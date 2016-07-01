@@ -1,0 +1,21 @@
+{
+  "name": "pbnj",
+  "version": "1.0.0",
+  "description": "",
+  "main": "\"\"",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Delon Newman",
+  "license": "ISC",
+  "dependencies": {
+    "bluebird": "^3.4.1",
+    "google-closure-compiler": "^20160619.0.0",
+    "js-atom": "^0.4.0",
+    "mori": "^0.3.2",
+    "underscore-contrib": "^0.3.0"
+  },
+  "devDependencies": {
+    "jasmine": "^2.4.1"
+  }
+}
