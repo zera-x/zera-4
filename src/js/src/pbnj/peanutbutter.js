@@ -1,12 +1,19 @@
-goog.provide('peanutbutter');
+goog.provide('pbnj.peanutbutter');
 
-goog.require('jess');
+goog.require('pbnj.jess');
+goog.require('pbnj.reader');
+goog.require('pbnj.util');
 
 goog.scope(function() {
   'use strict';
 
   /** @const */
-  var pb = peanutbutter;
+  var pb = pbnj.peanutbutter;
+  var jess = pbnj.jess;
+  //var _ = pbnj.util;
+  
+  var str = pbnj.util.str;
+  var assoc = pbnj.util.assoc;
 
   /** @const */
   var HAVE_WS = typeof wonderscript !== 'undefined';
@@ -16,54 +23,12 @@ goog.scope(function() {
     var ws = wonderscript;
   }
 
-  // Utils
-  // -----
-
   /**
-   * Corerce values into strings and concatenate arguments
-   *
-   * @param {...*} args
-   * @return {string}
+   * @param {*} exp
+   * @return {boolean}
    */
-  function str(args) {
-    if (arguments.length === 0) return '';
-    else if (arguments.length === 1) return '' + arguments[0];
-    else {
-      return Array.prototype.slice.call(arguments).join('');
-    }
-  }
-
-  /**
-   * Return new copy of object with the given key and it's
-   * associated value removed
-   *
-   * @param {Object} obj
-   * @param {string} key
-   * @return {Object}
-   */
-  function dissoc(obj, key) {
-    var newObj = {}, k;
-    for (k in obj) {
-      if (k !== key) newObj[k] = obj[k];
-    }
-    return newObj;
-  }
-
-  /**
-   * Return a new copy of object with the given key and value added
-   *
-   * @param {Object} obj
-   * @param {string} key
-   * @param {*} val
-   * @return {Object}
-   */
-  function assoc(obj, key, val) {
-    var newObj = {}, k;
-    for (k in obj) {
-      newObj[k] = obj[k];
-    }
-    newObj[key] = val;
-    return newObj;
+  function isNil(exp) {
+    return (_.isArray(exp) && _.size(exp) === 0) || !_.exists(exp);
   }
 
   /**
@@ -76,28 +41,14 @@ goog.scope(function() {
    */
   function walk(inner, outer, form) {
     if (isNil(form)) return outer([]);
-    else if (_.isArray(form)) return outer(_.map(form, inner));
+    else if (_.isArray(form)) return outer(util.map(form, inner));
     else {
       return outer(inner(form));
     }
   }
 
-  /**
-   * @param {*} exp
-   * @return {boolean}
-   */
-  function isNil(exp) {
-    return (_.isArray(exp) && _.size(exp) === 0) || !exists(exp);
-  }
-
-  /**
-   * @param {*} val
-   * @return {boolean}
-   */
-  function exists(val) { return val != null }
-
   function verify(prop, proto, success, failure) {
-    if (exists(proto) && exists(proto[prop])) {
+    if (_.exists(proto) && _.exists(proto[prop])) {
       if (success) return success(proto[prop], prop, proto);
       else {
         return proto[prop];
@@ -214,18 +165,12 @@ goog.scope(function() {
     return typeof this.pb$lang$attrs[k] !== 'undefined';
   };
 
-  Tag.prototype.hasDefinition = function() {
-    return !!this.env()[this.name()];
-  };
-
   Tag.prototype.definition = function() {
     return this.env()[this.name()];
   };
 
   Tag.prototype.toHTML = function(opts) {
-    var def = this.definition(),
-        code,
-        args,
+    var code,
         id = genID(),
         attrs = this.attrs()
         env = assoc(this.env(), 'id', id);
@@ -242,12 +187,12 @@ goog.scope(function() {
     return code;
   };
 
-  Tag.prototype.toPromise = function(opts) {
-    var def = this.definition(),
-        code,
-        args,
-        id = genID(),
-        attrs;
+  /**
+   * @override
+   * @returns {Promise}
+   */
+  Tag.prototype.toPromise = function() {
+    var attrs;
 
     if (_.any(this.attrs(), isPromise)) {
       attrs = Promise.all(_.chain(this.attrs())
@@ -427,53 +372,100 @@ goog.scope(function() {
     return this.toPromise().then(fn);
   };
 
-  function stackTrace(stack) {
-    return _.chain(mori.intoArray(stack.deref()))
-            .map(function(line) { return str(line[1], ': ', pp(line[0])); })
-            .value();
+  function renderTagList(list) {
+    return mori.reduce(
+              function (s, exp) {
+                return str(s, pb.eval(exp)) }, "", list);
   }
 
-  pb.stack = atom.createAtom(mori.list());
-  pb.eval = function() {
-    var idx = 0;
-    return function eval (form, opts) {
-      pb.stack.swap(function(sval) { return mori.conj(sval, [form, idx++]); });
+  function fmtAttrs(attrs) {
+    var makePairs = function(pair) { return str(mori.first(pair), '="', mori.second(pair), '"') };
+    return mori.intoArray(mori.map(makePairs, attrs)).join(' ');
+  }
 
-      var expandMacros = defaultTo('expandMacros', opts, true),
-          prettyPrint = defaultTo('prettyPrint', opts, true),
-          env = defaultTo('env', opts, DEFINITIONS),
-          attr,
-          args;
-
-      if (isNil(form)) return Nil;
-      else if (isPromise(form)) return form;
-      else if (isAtom(form)) return new Atom(form, env);
-      else if (form[0] === 'let') return scope(form, env);
-      else if (isTag(form)) {
-        var def = env[form[0]];
-        if (def && def instanceof Function) {
-          if (hasAttrs(form)) {
-            attr = attrs(form);
-            args = _.cons(attr, form.slice(2));
-          }
-          else {
-            attr = {};
-            args = _.cons(attr, form.slice(1));
-          }
-          return new TagList(def.apply(attr, args), env);
-        }
-        return tag(form, env);
+  pb.eval = function (exp) {
+    if (exp == null || mori.isSymbol(exp) && mori.equals(mori.symbol('nil'), exp)) {
+      return '';
+    }
+    else if (typeof exp === 'string' || typeof exp === 'number' || mori.isSymbol(exp)) {
+      return str(exp);
+    }
+    else if (mori.isList(exp) || mori.isVector(exp) || pbnj.util.isArray(exp)) {
+      if (mori.isEmpty(exp)) return '';
+      // evaluate as a tag list
+      else if (!mori.isSymbol(mori.first(exp))) {
+        return renderTagList(exp);
       }
-      else if (_.isArray(form)) return new TagList(form, env);
+      // evaluate as a teg
       else {
-        console.error('invalid form:', form);
-        console.error('peanutbutter env: ', env);
-        console.error('peanutbutter stack: ',
-                      str('\n', stackTrace(pb.stack).join('\n')));
-        throw new Error(str('invalid form', pp(form)));
+        var tag = mori.first(exp);
+        // evaluate as a tag with attributes
+        if (mori.isMap(mori.second(exp))) {
+          var attrs = mori.second(exp);
+          var rest = mori.rest(mori.rest(exp));
+          return str('<', tag, ' ', fmtAttrs(attrs), '>', renderTagList(rest), '</', tag, '>'); 
+        }
+        // evaluate as a tag without attributes
+        else {
+          var rest = mori.rest(exp);
+          return str('<', tag, '>', renderTagList(rest), '</', tag, '>'); 
+        }
       }
-    };
-  }();
+    }
+    else {
+      throw new Error(str("'", exp, "' is an invalid expression"));
+    }
+  };
+
+  pb.readString = function (input) {
+    return pbnj.reader.readString(input);
+  };
+
+  pb.readJSON = function(input) {
+    return pb.readJS(JSON.parse(input));
+  };
+
+  pb.readJS = function(exp) {
+    var tag, attrs, rest;
+
+    if (exp == null) return mori.symbol('nil');
+    else if (typeof exp === 'number') return exp;
+    else if (typeof exp === 'string') {
+      if (/^".*"$/.test(exp)) {
+        return exp.replace(/^"/, '').replace(/"$/, '');
+      }
+      return mori.symbol(exp);
+    }
+    else if (typeof exp === 'object') {
+      if (exp instanceof Array) {
+        if      (exp.length === 0) return mori.symbol('nil');
+        else if (typeof exp[0] !== 'string') {
+          return mori.map(pb.readJS, exp);
+        }
+        // evaluate as a tag
+        else {
+          tag = exp[0];
+          // evaluate as a tag with attributes
+          if ( typeof exp[1] === 'object' && exp[1].__proto__.__proto__ == null ) {
+            attrs = exp[1];
+            rest = exp.slice(2);
+            return mori.intoArray(mori.concat(mori.vector(mori.symbol(tag), mori.toClj(attrs)), mori.map(pb.readJS, rest)));
+          }
+          // evaluate as a tag without attributes
+          else {
+            rest = exp.slice(1);
+            return mori.intoArray(mori.concat(mori.vector(mori.symbol(tag)), mori.map(pb.readJS, rest)));
+          }
+        }
+      }
+      else {
+        return str(exp);
+      }
+    }
+    else {
+      throw new Error(str("'", exp, "' is an invalid expression"));
+}
+  };
 
   function isAtom(obj) {
     return !_.isObject(obj) && typeof(obj) !== 'undefined';
@@ -568,30 +560,11 @@ goog.scope(function() {
 
   function isCB(name) { return !!EVENTS[name] }
 
-  function fnSource(f) {
-    var s = str('(', f, ')()');
-    return encodeHTML(s);
-  }
-
-  function escapeHTML(str) {
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
-  }
-
-  var isFnApp = _.memoize(function(form) {
-    if (form instanceof Array && form.length > 0) {
-      var fn = eval(form[0]);
-      return !!fn && fn instanceof Function;
-    }
-    return false;
-  });
-
-  var POST_RENDER_CBS = atom.createAtom(mori.list());
-
-  pb.callPostRenderCallbacks = function () {
+  /** @const */
+  var POST_RENDER_CBS = [];
+  var callPostRenderCallbacks = function () {
     var cbs = POST_RENDER_CBS.deref();
-    mori.each(cbs, function (pair) {
+    _.each(cbs, function (pair) {
       var elem = pb.get(pair[1]);
       var code = jess.emit(pair[0]);
       var thunk = function () { return eval(code) };
@@ -614,9 +587,7 @@ goog.scope(function() {
       }
     }
     else if ( key === 'onrender' ) {
-      POST_RENDER_CBS.swap(function (list) {
-        return mori.conj(list, [value, env.id]);
-      });
+      POST_RENDER_CBS.push([value, env.id]);
       return '';
     }
     else if (_.isBoolean(value)) {
@@ -633,6 +604,7 @@ goog.scope(function() {
     }
   }
 
+  /** @const */
   var DEFINITIONS = {};
 
   /**
@@ -642,9 +614,10 @@ goog.scope(function() {
    * @param {Function} fn
    * @return {string}
    */
-  pb.define = function define(name, fn) {
+  pb.define = function define(name, value) {
     if (DEFINITIONS[name]) console.warn('overwriting "', name, '" definition');
-    DEFINITIONS[name] = fn;
+    var func = typeof value === 'function' ? value : function () { return value };
+    DEFINITIONS[name] = func;
     return name;
   };
 
@@ -684,7 +657,7 @@ goog.scope(function() {
   };
 
   // walk tag trees
-  var walkTags = _.memoize(function(form, fn) {
+  pb.walkTags = _.memoize(function(form, fn) {
     var inner = function(form) {
       if (isTag(form)) return fn(form);
       else {
@@ -764,7 +737,7 @@ goog.scope(function() {
       .toPromise()
       .then(function(html) {
         jQuery(elem).html(html);
-        pb.callPostRenderCallbacks();
+        callPostRenderCallbacks();
       })
       .catch(function(error) {
         console.error('Error: ', error);
@@ -776,7 +749,7 @@ goog.scope(function() {
    * append expressions to element
    *
    * @param {(string|Element)} elem
-   * @param {Array} forms a list of peanubutter expressions
+   * @param {Array} exp
    * @return {void}
    */
   pb.appendTo = function appendTo(elem, exp) {
@@ -784,7 +757,7 @@ goog.scope(function() {
       .toPromise()
       .then(function(html) {
         jQuery(elem).append(html);
-        pb.callPostRenderCallbacks();
+        callPostRenderCallbacks();
       })
       .catch(function(error) {
         console.error('Error: ', error);
@@ -792,24 +765,10 @@ goog.scope(function() {
       });
   };
 
-  function replace(elem, forms) {
-    if (!exists(jQuery)) throw new Error('jQuery is required');
-
-    var tags = pb.eval(forms), elem = elem;
-
-    if (elem instanceof Tag) elem = str('[data-element-id=', elem.id(), ']');
-    else if (elem instanceof TagList) {
-      elem = _.invoke(elem.children(), 'attr', 'data-element-id').join(', ');
-    }
-
-    jQuery(elem).replaceWith(tags.toHTML());
-    return tags;
-  }
-
   /**
    * Convert an expression into a function
    *
-   * @param {Array}
+   * @param {Array} form
    * @return {function(...args): Array}
    */
   pb.toFn = function toFn(form) {
@@ -831,7 +790,7 @@ goog.scope(function() {
   }
 
   var isCSSRule = function(obj) {
-    return exists(obj) && _.isObject(obj);
+    return _.exists(obj) && _.isObject(obj);
   };
 
   /**
@@ -844,5 +803,16 @@ goog.scope(function() {
 
   pb.define('jess', function (attr) {
     return [['javascript', jess.emit(['do'].concat(Array.prototype.slice.call(arguments, 1)))]];
+  });
+
+  pb.define('nbsp', function () {
+    return '&nbsp;';
+  });
+
+  pb.define('=', function () {
+    var code = ['do'].concat(Array.prototype.slice.call(arguments, 1));
+    console.log(code);
+    console.log(jess.emit(code));
+    return jess.eval(code);
   });
 });

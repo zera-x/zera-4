@@ -1,55 +1,16 @@
-goog.provide('jess');
+goog.provide('pbnj.jess');
+
+goog.require('pbnj.reader');
+goog.require('pbnj.util');
 
 goog.scope(function() {
-  
-  // [Object] -> String
-  var str = function () {
-    if ( arguments.length === 0 ) return "";
-    else if ( arguments.length === 1 ) return "" + arguments[0];
-    else {
-      return Array.prototype.slice.call(arguments).join('');
-    }
-  };
 
-  // Array -> Array
-  var pair = function (a) {
-    var i, pairs = [], pair = [];
-    for (i = 0; i < a.length; ++i) {
-      if ( i % 2 === 0 ) {
-        pair.push(a[i]);
-      }
-      else {
-        pair.push(a[i]);
-        pairs.push(pair);
-        pair = []
-      }
-    }
-    return pairs;
-  };
-
-  // Array -> Function -> Array
-  var map = function (a, fn) {
-    var newA = [], i;
-    for (i = 0; i < a.length; ++i) {
-      newA.push(fn.call(null, a[i], i));
-    }
-    return newA;
-  };
-
-  // Array -> String -> Array
-  var pluck = function (a, prop) {
-    return map(a, function (val) { return val[prop] });
-  };
-
-  // Object -> String -> JsValue -> Object
-  var assoc = function (obj, key, value) {
-    var newObj = {}, k;
-    for (k in obj) {
-      newObj[k] = obj[k];
-    }
-    newObj[key] = value;
-    return newObj;
-  };
+  var jess = pbnj.jess;
+  var str = pbnj.util.str;
+  var pair = pbnj.util.pair;
+  var map = pbnj.util.map;
+  var pluck = pbnj.util.pluck;
+  var assoc = pbnj.util.assoc;
   
   var pprint = function(form) {
     if ( typeof form === 'string' ) return str('"', form, '"');
@@ -78,6 +39,10 @@ goog.scope(function() {
 
   jess.eval = function (form) {
     return eval(jess.emit(form));
+  };
+
+  jess.readString = function(input) {
+    return jess.emit(pbnj.reader.readString(input));
   };
 
   // JsValue -> String
@@ -110,7 +75,6 @@ goog.scope(function() {
       }
       else {
         // a symbol
-        if ( env[form] ) return env[form];
         return form;
       }
     }
@@ -140,9 +104,9 @@ goog.scope(function() {
       if ( form[0] == null ) throw new Error(str("Invalid form: ", pprint(form)));
       switch(form[0].toString()) {
         case 'if-else':
-          return jess.emitIfElse(form, env, opts);
+          return emitIfElse(form, env, opts);
         case 'if':
-          return jess.emitIf(form, env, opts);
+          return emitIf(form, env, opts);
         case '?':
           return emitExistential(form, env, opts);
         case 'instance?':
@@ -153,44 +117,44 @@ goog.scope(function() {
           if ( form[1] == null ) throw new Error('a label cannot be null or undefined');
           return str(form[1], ':');
         case 'do':
-          return jess.emitBlock(form.slice(1));
+          return emitBlock(form.slice(1));
         case 'var':
         case 'const':
         case 'let':
-          return jess.emitDef(form, env, opts);
+          return emitDef(form, env, opts);
         case 'function':
         case 'function*':
-          return jess.emitFunction(form, env, opts);
+          return emitFunction(form, env, opts);
         case 'return':
         case 'break':
         case 'continue':
         case 'throw':
         case 'delete':
-          return jess.emitStatement(form);
+          return emitStatement(form);
         case 'case':
         case 'default':
-          return jess.emitColonStatement(form);
+          return emitColonStatement(form);
         case 'catch':
         case 'while':
         case 'switch':
-          return jess.emitControlFlow(form);
+          return emitControlFlow(form);
         case 'for':
           throw new Error("not implemented");
         case 'try':
-          return jess.emitNamedBlock(form);
+          return emitNamedBlock(form);
         // object property resolution
         case '.-':
-          return jess.emitObjectRes(form);
+          return emitObjectRes(form);
         // object method call
         case '.':
-          return jess.emitMethodCall(form);
+          return emitMethodCall(form);
         case 'new':
-          return jess.emitClassInit(form);
+          return emitClassInit(form);
         case '.-set!':
           if ( form.length !== 4 ) throw new SyntaxError("Object property assignment is malformed");
           return str(jess.emit(form[1]), '[', jess.emit(form[2]) , '] = ', jess.emit(form[3]));
         case 'set!':
-          return jess.emitAssignment(form);
+          return emitAssignment(form);
         // unary operators
         case '!':
         case 'not':
@@ -202,10 +166,10 @@ goog.scope(function() {
         // binary operators
         case '||':
         case 'or':
-          return jess.emitBinOperator(['||'].concat(form.slice(1)));
+          return emitBinOperator(['||'].concat(form.slice(1)));
         case '&&':
         case 'and':
-          return jess.emitBinOperator(['&&'].concat(form.slice(1)));
+          return emitBinOperator(['&&'].concat(form.slice(1)));
         case '|':
         case '&':
         case '<<':
@@ -223,7 +187,7 @@ goog.scope(function() {
         case '!=':
         case '===':
         case '!==':
-          return jess.emitBinOperator(form);
+          return emitBinOperator(form);
         case 'quote':
           return JSON.stringify(form[1]);
         case 'comment':
@@ -242,7 +206,7 @@ goog.scope(function() {
           }
           // function application
           else {
-            return jess.emitFuncApplication(form);
+            return emitFuncApplication(form);
           }
       }
     }
@@ -250,7 +214,7 @@ goog.scope(function() {
       return form.toSource();
     }
     else if ( typeof form === 'object' ) {
-      return jess.emitObj(form);
+      return emitObj(form);
     }
     else {
       //return str('(', JSON.stringify(form), ')');
@@ -258,13 +222,13 @@ goog.scope(function() {
     }
   };
 
-  jess.emitAssignment = function (form) {
+  var emitAssignment = function (form) {
     var name = form[1]
       , val = jess.emit(form[2]);
     return str(name, " = ", val);
-  }
+  };
 
-  jess.emitBinOperator = function (form) {
+  var emitBinOperator = function (form) {
     var op = form[0]
       , values = form.slice(1, form.length)
       , valBuffer = [], i;
@@ -272,9 +236,9 @@ goog.scope(function() {
       valBuffer.push(jess.emit(values[i]));
     }
     return str('(', valBuffer.join(op), ')');
-  }
+  };
 
-  jess.emitDef = function (form, env, opts) {
+  var emitDef = function (form, env, opts) {
     var name = form[0]
       , def  = form[1];
 
@@ -292,9 +256,9 @@ goog.scope(function() {
     else {
       throw new Error("definition is malformed");
     }
-  }
+  };
 
-  jess.emitStatement = function (form) {
+  var emitStatement = function (form) {
     if ( form.length === 1 ) {
       return str(form[0], ';');
     }
@@ -304,9 +268,9 @@ goog.scope(function() {
     else {
       throw new Error(str("statment is malformed: ", pprint(form)));
     }
-  }
+  };
 
-  jess.emitColonStatement = function (form) {
+  var emitColonStatement = function (form) {
     if ( form.length === 1 ) {
       return str(form[0], ':');
     }
@@ -316,24 +280,24 @@ goog.scope(function() {
     else {
       throw new Error(str("statment is malformed: ", pprint(form)));
     }
-  }
+  };
 
   // NAME EXPR BLOCK
   // eg:
   // while () {}
   // for () {}
-  jess.emitControlFlow = function (form) {
+  var emitControlFlow = function (form) {
     var name = form[0]
       , expr = form[1]
       , block = form.slice(2);
-    return str(name, ' (', jess.emit(expr), ') ', jess.emitBlock(block));
+    return str(name, ' (', jess.emit(expr), ') ', emitBlock(block));
   };
 
-  jess.emitBlock = function (exprs) {
+  var emitBlock = function (exprs) {
     return str('{', map(exprs, jess.emit).join('; '), '}');
   };
 
-  jess.emitIfElse = function (form, env, opts) {
+  var emitIfElse = function (form, env, opts) {
     var exprs = pair(form.slice(1))
       , i
       , cond
@@ -348,9 +312,9 @@ goog.scope(function() {
     }
 
     return buff.join(' ');
-  }
+  };
 
-  jess.emitIf = function (form) {
+  var emitIf = function (form) {
     var pred = jess.emit(form[1])
       , cons = jess.emit(form[2])
       , alt;
@@ -363,17 +327,17 @@ goog.scope(function() {
     else {
       return str("((", pred, ") ? ", cons, " : ", alt, ")");
     }
-  }
+  };
 
-  jess.emitClassInit = function (form) {
+  var emitClassInit = function (form) {
     var args = map(form.slice(2), jess.emit).join(', ');
     return str('new ', jess.emit(form[1]), '(', args, ')');
-  }
+  };
 
   // cases:
   // function () {}
   // function NAME () {}
-  jess.emitFunction = function (form) {
+  var emitFunction = function (form) {
     var i, name, args, body;
     
     // named function
@@ -398,7 +362,7 @@ goog.scope(function() {
       buf.push(jess.emit(body[i]));
     }
 
-    code = jess.emitBlock(body);
+    code = emitBlock(body);
 
     if ( name ) {
       return str(form[0], ' ', name, ' (', args.join(','), ') ', code, '');
@@ -406,9 +370,9 @@ goog.scope(function() {
     else {
       return str('(', form[0], ' (', args.join(','), ') ', code, ')');
     }
-  }
+  };
   
-  jess.emitObj = function (form) {
+  var emitObj = function (form) {
     var k, buf = [];
     for ( k in form ) {
       buf.push(str(k, ':', jess.emit(form[k])));
@@ -416,15 +380,15 @@ goog.scope(function() {
     return str('({', buf.join(','), '})');
   };
   
-  jess.emitExistential = function (form, env, opts) {
+  var emitExistential = function (form, env, opts) {
     var val = emit(form[1], env, opts);
     return str("(", emit(val, env), " != null)");
-  }
+  };
 
-  jess.emitNullTest = function (form, env, opts) {
+  var emitNullTest = function (form, env, opts) {
     var val = emit(form[1], env, opts);
     return str("(", symbolize(val), " === null)");
-  }
+  };
   
   function parseArgs(args) {
     var splat = false, name, argsBuf = [];
@@ -460,17 +424,17 @@ goog.scope(function() {
     return argsDef.join(',');
   }
 
-  jess.emitObjectRes = function (form) {
+  var emitObjectRes = function (form) {
     var obj = form[1]
       , prop = form[2]
     return str('(', jess.emit(obj), ')["', prop, '"]');
-  }
+  };
 
-  jess.emitMethodCall = function (form) {
-    return str(jess.emitObjectRes(form), '(', map(form.slice(3), jess.emit).join(', '), ')');
-  }
+  var emitMethodCall = function (form) {
+    return str(emitObjectRes(form), '(', map(form.slice(3), jess.emit).join(', '), ')');
+  };
 
-  jess.emitFuncApplication = function (form) {
+  var emitFuncApplication = function (form) {
     var fn = jess.emit(form[0])
       , args = form.slice(1, form.length)
       , argBuffer = [], i, value;
@@ -481,9 +445,8 @@ goog.scope(function() {
     }
   
     if ( argBuffer.length === 0 ) {
-      return str('(', fn, ').apply(this)');
+      return str('(', fn, ')()');
     }
-    return str('(', fn, ').apply(this, [', argBuffer.join(', ') ,"])");
-  }
-  
+    return str('(', fn, ')(', argBuffer.join(', ') ,")");
+  };
 });

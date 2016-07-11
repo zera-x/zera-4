@@ -1,1 +1,14 @@
-﻿<Properties StartupItem="pbnj.csproj" />
+﻿<Properties StartupItem="pbnj.csproj">
+  <MonoDevelop.Ide.Workbench ActiveDocument="Jess.cs">
+    <Files>
+      <File FileName="Jess.cs" Line="9" Column="1" />
+      <File FileName="Peanutbutter.cs" Line="5" Column="3" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" />
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches />
+  <MonoDevelop.Ide.ItemProperties.pbnj PreferredExecutionTarget="MonoDevelop.Default" />
+</Properties>
