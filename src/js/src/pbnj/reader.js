@@ -1,10 +1,11 @@
 goog.provide('pbnj.reader');
 
-goog.require('pbnj.util');
+goog.require('pbnj.core');
 
 goog.scope(function() {
 
-  var pair = pbnj.util.pair;
+  var pair = pbnj.core.pair;
+  var syntax = pbnj.core.syntax;
 
   function inputStream(input) {
     var pos = 0, line = 1, col = 0;
@@ -12,8 +13,14 @@ goog.scope(function() {
       next: next,
       peek: peek,
       eof: eof,
-      croak: croak
+      croak: croak,
+      source: source,
+      line: lineNumber,
+      column: columnNumber
     };
+    function source() { return 'input' }
+    function lineNumber() { return line }
+    function columnNumber() { return col }
     function next() {
       var ch = input.charAt(pos++);
       if (ch === "\n") {
@@ -106,9 +113,8 @@ goog.scope(function() {
     return map;
   }
 
-  function tokenStream(input, dispatch) {
+  function tokenStream(input) {
     var current = null;
-    var dispatch = dispatch || TYPE_DISPATCH.mori;
     return {
       next: next,
       peek: peek,
@@ -176,7 +182,7 @@ goog.scope(function() {
     }
 
     function readString() {
-      return dispatch.string(readEscaped('"'));
+      return syntax('string', readEscaped('"'), input);
     }
 
     function readNumber() {
@@ -189,18 +195,19 @@ goog.scope(function() {
         }
         return isDigit(ch);
       });
-      return dispatch.number((num));
+      // TODO: see what improvements can be made given the quality of JS numbers
+      return syntax('number', parseFloat(num), input);
     }
 
     function readSymbol() {
       var sym = readWhile(isSymbol);
-      return dispatch.symbol(sym);
+      return syntax('symbol', sym, input);
     }
 
     function readKeyword() {
       input.next();
       var kw = readWhile(isSymbol);
-      return dispatch.keyword(kw);
+      return syntax('keyword', kw, input);
     }
 
     function readCollection(tag, end) {
@@ -215,12 +222,12 @@ goog.scope(function() {
           buffer.push(readNext());
         }
       }
-      return dispatch[tag](buffer);
+      return syntax(tag, buffer, input);
     }
 
     function readQuotedForm() {
       input.next();
-      return dispatch.quote(readNext());
+      return syntax('quote', readNext(), input);
     }
 
     function readNext() {
@@ -274,9 +281,9 @@ goog.scope(function() {
     }
   }
 
-  function readString(str, dispatch) {
+  function readString(str) {
     var tokens = [];
-    var stream = tokenStream(inputStream(str), dispatch);
+    var stream = tokenStream(inputStream(str));
     while (!stream.eof()) tokens.push(stream.next());
     return tokens;
   }

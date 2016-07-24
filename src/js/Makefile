@@ -6,3 +6,5 @@ dist/pbnj.js:
 clean:
 	rm dist/pbnj.js
 	rm dist/pbnj.js.map
+
+rebuild: clean dist/pbnj.js

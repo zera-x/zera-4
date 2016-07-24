@@ -2,7 +2,7 @@ goog.provide('pbnj.peanutbutter');
 
 goog.require('pbnj.jess');
 goog.require('pbnj.reader');
-goog.require('pbnj.util');
+goog.require('pbnj.core');
 
 goog.scope(function() {
   'use strict';
@@ -10,10 +10,10 @@ goog.scope(function() {
   /** @const */
   var pb = pbnj.peanutbutter;
   var jess = pbnj.jess;
-  //var _ = pbnj.util;
+  //var _ = pbnj.core;
   
-  var str = pbnj.util.str;
-  var assoc = pbnj.util.assoc;
+  var str = pbnj.core.str;
+  var assoc = pbnj.core.assoc;
 
   /** @const */
   var HAVE_WS = typeof wonderscript !== 'undefined';
@@ -390,7 +390,7 @@ goog.scope(function() {
     else if (typeof exp === 'string' || typeof exp === 'number' || mori.isSymbol(exp)) {
       return str(exp);
     }
-    else if (mori.isList(exp) || mori.isVector(exp) || pbnj.util.isArray(exp)) {
+    else if (mori.isList(exp) || mori.isVector(exp) || pbnj.core.isArray(exp)) {
       if (mori.isEmpty(exp)) return '';
       // evaluate as a tag list
       else if (!mori.isSymbol(mori.first(exp))) {

@@ -1,10 +1,40 @@
-goog.provide('pbnj.util');
+goog.provide('pbnj.core');
 
 goog.scope(function() {
-  var _ = pbnj.util;
+  var _ = pbnj.core;
   
   // Utils
   // -----
+
+  _.syntax = function(type, value, input) {
+    return mori.hashMap(
+            'type', type,
+            'value', value,
+            'source', input.source(),
+            'line', input.line(),
+            'column', input.column());
+  };
+
+
+  _.isSyntax = function(val) {
+    return mori.isMap(val) &&
+           mori.hasKey(val, 'type') &&
+           mori.hasKey(val, 'value') &&
+           mori.hasKey(val, 'line') &&
+           mori.hasKey(val, 'column');
+  };
+
+  _.get = function(col, key, alt) {
+    if (mori.isAssociative(col)) {
+      return mori.get(col, key, alt);
+    }
+    else {
+      var val = col[key];
+      return val != null
+                  ? val
+                  : alt == null ? null : alt;
+    }
+  };
 
   /** @interface */
   pbnj.IArray = function() {};
@@ -364,7 +394,7 @@ goog.scope(function() {
    * @returns {Array<*>}
    */
   _.pluck = function (a, prop, context) {
-    return _.map(a, function (val) { return val[prop] }, context);
+    return _.map(a, function (val) { return _.get(val, prop) }, context);
   };
 
   /**
@@ -507,6 +537,10 @@ goog.scope(function() {
 
   _.any = function (a, fn, context) {
     return _.filter(a, fn, context).length !== 0;
+  };
+
+  _.all = function (a, fn, context) {
+    return a.length === _.filter(a, fn, context).length;
   };
 
   // Array -> Array

@@ -1,16 +1,16 @@
 goog.provide('pbnj.jess');
 
 goog.require('pbnj.reader');
-goog.require('pbnj.util');
+goog.require('pbnj.core');
 
 goog.scope(function() {
 
   var jess = pbnj.jess;
-  var str = pbnj.util.str;
-  var pair = pbnj.util.pair;
-  var map = pbnj.util.map;
-  var pluck = pbnj.util.pluck;
-  var assoc = pbnj.util.assoc;
+  var str = pbnj.core.str;
+  var pair = pbnj.core.pair;
+  var map = pbnj.core.map;
+  var pluck = pbnj.core.pluck;
+  var assoc = pbnj.core.assoc;
   
   var pprint = function(form) {
     if ( typeof form === 'string' ) return str('"', form, '"');
