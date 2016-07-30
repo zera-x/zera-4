@@ -31,8 +31,10 @@ goog.scope(function() {
     else {
       var val = col[key];
       return val != null
-                  ? val
-                  : alt == null ? null : alt;
+               ? val
+               : alt == null
+                   ? null
+                   : alt;
     }
   };
 
@@ -97,15 +99,18 @@ goog.scope(function() {
   };
 
   _.first = function(obj) {
+    if (mori.isCollection(obj)) return mori.first(obj);
     return _.isArrayLike(obj) ? obj[0] : _.values(obj)[0];
   };
 
   _.last = function(obj) {
+    if (mori.isCollection(obj)) return mori.last(obj);
     var a = _.isArrayLike(obj) ? obj : _.values(obj);
     return a[a.length - 1];
   };
 
   _.rest = function(obj) {
+    if (mori.isCollection(obj)) return mori.rest(obj);
     var a = _.isArrayLike(obj) ? _.toArray(obj) : _.values(obj);
     return a.slice(1);
   };
@@ -189,8 +194,13 @@ goog.scope(function() {
    * @param {string} key
    * @returns {*}
    */
-  _.has = function(obj, key) {
-    return obj != null && Object.prototype.hasOwnProperty.call(obj, key);
+  _.has = _.hasKey = function(obj, key) {
+    if (mori.isAssociative(obj)) {
+      return mori.hasKey(obj, key);
+    }
+    else {
+      return obj != null && Object.prototype.hasOwnProperty.call(obj, key);
+    }
   };
 
   /**
@@ -198,11 +208,16 @@ goog.scope(function() {
    * @returns {Array<*>}
    */
   _.keys = function(obj) {
-    if (!_.isObject(obj)) return [];
-    if (Object.keys) return Object.keys(obj);
-    var keys = [];
-    for (var key in obj) if (_.has(obj, key)) keys.push(key);
-    return keys;
+    if (mori.isAssociative(obj)) {
+      return mori.keys(obj);
+    }
+    else {
+      if (!_.isObject(obj)) return [];
+      if (Object.keys) return Object.keys(obj);
+      var keys = [];
+      for (var key in obj) if (_.has(obj, key)) keys.push(key);
+      return keys;
+    }
   };
 
   /**
@@ -210,11 +225,16 @@ goog.scope(function() {
    * @returns {Array<*>}
    */
   _.values = function(obj) {
-    if (!_.isObject(obj)) return [];
-    if (Object.values) return Object.values(obj);
-    var values = [];
-    for (var key in obj) if (_.has(obj, key)) values.push(obj[key]);
-    return values;
+    if (mori.isAssociative(obj)) {
+      return mori.values(obj);
+    }
+    else {
+      if (!_.isObject(obj)) return [];
+      if (Object.values) return Object.values(obj);
+      var values = [];
+      for (var key in obj) if (_.has(obj, key)) values.push(obj[key]);
+      return values;
+    }
   };
   
   /**
@@ -240,11 +260,14 @@ goog.scope(function() {
    * @returns {Object}
    */
   _.dissoc = function(obj, key) {
-    var newObj = {}, k;
-    for (k in obj) {
-      if (k !== key) newObj[k] = obj[k];
+    if (mori.isAssociative(obj)) {
+      return mori.dissoc(obj, key);
     }
-    return newObj;
+    else {
+      var newObj = {}, k;
+      for (k in obj) if (k !== key) newObj[k] = obj[k];
+      return newObj;
+    }
   };
 
   /**
@@ -256,12 +279,15 @@ goog.scope(function() {
    * @returns {Object}
    */
   _.assoc = function(obj, key, val) {
-    var newObj = {}, k;
-    for (k in obj) {
-      newObj[k] = obj[k];
+    if (mori.isAssociative(obj)) {
+      return mori.assoc(obj, key, val);
     }
-    newObj[key] = val;
-    return newObj;
+    else {
+      var newObj = {}, k;
+      for (k in obj) newObj[k] = obj[k];
+      newObj[key] = val;
+      return newObj;
+    }
   };
 
   /**
@@ -271,10 +297,15 @@ goog.scope(function() {
    * @returns {Object}
    */
   _.merge = function (o1, o2) {
-    var o = {}, k;
-    for ( k in o1 ) o[k] = o1[k];
-    for ( k in o2 ) o[k] = o2[k];
-    return o;
+    if (mori.isAssociative(o1) && mori.isAssociative(o2)) {
+      return mori.merge(o1, o2);
+    }
+    else {
+      var o = {}, k;
+      for (k in o1) o[k] = o1[k];
+      for (k in o2) o[k] = o2[k];
+      return o;
+    }
   };
 
   /**
@@ -284,6 +315,7 @@ goog.scope(function() {
   _.exists = function(val) { return val != null };
 
   _.cons = function(v, col) {
+    if (mori.isSeqable(col)) return mori.cons(v, col);
     return [v].concat(col);
   };
 
@@ -348,7 +380,7 @@ goog.scope(function() {
    * @param {?Object} context
    * @returns {*}
    */
-  _.each = function(obj, fn, context) {
+  _.each = _.forEach = function(obj, fn, context) {
     var iteratee = optimizeCb(fn, context);
     var i, length;
     if (_.isArrayLike(obj)) {
