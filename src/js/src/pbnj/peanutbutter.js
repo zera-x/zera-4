@@ -14,6 +14,9 @@ goog.scope(function() {
   
   var str = pbnj.core.str;
   var assoc = pbnj.core.assoc;
+  var get = pbnj.core.get;
+  var map = pbnj.core.map;
+  var cons = pbnj.core.cons;
 
   /** @const */
   var HAVE_WS = typeof wonderscript !== 'undefined';
@@ -417,8 +420,40 @@ goog.scope(function() {
     }
   };
 
-  pb.readString = function (input) {
-    return pbnj.reader.readString(input);
+  pb.readString = function(input) {
+    return map(pbnj.reader.readString(input), pb.analyze);
+  };
+
+  pb.analyze = function(syn) {
+    var type = get(syn, 'type');
+    var value = get(syn, 'value');
+    if (type === 'symbol' && value === 'nil') {
+      return assoc(syn, 'type', 'nil');
+    }
+    else if (type === 'list') {
+      if (value.length === 0) return assoc(syn, 'type', 'nil');
+      // evaluate as a tag list
+      else if (get(value[0], 'type') !== 'symbol') {
+        return assoc(syn, 'type', 'tag-list');
+      }
+      // evaluate as a teg
+      else {
+        var tag = value[0];
+        // evaluate as a tag with attributes
+        if (get(value[1], 'type') === 'hashMap') {
+          var rest = value.slice(2);
+          return assoc(assoc(syn, 'value', cons(value[1], map(rest, pb.analyze))), 'type', 'tag-with-attrs');
+        }
+        // evaluate as a tag without attributes
+        else {
+          var rest = value.slice(1);
+          return assoc(assoc(syn, 'value', map(rest, pb.analyze)), 'type', 'tag-wo-attrs');
+        }
+      }
+    }
+    else {
+      return syn;
+    }
   };
 
   pb.readJSON = function(input) {
