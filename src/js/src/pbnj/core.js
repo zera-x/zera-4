@@ -1,29 +1,161 @@
 goog.provide('pbnj.core');
 
+var root = this;
 goog.scope(function() {
   var _ = pbnj.core;
   
-  // Utils
-  // -----
+  if (module != void 0 && module.exports) {
+    module.exports.core = pbnj.core;
+  }
 
-  _.syntax = function(type, value, input) {
-    return mori.hashMap(
-            'type', type,
-            'value', value,
-            'source', input.source(),
-            'line', input.line(),
-            'column', input.column());
+  // merge mori's API
+  var extend = function(target, source, pred) {
+    for (var key in source) {
+      if (!pred || pred(source[key], key, source, target)) target[key] = source[key];
+    }
+  };
+  extend(_, mori);
+
+  // Arithmetic
+  
+  _.add = _['+'] = function(a, b) {
+    if (arguments.length === 0) return 0;
+    else if (arguments.length === 1) return a;
+    else {
+      var sum = 0;
+      for (var i = 0; i < arguments.length; ++i) {
+        sum += arguments[i];
+      }
+      return sum;
+    }
   };
 
-
-  _.isSyntax = function(val) {
-    return mori.isMap(val) &&
-           mori.hasKey(val, 'type') &&
-           mori.hasKey(val, 'value') &&
-           mori.hasKey(val, 'line') &&
-           mori.hasKey(val, 'column');
+  _.sub = _['-'] = function(a, b) {
+    if (arguments.length === 0) return 0;
+    else if (arguments.length === 1) return -a;
+    else {
+      var diff = arguments[0];
+      for (var i = 1; i < arguments.length; ++i) {
+        diff -= arguments[i];
+      }
+      return diff;
+    }
   };
 
+  _.mult = _['*'] = function(a, b) {
+    if (arguments.length === 0) return 1;
+    else if (arguments.length === 1) return a;
+    else {
+      var prod = 1;
+      for (var i = 0; i < arguments.length; ++i) {
+        prod *= arguments[i];
+      }
+      return prod;
+    }
+  };
+
+  _.div = _['/'] = function(a, b) {
+    if (arguments.length === 0) return 1;
+    else if (arguments.length === 1) return a;
+    else {
+      var quot = arguments[0];
+      for (var i = 1; i < arguments.length; ++i) {
+        quot /= arguments[i];
+      }
+      return quot;
+    }
+  };
+
+  // Type Predicates
+  
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isNumber = _['number?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object Number]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isString = _['string?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object String]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isBoolean = _['boolean?'] = function(val) {
+    return val === true || val === false || Object.prototype.toString.call(val) === '[object Boolean]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isNull = _['nil?'] = _['null?'] = function(val) {
+    return val === null;
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isUndefined = _['undefined?'] = function(val) {
+    return val === void 0;
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isDate = _['date?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object Date]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isError = _['error?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object Error]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isRegExp = _['regexp?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object RegExp]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isFunction = _['function?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object Function]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isArguments = _['arguments?'] = function(val) {
+    return Object.prototype.toString.call(val) === '[object Arguments]';
+  };
+
+  /**
+   * @param {*} val
+   * @returns {boolean}
+   */
+  _.isElement = _['element?'] = function(obj) {
+    return !!(obj && obj.nodeType === 1);
+  };
+  
   _.get = function(col, key, alt) {
     if (mori.isAssociative(col)) {
       return mori.get(col, key, alt);
@@ -72,9 +204,12 @@ goog.scope(function() {
    * @param {(pbnj.ArrayLike|null)} obj
    * @returns {Array<*>}
    */
-  _.toArray = function(obj) {
+  _.toArray = _['->Array'] = function(obj) {
     if (!obj) return [];
     else if (_.isArray(obj)) return obj;
+    else if (mori.isCollection(obj)) {
+      return mori.intoArray(obj);
+    }
     else {
       return Array.prototype.slice.call(obj);
     }
@@ -84,7 +219,7 @@ goog.scope(function() {
    * @params {Object} obj
    * @returns {boolean}
    */
-  _.isArray = Array.isArray || function(obj) {
+  _.isArray = _['array?'] = Array.isArray || function(obj) {
     return Object.prototype.toString.call(obj) === '[object Array]';
   };
 
@@ -93,7 +228,7 @@ goog.scope(function() {
    * @param {Object} obj
    * @returns {boolean}
    */
-  _.isArrayLike = function(obj) {
+  _.isArrayLike = _['arraylike?'] = function(obj) {
     var length = obj && obj.length;
     return typeof length === 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
   };
@@ -125,14 +260,6 @@ goog.scope(function() {
   };
 
   /**
-   * @param {*} obj
-   * @returns {boolean}
-   */
-  _.isFunction = function(obj) {
-    return typeof obj === 'function';
-  };
-
-  /**
    * @param {*} val
    * @returns {*}
    */
@@ -144,10 +271,6 @@ goog.scope(function() {
    */
   _.always = function (val) {
     return function () { return val }
-  };
-
-  _.chain = function(val) {
-    
   };
 
   /**
@@ -347,10 +470,6 @@ goog.scope(function() {
     return pairs;
   };
 
-  _.isArguments = function(obj) {
-      return _.has(obj, 'callee');
-  };
-
   var flatten = function(input, shallow, strict, startIndex) {
     var output = [], idx = 0;
     for (var i = startIndex || 0; i < input.length; i++) {
@@ -380,21 +499,27 @@ goog.scope(function() {
    * @param {?Object} context
    * @returns {*}
    */
-  _.each = _.forEach = function(obj, fn, context) {
-    var iteratee = optimizeCb(fn, context);
-    var i, length;
-    if (_.isArrayLike(obj)) {
-      for (i = 0, length = obj.length; i < length; i++) {
-        iteratee(obj[i], i, obj);
-      }
+  _.each = _.forEach = function(obj, fn) {
+    if (mori.isCollection(obj)) {
+      mori.each(obj, fn);
+      return obj;
     }
     else {
-      var keys = _.keys(obj);
-      for (i = 0, length = keys.length; i < length; i++) {
-        iteratee(obj[keys[i]], keys[i], obj);
+      var iteratee = optimizeCb(fn);
+      var i, length;
+      if (_.isArrayLike(obj)) {
+        for (i = 0, length = obj.length; i < length; i++) {
+          iteratee(obj[i], i, obj);
+        }
       }
+      else {
+        var keys = _.keys(obj);
+        for (i = 0, length = keys.length; i < length; i++) {
+          iteratee(obj[keys[i]], keys[i], obj);
+        }
+      }
+      return obj;
     }
-    return obj;
   };
 
   /**
@@ -402,21 +527,26 @@ goog.scope(function() {
    * @param {Function} fn
    * @returns {Array<*>}
    */
-  _.map = function (obj, fn, context) {
-    var iteratee = optimizeCb(fn, context);
-    var results = [], i;
-    if (_.isArrayLike(obj)) {
-      for (i = 0; i < obj.length; ++i) {
-        results.push(iteratee(obj[i], i));
-      }
+  _.map = function (obj, fn) {
+    if (mori.isCollection(obj)) {
+      return mori.map(fn, obj);
     }
     else {
-      var keys = _.keys(obj);
-      for (i = 0; i < keys.length; ++i) {
-        results.push(iteratee(obj[keys[i]], keys[i]));
+      var iteratee = optimizeCb(fn);
+      var results = [], i;
+      if (_.isArrayLike(obj)) {
+        for (i = 0; i < obj.length; ++i) {
+          results.push(iteratee(obj[i], i));
+        }
       }
+      else {
+        var keys = _.keys(obj);
+        for (i = 0; i < keys.length; ++i) {
+          results.push(iteratee(obj[keys[i]], keys[i]));
+        }
+      }
+      return results;
     }
-    return results;
   };
 
   /**
@@ -445,12 +575,17 @@ goog.scope(function() {
    * @param {Function} fn
    * @returns {Array<*>}
    */
-  _.mapcat = function (a, fn, context) {
-    var a = _.map(a, fn, context), newA = [], i;
-    for (i = 0; i < a.length; ++i) {
-      newA = newA.concat(a[i]);
+  _.mapcat = function (a, fn) {
+    if (mori.isCollection(a)) {
+      return mori.mapcat(fn, a);
     }
-    return newA;
+    else {
+      var a = _.map(a, fn), newA = [], i;
+      for (i = 0; i < a.length; ++i) {
+        newA = newA.concat(a[i]);
+      }
+      return newA;
+    }
   };
 
   /**
@@ -459,21 +594,26 @@ goog.scope(function() {
    * @param {?Object} context
    * @returns {Array<*>}
    */
-  _.filter = function (obj, fn, context) {
-    var iteratee = optimizeCb(fn, context);
-    var i, results = [];
-    if (_.isArrayLike(obj)) {
-      for (i = 0; i < obj.length; ++i) {
-        if (iteratee(obj[i], i)) results.push(obj[i]);
-      }
+  _.filter = function (obj, fn) {
+    if (mori.isCollection(obj)) {
+      return mori.filter(fn, obj);
     }
     else {
-      var keys = _.keys(obj);
-      for (i = 0; i < keys.length; ++i) {
-        if (iteratee(obj[keys[i]], keys[i])) results.push(obj[keys[i]]);
+      var iteratee = optimizeCb(fn);
+      var i, results = [];
+      if (_.isArrayLike(obj)) {
+        for (i = 0; i < obj.length; ++i) {
+          if (iteratee(obj[i], i)) results.push(obj[i]);
+        }
       }
+      else {
+        var keys = _.keys(obj);
+        for (i = 0; i < keys.length; ++i) {
+          if (iteratee(obj[keys[i]], keys[i])) results.push(obj[keys[i]]);
+        }
+      }
+      return results;
     }
-    return results;
   };
 
   /**
@@ -482,21 +622,26 @@ goog.scope(function() {
    * @param {?Object} context
    * @returns {Array<*>}
    */
-  _.reject = function (obj, fn, context) {
-    var iteratee = optimizeCb(fn, context);
-    var i, results = [];
-    if (_.isArrayLike(obj)) {
-      for (i = 0; i < obj.length; ++i) {
-        if (!iteratee(obj[i], i)) results.push(obj[i]);
-      }
+  _.reject = _.remove = function (obj, fn) {
+    if (mori.isCollection(obj)) {
+      return mori.remove(fn, obj);
     }
     else {
-      var keys = _.keys(obj);
-      for (i = 0; i < keys.length; ++i) {
-        if (!iteratee(obj[keys[i]], keys[i])) results.push(obj[keys[i]]);
+      var iteratee = optimizeCb(fn, context);
+      var i, results = [];
+      if (_.isArrayLike(obj)) {
+        for (i = 0; i < obj.length; ++i) {
+          if (!iteratee(obj[i], i)) results.push(obj[i]);
+        }
       }
+      else {
+        var keys = _.keys(obj);
+        for (i = 0; i < keys.length; ++i) {
+          if (!iteratee(obj[keys[i]], keys[i])) results.push(obj[keys[i]]);
+        }
+      }
+      return results;
     }
-    return results;
   };
 
   /**
@@ -506,25 +651,29 @@ goog.scope(function() {
    * @param {?Object} context
    * @returns {*}
    */
-  _.reduce = function (obj, fn, memo, context) {
-    var iteratee = optimizeCb(fn, context, 4);
-    var i;
-    if (_.isArrayLike(obj)) {
-      for (i = 0; i < obj.length; ++i) {
-        if (memo == null && i === 0) memo = obj[i];
-        memo = iteratee(memo, obj[i], i, obj);
-      }
+  _.reduce = _.foldl = function (obj, fn, memo) {
+    if (mori.isCollection(obj)) {
+      return mori.reduce(fn, obj);
     }
     else {
-      var keys = _.keys(obj);
-      for (i = 0; i < keys.length; ++i) {
-        if (memo == null && i === 0) memo = obj[keys[i]];
-        memo = iteratee(memo, obj[keys[i]], keys[i], obj);
+      var iteratee = optimizeCb(fn, null, 4);
+      var i;
+      if (_.isArrayLike(obj)) {
+        for (i = 0; i < obj.length; ++i) {
+          if (memo == null && i === 0) memo = obj[i];
+          memo = iteratee(memo, obj[i], i, obj);
+        }
       }
+      else {
+        var keys = _.keys(obj);
+        for (i = 0; i < keys.length; ++i) {
+          if (memo == null && i === 0) memo = obj[keys[i]];
+          memo = iteratee(memo, obj[keys[i]], keys[i], obj);
+        }
+      }
+      return memo;
     }
-    return memo;
   };
-  _.foldl = _.reduce;
 
   /**
    * @param {pbnj.ArrayLike} obj
@@ -533,62 +682,56 @@ goog.scope(function() {
    * @param {?Object} context
    * @returns {*}
    */
-  _.reduceRight = function (obj, fn, memo, context) {
-    var iteratee = optimizeCb(fn, context, 4);
-    var i, init;
-    if (_.isArrayLike(obj)) {
-      init = (obj.length - 1);
-      for (i = init; i >= 0; --i) {
-        if (memo == null && i === init) memo = obj[i];
-        memo = iteratee(memo, obj[i], i, obj);
-      }
+  _.reduceRight = _.foldr = function (obj, fn, memo, context) {
+    if (mori.isCollection(obj)) {
+      return mori.reduceRight(fn, obj);
     }
     else {
-      var keys = _.keys(obj);
-      init = (keys.length - 1);
-      for (i = init; i >= 0; --i) {
-        if (memo == null && i === init) memo = obj[keys[i]];
-        memo = iteratee(memo, obj[keys[i]], keys[i], obj);
+      var iteratee = optimizeCb(fn, context, 4);
+      var i, init;
+      if (_.isArrayLike(obj)) {
+        init = (obj.length - 1);
+        for (i = init; i >= 0; --i) {
+          if (memo == null && i === init) memo = obj[i];
+          memo = iteratee(memo, obj[i], i, obj);
+        }
       }
+      else {
+        var keys = _.keys(obj);
+        init = (keys.length - 1);
+        for (i = init; i >= 0; --i) {
+          if (memo == null && i === init) memo = obj[keys[i]];
+          memo = iteratee(memo, obj[keys[i]], keys[i], obj);
+        }
+      }
+      return memo;
     }
-    return memo;
   };
-  _.foldr = _.reduceRight;
 
-  _.min = function (a, context) {
+  _.min = function(a) {
     return _.reduce(a, function(memo, n) {
       return memo < n ? memo : n;
-    }, null, context);
+    }, null);
   };
 
-  _.max = function (a, context) {
+  _.max = function(a) {
     return _.reduce(a, function(memo, n) {
       return memo > n ? memo : n;
-    }, null, context);
+    }, null);
   };
 
-  _.any = function (a, fn, context) {
-    return _.filter(a, fn, context).length !== 0;
+  _.any = function(a, fn) {
+    return _.filter(a, fn).length !== 0;
   };
 
-  _.all = function (a, fn, context) {
-    return a.length === _.filter(a, fn, context).length;
+  _.all = function(a, fn) {
+    return a.length === _.filter(a, fn).length;
   };
 
   // Array -> Array
-  _.uniq = function (a, context) {
-    var set = _.reduce(a, function(memo, n) {
-      var o = {};
-      if ( !memo[n] ) {
-        o[n] = true;
-        return _.merge(memo, o);
-      }
-      return memo;
-    }, {}, context);
-
-    var newA = [], k;
-    for (k in set) newA.push(k);
-    return newA;
+  _.uniq = function (a) {
+    var set = _.into(_.set(), a);
+    return _.intoArray(set);
   };
 
 });

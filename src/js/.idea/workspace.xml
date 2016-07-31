@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="2a98aedd-d9db-419c-99e9-882045f0a6e7" name="Default" comment="" />
+    <list default="true" id="2a98aedd-d9db-419c-99e9-882045f0a6e7" name="Default" comment="">
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/pbnj/core.js" afterPath="$PROJECT_DIR$/src/pbnj/core.js" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/pbnj/peanutbutter.js" afterPath="$PROJECT_DIR$/src/pbnj/peanutbutter.js" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/src/pbnj/reader.js" afterPath="$PROJECT_DIR$/src/pbnj/reader.js" />
+    </list>
     <ignored path="js.iws" />
     <ignored path=".idea/workspace.xml" />
     <ignored path=".idea/dataSources.local.xml" />
@@ -25,8 +29,8 @@
       <file leaf-file-name="reader.js" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/pbnj/reader.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-2560">
-              <caret line="75" column="15" selection-start-line="75" selection-start-column="15" selection-end-line="75" selection-end-column="15" />
+            <state relative-caret-position="15">
+              <caret line="82" column="15" selection-start-line="82" selection-start-column="15" selection-end-line="82" selection-end-column="15" />
               <folding />
             </state>
           </provider>
@@ -35,103 +39,10 @@
       <file leaf-file-name="peanutbutter.js" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/src/pbnj/peanutbutter.js">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-6840">
-              <caret line="88" column="2" selection-start-line="88" selection-start-column="2" selection-end-line="88" selection-end-column="2" />
+            <state relative-caret-position="1365">
+              <caret line="91" column="2" selection-start-line="91" selection-start-column="2" selection-end-line="91" selection-end-column="2" />
               <folding>
-                <marker date="1468216904000" expanded="true" signature="318:331" ph="/**...*/" />
-                <marker date="1468216904000" expanded="true" signature="607:759" ph="/** walk trees ...*/" />
-                <marker date="1468216904000" expanded="true" signature="2345:2389" ph="/** An expression ...*/" />
-                <marker date="1468216904000" expanded="true" signature="2413:2436" ph="/**...*/" />
-                <marker date="1468216904000" expanded="true" signature="2480:2504" ph="/**...*/" />
-                <marker date="1468216904000" expanded="true" signature="2551:2742" ph="/** An HTML Tag ...*/" />
-                <marker date="1468216904000" expanded="true" signature="3547:3602" ph="/** @param {string} k ...*/" />
-                <marker date="1468216904000" expanded="true" signature="4234:4282" ph="/** @override ...*/" />
-                <marker date="1468216904000" expanded="true" signature="5656:5774" ph="/** Build a Tag from JS object format ...*/" />
-                <marker date="1468216904000" expanded="true" signature="6297:6454" ph="/** An atomic value ...*/" />
-                <marker date="1468216904000" expanded="true" signature="7190:7233" ph="/** A Nil value null | undefined ...*/" />
-                <marker date="1468216904000" expanded="true" signature="7639:7781" ph="/** An expression list ...*/" />
-                <marker date="1468216904000" expanded="true" signature="8545:8653" ph="/** Partially render and wrap in a promise ...*/" />
-                <marker date="1468216904000" expanded="true" signature="20440:20445" ph="{...}" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="util.js" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/src/pbnj/util.js">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2670">
-              <caret line="206" column="0" selection-start-line="206" selection-start-column="0" selection-end-line="206" selection-end-column="0" />
-              <folding>
-                <marker date="1468192819000" expanded="true" signature="101:118" ph="/**...*/" />
-                <marker date="1468192819000" expanded="true" signature="191:231" ph="/**...*/" />
-                <marker date="1468192819000" expanded="true" signature="962:1103" ph="/** Convert an Array like object into an instance of Array. ...*/" />
-                <marker date="1468192819000" expanded="true" signature="1271:1330" ph="/** @params {Object} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="1500:1558" ph="/** @param {Object} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="2049:2114" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="2246:2299" ph="/** @param {} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="2379:2426" ph="/** @param {} val ...*/" />
-                <marker date="1468192819000" expanded="true" signature="2475:2529" ph="/** @param {} val ...*/" />
-                <marker date="1468192819000" expanded="true" signature="2645:2724" ph="/** @param {Object} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="2946:3039" ph="/** @param {Function} func ...*/" />
-                <marker date="1468192819000" expanded="true" signature="3387:3445" ph="/** @param {Object} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="3575:3652" ph="/** @param {Object} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="3766:3822" ph="/** @params {Object} ...*/" />
-                <marker date="1468192819000" expanded="true" signature="4039:4095" ph="/** @params {Object} ...*/" />
-                <marker date="1468192819000" expanded="true" signature="4331:4450" ph="/** Coerce values into strings and concatenate arguments ...*/" />
-                <marker date="1468192819000" expanded="true" signature="4676:4852" ph="/** Return new copy of object with the given key and it's ...*/" />
-                <marker date="1468192819000" expanded="true" signature="5006:5181" ph="/** Return a new copy of object with the given key and value added ...*/" />
-                <marker date="1468192819000" expanded="true" signature="5347:5433" ph="/** ...*/" />
-                <marker date="1468192819000" expanded="true" signature="5575:5628" ph="/** @param {} val ...*/" />
-                <marker date="1468192819000" expanded="true" signature="5747:5800" ph="/** @param {...} ...*/" />
-                <marker date="1468192819000" expanded="true" signature="5946:6011" ph="/** @params {Array&lt;&gt;} ...*/" />
-                <marker date="1468192819000" expanded="true" signature="6291:7142" ph="/** ...*/" />
-                <marker date="1468192819000" expanded="true" signature="7181:7561" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7274:7381" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7391:7541" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7480:7535" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7566:7657" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-                <marker date="1468192819000" expanded="true" signature="7696:8070" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7795:7894" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7836:7888" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7904:8046" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="7976:8040" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="8075:8196" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-                <marker date="1468192819000" expanded="true" signature="8237:8309" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="8314:8423" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-                <marker date="1468192819000" expanded="true" signature="8456:8582" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="8589:8680" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-                <marker date="1468192819000" expanded="true" signature="8720:8866" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="8806:8845" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="8871:8994" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="9036:9440" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9135:9246" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9176:9240" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9256:9416" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9328:9410" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9445:9568" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="9610:10016" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9709:9821" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9750:9815" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9831:9992" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="9903:9986" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10021:10159" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="10207:10685" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10295:10450" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10336:10444" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10460:10664" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10532:10658" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10712:10850" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-                <marker date="1468192819000" expanded="true" signature="10903:11445" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="10997:11181" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11064:11175" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11191:11424" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11289:11418" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11507:11612" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11550:11591" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11647:11752" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11690:11731" ph="{...}" />
-                <marker date="1468192819000" expanded="true" signature="11791:11846" ph="{...}" />
+                <marker date="1469411364000" expanded="true" signature="21546:21551" ph="{...}" />
               </folding>
             </state>
           </provider>
@@ -192,9 +103,8 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
-      <pane id="PackagesPane" />
       <pane id="Scratches" />
+      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <PATH>
@@ -233,6 +143,7 @@
           </PATH>
         </subPane>
       </pane>
+      <pane id="PackagesPane" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -554,11 +465,12 @@
       <updated>1468126388229</updated>
       <workItem from="1468126396275" duration="1223000" />
       <workItem from="1468191053905" duration="3114000" />
+      <workItem from="1469636167601" duration="21000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="4337000" />
+    <option name="totallyTimeSpent" value="4358000" />
   </component>
   <component name="ToolWindowManager">
     <frame x="0" y="23" width="1440" height="873" extended-state="6" />
@@ -572,23 +484,23 @@
       <window_info id="Maven Projects" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="REPL" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="true" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Leiningen" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Capture Tool" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Designer" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.24964234" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="true" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.24964234" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="UI Designer" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
-      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Commander" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Hierarchy" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="combo" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Inspection" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4" sideWeight="0.5" order="5" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
     </layout>
   </component>
@@ -618,106 +530,23 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/pbnj/peanutbutter.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+        <state relative-caret-position="1320">
+          <caret line="88" column="2" selection-start-line="88" selection-start-column="2" selection-end-line="88" selection-end-column="2" />
           <folding>
-            <marker date="1468216904000" expanded="true" signature="318:331" ph="/**...*/" />
-            <marker date="1468216904000" expanded="true" signature="607:759" ph="/** walk trees ...*/" />
-            <marker date="1468216904000" expanded="true" signature="2345:2389" ph="/** An expression ...*/" />
-            <marker date="1468216904000" expanded="true" signature="2413:2436" ph="/**...*/" />
-            <marker date="1468216904000" expanded="true" signature="2480:2504" ph="/**...*/" />
-            <marker date="1468216904000" expanded="true" signature="2551:2742" ph="/** An HTML Tag ...*/" />
-            <marker date="1468216904000" expanded="true" signature="3547:3602" ph="/** @param {string} k ...*/" />
-            <marker date="1468216904000" expanded="true" signature="4234:4282" ph="/** @override ...*/" />
-            <marker date="1468216904000" expanded="true" signature="5656:5774" ph="/** Build a Tag from JS object format ...*/" />
-            <marker date="1468216904000" expanded="true" signature="6297:6454" ph="/** An atomic value ...*/" />
-            <marker date="1468216904000" expanded="true" signature="7190:7233" ph="/** A Nil value null | undefined ...*/" />
-            <marker date="1468216904000" expanded="true" signature="7639:7781" ph="/** An expression list ...*/" />
-            <marker date="1468216904000" expanded="true" signature="8545:8653" ph="/** Partially render and wrap in a promise ...*/" />
-            <marker date="1468216904000" expanded="true" signature="20440:20445" ph="{...}" />
+            <marker date="1469411364000" expanded="true" signature="21546:21551" ph="{...}" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/pbnj/util.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2670">
+        <state relative-caret-position="3090">
           <caret line="206" column="0" selection-start-line="206" selection-start-column="0" selection-end-line="206" selection-end-column="0" />
-          <folding>
-            <marker date="1468192819000" expanded="true" signature="101:118" ph="/**...*/" />
-            <marker date="1468192819000" expanded="true" signature="191:231" ph="/**...*/" />
-            <marker date="1468192819000" expanded="true" signature="962:1103" ph="/** Convert an Array like object into an instance of Array. ...*/" />
-            <marker date="1468192819000" expanded="true" signature="1271:1330" ph="/** @params {Object} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="1500:1558" ph="/** @param {Object} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="2049:2114" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="2246:2299" ph="/** @param {} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="2379:2426" ph="/** @param {} val ...*/" />
-            <marker date="1468192819000" expanded="true" signature="2475:2529" ph="/** @param {} val ...*/" />
-            <marker date="1468192819000" expanded="true" signature="2645:2724" ph="/** @param {Object} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="2946:3039" ph="/** @param {Function} func ...*/" />
-            <marker date="1468192819000" expanded="true" signature="3387:3445" ph="/** @param {Object} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="3575:3652" ph="/** @param {Object} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="3766:3822" ph="/** @params {Object} ...*/" />
-            <marker date="1468192819000" expanded="true" signature="4039:4095" ph="/** @params {Object} ...*/" />
-            <marker date="1468192819000" expanded="true" signature="4331:4450" ph="/** Coerce values into strings and concatenate arguments ...*/" />
-            <marker date="1468192819000" expanded="true" signature="4676:4852" ph="/** Return new copy of object with the given key and it's ...*/" />
-            <marker date="1468192819000" expanded="true" signature="5006:5181" ph="/** Return a new copy of object with the given key and value added ...*/" />
-            <marker date="1468192819000" expanded="true" signature="5347:5433" ph="/** ...*/" />
-            <marker date="1468192819000" expanded="true" signature="5575:5628" ph="/** @param {} val ...*/" />
-            <marker date="1468192819000" expanded="true" signature="5747:5800" ph="/** @param {...} ...*/" />
-            <marker date="1468192819000" expanded="true" signature="5946:6011" ph="/** @params {Array&lt;&gt;} ...*/" />
-            <marker date="1468192819000" expanded="true" signature="6291:7142" ph="/** ...*/" />
-            <marker date="1468192819000" expanded="true" signature="7181:7561" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7274:7381" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7391:7541" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7480:7535" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7566:7657" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-            <marker date="1468192819000" expanded="true" signature="7696:8070" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7795:7894" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7836:7888" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7904:8046" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="7976:8040" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="8075:8196" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-            <marker date="1468192819000" expanded="true" signature="8237:8309" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="8314:8423" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-            <marker date="1468192819000" expanded="true" signature="8456:8582" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="8589:8680" ph="/** @param {pbnj.ArrayLike} a ...*/" />
-            <marker date="1468192819000" expanded="true" signature="8720:8866" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="8806:8845" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="8871:8994" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="9036:9440" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9135:9246" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9176:9240" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9256:9416" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9328:9410" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9445:9568" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="9610:10016" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9709:9821" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9750:9815" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9831:9992" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="9903:9986" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10021:10159" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="10207:10685" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10295:10450" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10336:10444" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10460:10664" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10532:10658" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10712:10850" ph="/** @param {pbnj.ArrayLike} obj ...*/" />
-            <marker date="1468192819000" expanded="true" signature="10903:11445" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="10997:11181" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11064:11175" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11191:11424" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11289:11418" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11507:11612" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11550:11591" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11647:11752" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11690:11731" ph="{...}" />
-            <marker date="1468192819000" expanded="true" signature="11791:11846" ph="{...}" />
-          </folding>
+          <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Makefile">
+    <entry file="file://$PROJECT_DIR$/src/pbnj/reader.js">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
@@ -727,31 +556,36 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/pbnj/peanutbutter.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-6840">
-          <caret line="88" column="2" selection-start-line="88" selection-start-column="2" selection-end-line="88" selection-end-column="2" />
+        <state relative-caret-position="0">
+          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <marker date="1468216904000" expanded="true" signature="318:331" ph="/**...*/" />
-            <marker date="1468216904000" expanded="true" signature="607:759" ph="/** walk trees ...*/" />
-            <marker date="1468216904000" expanded="true" signature="2345:2389" ph="/** An expression ...*/" />
-            <marker date="1468216904000" expanded="true" signature="2413:2436" ph="/**...*/" />
-            <marker date="1468216904000" expanded="true" signature="2480:2504" ph="/**...*/" />
-            <marker date="1468216904000" expanded="true" signature="2551:2742" ph="/** An HTML Tag ...*/" />
-            <marker date="1468216904000" expanded="true" signature="3547:3602" ph="/** @param {string} k ...*/" />
-            <marker date="1468216904000" expanded="true" signature="4234:4282" ph="/** @override ...*/" />
-            <marker date="1468216904000" expanded="true" signature="5656:5774" ph="/** Build a Tag from JS object format ...*/" />
-            <marker date="1468216904000" expanded="true" signature="6297:6454" ph="/** An atomic value ...*/" />
-            <marker date="1468216904000" expanded="true" signature="7190:7233" ph="/** A Nil value null | undefined ...*/" />
-            <marker date="1468216904000" expanded="true" signature="7639:7781" ph="/** An expression list ...*/" />
-            <marker date="1468216904000" expanded="true" signature="8545:8653" ph="/** Partially render and wrap in a promise ...*/" />
-            <marker date="1468216904000" expanded="true" signature="20440:20445" ph="{...}" />
+            <marker date="1469411364000" expanded="true" signature="21546:21551" ph="{...}" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/pbnj/util.js" />
+    <entry file="file://$PROJECT_DIR$/Makefile">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="0">
+          <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/src/pbnj/peanutbutter.js">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1365">
+          <caret line="91" column="2" selection-start-line="91" selection-start-column="2" selection-end-line="91" selection-end-column="2" />
+          <folding>
+            <marker date="1469411364000" expanded="true" signature="21546:21551" ph="{...}" />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/src/pbnj/reader.js">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-2560">
-          <caret line="75" column="15" selection-start-line="75" selection-start-column="15" selection-end-line="75" selection-end-column="15" />
+        <state relative-caret-position="15">
+          <caret line="82" column="15" selection-start-line="82" selection-start-column="15" selection-end-line="82" selection-end-column="15" />
           <folding />
         </state>
       </provider>

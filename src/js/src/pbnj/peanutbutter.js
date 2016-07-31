@@ -10,7 +10,7 @@ goog.scope(function() {
   /** @const */
   var pb = pbnj.peanutbutter;
   var jess = pbnj.jess;
-  //var _ = pbnj.core;
+  var _ = pbnj.core;
   
   var str = pbnj.core.str;
   var assoc = pbnj.core.assoc;

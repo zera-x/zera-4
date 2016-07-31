@@ -4,6 +4,16 @@ goog.require('pbnj.core');
 
 goog.scope(function() {
 
+  if (module != void 0 && module.exports) {
+    module.exports.reader = pbnj.reader;
+  }
+
+  // should support full EDN spec
+  // see: https://github.com/edn-format/edn
+  //
+  // also look to the Clojure reader spec for ideas
+  // see: http://clojure.org/reference/reader 
+
   var pair = pbnj.core.pair;
   var syntax = pbnj.core.syntax;
 
@@ -53,7 +63,7 @@ goog.scope(function() {
   var COLLECTION_START = {
     '(': 'list',
     '[': 'vector',
-    '{': 'hashMap',
+    '{': 'map',
     '#': 'set'
   };
 
@@ -67,7 +77,7 @@ goog.scope(function() {
   var COLLECTION_END_NAME = {
     ')': 'list',
     ']': 'vector',
-    '}': 'hashMap',
+    '}': 'map',
     '}': 'set',
   };
 
@@ -75,22 +85,26 @@ goog.scope(function() {
     mori: {
       string: function (rep) { return rep },
       symbol: function (rep) { return mori.symbol(rep) },
+      boolean: function (rep) { return rep === 'true' ? true : false; },
+      nil: function (rep) { return null },
       number: function (rep) { return parseFloat(rep) },
       list: function (rep) { return mori.list.apply(mori, rep) },
       vector: function (rep) { return mori.vector.apply(mori, rep) },
       set: function (rep) { return mori.set(rep) },
-      hashMap: function (rep) { return mori.hashMap.apply(mori, rep) },
+      map: function (rep) { return mori.hashMap.apply(mori, rep) },
       keyword: function (rep) { return mori.keyword(rep) },
       quote: function (form) { return mori.list(mori.symbol('quote'), form) }
     },
     js: {
       string: function (rep) { return rep },
       symbol: function (rep) { return Symbol(rep) },
+      boolean: function (rep) { return rep === 'true' ? true : false; },
+      nil: function (rep) { return null },
       number: function (rep) { return parseFloat(rep) },
       list: function (rep) { return rep },
       vector: function (rep) { return rep },
       set: buildSet,
-      hashMap: buildMap,
+      map: buildMap,
       keyword: function (rep) { return rep },
       quote: function (form) { return ['quote', form] }
     }
@@ -113,7 +127,9 @@ goog.scope(function() {
     return map;
   }
 
-  function tokenStream(input) {
+  // TODO: add rationals, dates (#inst ...) and regexes
+  function tokenStream(input, dispatch) {
+    var dispatch = dispatch || TYPE_DISPATCH.mori;
     var current = null;
     return {
       next: next,
@@ -182,7 +198,7 @@ goog.scope(function() {
     }
 
     function readString() {
-      return syntax('string', readEscaped('"'), input);
+      return dispatch.string(readEscaped('"'));
     }
 
     function readNumber() {
@@ -195,19 +211,26 @@ goog.scope(function() {
         }
         return isDigit(ch);
       });
-      // TODO: see what improvements can be made given the quality of JS numbers
-      return syntax('number', parseFloat(num), input);
+      return dispatch.number(hasDot ? parseFloat(num) : parseInt(num));
     }
 
     function readSymbol() {
       var sym = readWhile(isSymbol);
-      return syntax('symbol', sym, input);
+      if (sym === 'true' || sym === 'false') {
+        return dispatch.boolean(sym);
+      }
+      else if (sym === 'nil') {
+        return dispatch.nil(sym);
+      }
+      else {
+        return dispatch.symbol(sym);
+      }
     }
 
     function readKeyword() {
       input.next();
       var kw = readWhile(isSymbol);
-      return syntax('keyword', kw, input);
+      return dispatch.keyword(kw);
     }
 
     function readCollection(tag, end) {
@@ -222,12 +245,12 @@ goog.scope(function() {
           buffer.push(readNext());
         }
       }
-      return syntax(tag, buffer, input);
+      return dispatch[tag](buffer);
     }
 
     function readQuotedForm() {
       input.next();
-      return syntax('quote', readNext(), input);
+      return dispatch.quote(readNext());
     }
 
     function readNext() {
@@ -281,9 +304,14 @@ goog.scope(function() {
     }
   }
 
-  function readString(str) {
+  /**
+   * @param {string} str
+   * @returns {Array<Object>}
+   */
+  function readString(str, dispatch) {
+    if (str == null || typeof str !== 'string') return [];
     var tokens = [];
-    var stream = tokenStream(inputStream(str));
+    var stream = tokenStream(inputStream(str), dispatch);
     while (!stream.eof()) tokens.push(stream.next());
     return tokens;
   }
@@ -293,6 +321,5 @@ goog.scope(function() {
     tokenStream: tokenStream,
     readString: readString,
     TYPE_DISPATCH: TYPE_DISPATCH
-  }
-
+  };
 });
