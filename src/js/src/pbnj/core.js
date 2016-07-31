@@ -68,6 +68,28 @@ goog.scope(function() {
 
   // Type Predicates
   
+  _['list?'] = _.isList;
+  _['map?'] = _.isMap;
+  _['vector?'] = _.isVector;
+  _['set?'] = _.isSet;
+  _['collection?'] = _.isCollection;
+  _['seq?'] = _.isSeq;
+  _['sequential?'] = _.isSequential;
+  _['associative?'] = _.isAssociative;
+  _['counted?'] = _.isCounted;
+  _['indexed?'] = _.isIndexed;
+  _['reduceable?'] = _.isReducable;
+  _['seqable?'] = _.isSeqable;
+  _['reversable?'] = _.isReversable;
+
+  _['odd?'] = _.isOdd;
+  _['even?'] = _.isEven;
+
+  _['subset?'] = _.isSubset;
+  _['superset?'] = _.isSuperset;
+
+  _['empty?'] = _.isEmpty;
+
   /**
    * @param {*} val
    * @returns {boolean}
@@ -157,7 +179,7 @@ goog.scope(function() {
   };
   
   _.get = function(col, key, alt) {
-    if (mori.isAssociative(col)) {
+    if (mori.isCollection(col)) {
       return mori.get(col, key, alt);
     }
     else {
@@ -318,7 +340,7 @@ goog.scope(function() {
    * @returns {*}
    */
   _.has = _.hasKey = function(obj, key) {
-    if (mori.isAssociative(obj)) {
+    if (mori.isCollection(obj)) {
       return mori.hasKey(obj, key);
     }
     else {

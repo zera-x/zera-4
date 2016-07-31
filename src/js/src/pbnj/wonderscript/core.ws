@@ -50,3 +50,35 @@
                          :else ["pbnj.core.list(" ")"]))
                  :else (str exp)))) 
 
+(defmacro let [exp]
+  (def bindings (pair (->Array (second exp))))
+  (list 'apply (list 'lambda
+                     (into [] (map bindings first))
+                     (second (rest exp)))
+        (into [] (map bindings second))))
+
+(defmacro do [exp]
+  (list 'apply (cons 'lambda (cons [] (rest exp)))))
+
+(defmacro if [exp]
+  (def r (rest exp))
+  (def pred (first r))
+  (def conse (second r))
+  (def alt (second (rest r)))
+  (cond alt (list 'cond pred conse :else alt)
+        :else (list 'cond pred conse)))
+
+(defmacro defn [exp]
+  (def r (rest exp))
+  (list 'def (first r) (cons 'lambda (cons (second r) (rest (rest r))))))
+
+(defmacro defonce [exp]
+  (def r (rest exp))
+  (if (not (defined? (first r)))
+    (list 'def (first r) (second r))
+    :defined))
+
+(defmacro defstruct [exp]
+  (def name (second exp))
+  (def args (rest (rest exp)))
+  (list 'def name (cons 'struct (cons (keyword (str name)) args)))) 
