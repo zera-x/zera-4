@@ -84,7 +84,7 @@ goog.scope(function() {
   var TYPE_DISPATCH = {
     mori: {
       string: function (rep) { return rep },
-      symbol: function (rep) { return mori.symbol(rep) },
+      symbol: function (rep) { return mori.symbol.apply(mori, rep.split('/')) },
       boolean: function (rep) { return rep === 'true' ? true : false; },
       nil: function (rep) { return null },
       number: function (rep) { return parseFloat(rep) },
@@ -92,7 +92,7 @@ goog.scope(function() {
       vector: function (rep) { return mori.vector.apply(mori, rep) },
       set: function (rep) { return mori.set(rep) },
       map: function (rep) { return mori.hashMap.apply(mori, rep) },
-      keyword: function (rep) { return mori.keyword(rep) },
+      keyword: function (rep) { return mori.keyword.apply(mori, rep.split('/')) },
       quote: function (form) { return mori.list(mori.symbol('quote'), form) }
     },
     js: {
@@ -147,7 +147,7 @@ goog.scope(function() {
     }
 
     function isSymbol(ch) {
-      return /[a-zA-Z0-9_\.\/\-\!\?\*\$\=\<\>\&\+]/.test(ch);
+      return /[a-zA-Z0-9_\.\/\-\!\?\*\$\=\<\>\&\+\~\|\%]/.test(ch);
     }
 
     function isKeywordStart(ch) {
