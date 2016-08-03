@@ -1,6 +1,5 @@
 goog.provide('pbnj.core');
 
-var root = this;
 goog.scope(function() {
   var _ = pbnj.core;
   
@@ -18,7 +17,7 @@ goog.scope(function() {
 
   // Arithmetic
   
-  _.add = _['+'] = function(a, b) {
+  _.add = function(a, b) {
     if (arguments.length === 0) return 0;
     else if (arguments.length === 1) return a;
     else {
@@ -30,7 +29,7 @@ goog.scope(function() {
     }
   };
 
-  _.sub = _['-'] = function(a, b) {
+  _.sub = function(a, b) {
     if (arguments.length === 0) return 0;
     else if (arguments.length === 1) return -a;
     else {
@@ -42,7 +41,7 @@ goog.scope(function() {
     }
   };
 
-  _.mult = _['*'] = function(a, b) {
+  _.mult = function(a, b) {
     if (arguments.length === 0) return 1;
     else if (arguments.length === 1) return a;
     else {
@@ -54,7 +53,7 @@ goog.scope(function() {
     }
   };
 
-  _.div = _['/'] = function(a, b) {
+  _.div = function(a, b) {
     if (arguments.length === 0) return 1;
     else if (arguments.length === 1) return a;
     else {
@@ -66,35 +65,11 @@ goog.scope(function() {
     }
   };
 
-  // Type Predicates
-  
-  _['list?'] = _.isList;
-  _['map?'] = _.isMap;
-  _['vector?'] = _.isVector;
-  _['set?'] = _.isSet;
-  _['collection?'] = _.isCollection;
-  _['seq?'] = _.isSeq;
-  _['sequential?'] = _.isSequential;
-  _['associative?'] = _.isAssociative;
-  _['counted?'] = _.isCounted;
-  _['indexed?'] = _.isIndexed;
-  _['reduceable?'] = _.isReducable;
-  _['seqable?'] = _.isSeqable;
-  _['reversable?'] = _.isReversable;
-
-  _['odd?'] = _.isOdd;
-  _['even?'] = _.isEven;
-
-  _['subset?'] = _.isSubset;
-  _['superset?'] = _.isSuperset;
-
-  _['empty?'] = _.isEmpty;
-
   /**
    * @param {*} val
    * @returns {boolean}
    */
-  _.isNumber = _['number?'] = function(val) {
+  _.isNumber = function(val) {
     return Object.prototype.toString.call(val) === '[object Number]';
   };
 
@@ -102,7 +77,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isString = _['string?'] = function(val) {
+  _.isString = function(val) {
     return Object.prototype.toString.call(val) === '[object String]';
   };
 
@@ -118,7 +93,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isNull = _['nil?'] = _['null?'] = function(val) {
+  _.isNull = function(val) {
     return val === null;
   };
 
@@ -126,7 +101,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isUndefined = _['undefined?'] = function(val) {
+  _.isUndefined = function(val) {
     return val === void 0;
   };
 
@@ -134,7 +109,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isDate = _['date?'] = function(val) {
+  _.isDate = function(val) {
     return Object.prototype.toString.call(val) === '[object Date]';
   };
 
@@ -142,7 +117,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isError = _['error?'] = function(val) {
+  _.isError = function(val) {
     return Object.prototype.toString.call(val) === '[object Error]';
   };
 
@@ -150,7 +125,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isRegExp = _['regexp?'] = function(val) {
+  _.isRegExp = function(val) {
     return Object.prototype.toString.call(val) === '[object RegExp]';
   };
 
@@ -158,7 +133,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isFunction = _['function?'] = function(val) {
+  _.isFunction = function(val) {
     return Object.prototype.toString.call(val) === '[object Function]';
   };
 
@@ -166,7 +141,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isArguments = _['arguments?'] = function(val) {
+  _.isArguments = function(val) {
     return Object.prototype.toString.call(val) === '[object Arguments]';
   };
 
@@ -174,9 +149,12 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isElement = _['element?'] = function(obj) {
+  _.isElement = function(obj) {
     return !!(obj && obj.nodeType === 1);
   };
+
+  _.name = function(sym) { return sym.name };
+  _.namespace = function(sym) { return sym.ba };
   
   _.get = function(col, key, alt) {
     if (mori.isCollection(col)) {
@@ -226,7 +204,7 @@ goog.scope(function() {
    * @param {(pbnj.ArrayLike|null)} obj
    * @returns {Array<*>}
    */
-  _.toArray = _['->Array'] = function(obj) {
+  _.toArray = function(obj) {
     if (!obj) return [];
     else if (_.isArray(obj)) return obj;
     else if (mori.isCollection(obj)) {
@@ -241,7 +219,7 @@ goog.scope(function() {
    * @params {Object} obj
    * @returns {boolean}
    */
-  _.isArray = _['array?'] = Array.isArray || function(obj) {
+  _.isArray = Array.isArray || function(obj) {
     return Object.prototype.toString.call(obj) === '[object Array]';
   };
 
@@ -250,7 +228,7 @@ goog.scope(function() {
    * @param {Object} obj
    * @returns {boolean}
    */
-  _.isArrayLike = _['arraylike?'] = function(obj) {
+  _.isArrayLike = function(obj) {
     var length = obj && obj.length;
     return typeof length === 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
   };
@@ -478,15 +456,17 @@ goog.scope(function() {
    * @returns {Array<Array<*>>}
    */
   _.pair = function (a) {
-    var i, pairs = [], pair = [];
-    for (i = 0; i < a.length; ++i) {
-      if ( i % 2 === 0 ) {
-        pair.push(a[i]);
+    var i, pairs;
+    if (mori.isCollection(a)) {
+      pairs = mori.vector();
+      for (i = 0; i < mori.count(a); i += 2) {
+        pairs = mori.conj(pairs, mori.vector(mori.nth(a, i), mori.nth(a, i+1)));
       }
-      else {
-        pair.push(a[i]);
-        pairs.push(pair);
-        pair = []
+    }
+    else {
+      pairs = [];
+      for (i = 0; i < a.length; i += 2) {
+        pairs.push([a[i], a[i+1]]);
       }
     }
     return pairs;
@@ -675,7 +655,7 @@ goog.scope(function() {
    */
   _.reduce = _.foldl = function (obj, fn, memo) {
     if (mori.isCollection(obj)) {
-      return mori.reduce(fn, obj);
+      return memo === void 0 ? mori.reduce(fn, obj) : mori.reduce(fn, memo, obj);
     }
     else {
       var iteratee = optimizeCb(fn, null, 4);
