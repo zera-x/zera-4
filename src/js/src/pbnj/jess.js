@@ -210,9 +210,6 @@ goog.scope(function() {
           }
       }
     }
-    else if ( typeof form === 'object' && form.toSource ) {
-      return form.toSource();
-    }
     else if ( typeof form === 'object' ) {
       return emitObj(form);
     }
