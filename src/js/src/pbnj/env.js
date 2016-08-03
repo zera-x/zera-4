@@ -24,20 +24,20 @@ goog.scope(function() {
       }
       scope = scope.parent;
     }
-    throw new Error(_.str("Undefined variable: ", name));
+    throw new Error(_.str("Undefined variable: '", name, "'"));
   };
 
   env.get = function(name) {
     if (name in this.vars) {
       return this.vars[name]
     }
-    throw new Error(_.str("Undefined variable: ", name));
+    throw new Error(_.str("Undefined variable: '", name, "'"));
   };
 
   env.set = function(name, value) {
     var scope = this.lookup(name);
     // cannot define globals from a nested environment
-    if (!scope && this.parent) throw new Error(_.str("Undefined variable", name));
+    if (!scope && this.parent) throw new Error(_.str("Undefined variable: '", name, "'"));
     return (scope || this).vars[name] = value;
   };
 
