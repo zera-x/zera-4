@@ -28,32 +28,54 @@ goog.scope(function() {
   var isVariable = _.isSymbol;
 
   var evalVariable = function(exp, env) {
-    var name = _.str(exp);
-    return env.lookup(name).get(name);
+    var name = _.name(exp);
+    var ns = _.namespace(exp);
+    var val;
+    if (ns === 'js') {
+      val = ROOT_OBJECT[name];
+    }
+    else if (ns !== null) {
+      val = getModule(_.symbol(ns))[name];
+    }
+    else {
+      val = env.lookup(name).get(name);
+    }
+    if (val == null) throw new Error(_.str("Undefined variable: '", exp, "'"));
+    return val;
   };
 
   var isDefinition = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('def'));
+    return _.isList(exp) && _.equals(_.first(exp), _.symbol('define'));
   }
 
   var evalDefinition = function(exp, env) {
     var rest = _.rest(exp);
-    var name = _.first(rest);
-    var value = _.second(rest);
-    return env.define(_.str(name), ws.eval(value, env));
+    var name = _.name(_.first(rest));
+    var ns = _.namespace(_.first(rest));
+    env.define(name);
+    var value = ws.eval(_.second(rest), env);
+    if (!env.parent || ns != null) {
+      var mod = ns != null ? getModule(_.symbol(ns)) : pbnj.MODULE_SCOPE;
+      mod[name] = value;
+    }
+    return env.define(name, value);
   };
 
   var isLambda = function(exp) {
     return _.isList(exp) && _.equals(_.first(exp), _.symbol('lambda'));
   };
 
+  var arity = function(fn) {
+    return fn.arity || fn.length;
+  };
+
   var evalLambda = function(exp, env) {
     var rest = _.rest(exp);
     var names = _.first(rest);
-    var body = _.rest(rest);
+    var body = _.second(rest);
     var scope = env.extend();
     var argCount = _.count(names);
-    return function lambda() {
+    var lambda = function lambda() {
       var args = arguments;
       if (argCount !== args.length) {
         throw new Error(_.str('wrong number of arguments expected: ', argCount, ' got: ', args.length));
@@ -63,12 +85,27 @@ goog.scope(function() {
         scope.define(name, i < args.length ? args[i] : false);
         i++;
       });
-      var value = null;
-      _.each(body, function(exp) {
-        value = ws.eval(exp, scope)
-      });
-      return value;
+      return ws.eval(body, scope);
     };
+    lambda.arity = argCount;
+    lambda.pprint = lambda.toString = function() {
+      return exp.toString();
+    };
+    return lambda;
+  };
+
+  var isBlock = function(exp) {
+    return _.isList(exp) && _.equals(_.first(exp), _.symbol('do'));
+  };
+
+  var evalBlock = function(exp, env) {
+    var body = _.rest(exp);
+    var scope = env.extend();
+    var value = null;
+    _.each(body, function(exp) {
+      value = ws.eval(exp, scope)
+    });
+    return value;
   };
 
   var isInvocable = function(exp) {
@@ -84,18 +121,7 @@ goog.scope(function() {
     var args = _.intoArray(_.map(_.rest(exp), function(exp) { return ws.eval(exp, env) }));
 
     if (isVariable(func)) {
-      try {
-        func = evalVariable(func, env); 
-      }
-      catch (e) {
-        if (_.isSymbol(func) && args[0][func.toString()]) {
-          func = args[0][func.toString()].bind(args[0]);
-          args = _.rest(args);
-        }
-        else {
-          throw e;
-        }
-      }
+      func = evalVariable(func, env); 
     }
     else if (isLambda(func)) {
       func = evalLambda(func, env);
@@ -143,7 +169,7 @@ goog.scope(function() {
   };
 
   var isMacro = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('defmacro'));
+    return _.isList(exp) && _.equals(_.first(exp), _.symbol('define-syntax'));
   };
 
   var MACROS = {};
@@ -153,17 +179,23 @@ goog.scope(function() {
     var args = _.second(rest);
     var body = _.rest(_.rest(rest));
     var lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
-    console.log('lambda: ', _.str(lambda));
-    MACROS[name.toString()] = evalLambda(lambda, env)
+    var currentScope = pbnj.MODULE_SCOPE;
+    var mod = _.namespace(name) ? getModule(_.symbol(_.namespace(name))) : pbnj.MODULE_SCOPE;
+    mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
+    mod['@@MACROS@@'][_.name(name)] = evalLambda(lambda, env);
+    return name;
   };
 
   var macroexpand = function(exp) {
+    if (exp == null) return exp;
     var macro = null;
-    if (_.isSymbol(exp) && (macro = MACROS[_.str(exp)])) {
-      return macro(exp);
-    }
-    else if (_.isList(exp) && (macro = MACROS[_.str(_.first(exp))])) {
-      return macro(exp);
+    var name = _.isList(exp) ? _.first(exp) : exp;
+    var ns = _.isSymbol(name) ? _.namespace(name) : null;
+    if (ns === 'js') return exp;
+    var macros = ns ? getModule(_.symbol(ns))['@@MACROS@@'] : pbnj.MODULE_SCOPE['@@MACROS@@'];
+    if (macros == null) return exp;
+    else if ((macro = macros[_.name(name)])) {
+      return macroexpand(macro(exp));
     }
     return exp;
   };
@@ -194,9 +226,16 @@ goog.scope(function() {
     return value;
   };
 
+  var isThrownException = function(exp) {
+    return _.isList(exp) && _.equals(_.first(exp), _.symbol('throw'));
+  };
+
+  var evalThrownException = function(exp, env) {
+    var error = ws.eval(_.second(exp), env);
+    throw error;
+  };
+
   var globalEnv = pbnj.env();
-  globalEnv.define('and', function(a, b) { return a && b });
-  globalEnv.define('or', function(a, b) { return a || b });
   globalEnv.define('not', function(x) { return !x });
   globalEnv.define('identical?', function(a, b) { return a === b });
   globalEnv.define('equiv?', function(a, b) { return a == b });
@@ -206,8 +245,23 @@ goog.scope(function() {
   globalEnv.define('<=', function(a, b) { return a <= b });
   globalEnv.define('>=', function(a, b) { return a >= b });
   globalEnv.define('array', function() { return Array.prototype.slice.call(arguments) });
+  globalEnv.define('object', function(parent) { return Object.create(parent ? parent : null) });
   globalEnv.define('println', console.log.bind(console));
   globalEnv.define('macroexpand', macroexpand);
+  globalEnv.define('arity', arity);
+  globalEnv.define('init', function(ctr) {
+    if (!_.isFunction(ctr)) throw new Error(_.str("'", ctr, "' is not an constructor"));
+    return new (Function.prototype.bind.apply(ctr, _.rest(arguments)));
+  });
+  globalEnv.define('property', function(obj, prop) {
+    if (obj == null) throw new Error('nil is not an object');
+    return obj[_.str(prop).replace(/^:/, '')];
+  });
+  globalEnv.define('set-property!', function(obj, prop, value) {
+    if (obj == null) throw new Error('nil is not an object');
+    obj[_.str(prop).replace(/^:/, '')] = value;
+    return obj;
+  });
   globalEnv.define('send', function(obj, method) {
     if (arguments.length !== 2) throw new Error(_.str('wrong number of arguments expected: 2 arguments, got: ', arguments.length));
     return obj[_.str(method).replace(/^:/, '')].apply(obj, _.toArray(arguments).slice(2))
@@ -215,14 +269,14 @@ goog.scope(function() {
   globalEnv.define('responds-to?', function(obj, method) {
     if (arguments.length !== 2) throw new Error(_.str('wrong number of arguments expected: 2 arguments, got: ', arguments.length));
     var val = obj[_.str(method).replace(/^:/, '')];
-    return !isFalsy((val && _.isFunction(val)));
+    return !isFalsy(val) && _.isFunction(val);
   });
-  globalEnv.define('struct', function(name) {
-    var attrs = _.map(_.rest(arguments), function(name) { return _.str(name).replace(/^:/, '') });
+  globalEnv.define('struct', function(args, name) {
+    var attrs = _.map(_.rest(args), function(name) { return _.str(name).replace(/^:/, '') });
     var ctr = function(/** values */) {
       var obj = this;
-      var prefix = _.str(name).replace(/^:/, '').toLowerCase();
-      var values = _.toArray(arguments);
+      var prefix = !name ? '' : _.str(name).replace(/^:/, '').toLowerCase();
+      var values = _.toArray(args);
       _.each(values, function(value, i) {
         obj[_.str(prefix, '-', attrs[i])] = function() {
           return value;
@@ -233,6 +287,73 @@ goog.scope(function() {
       return new (Function.prototype.bind.apply(ctr, _.cat({}, _.toArray(arguments))));
     }
   });
+  /*
+  globalEnv.define('method', function(obj, name, def) {
+    if (!_.isFunction(def)) throw new Error("invalid definition");
+    if (_.isFunction(obj)) {
+      // treat as a generic function
+      var method = function(obj) {
+        if (arguments.length !== def.length) {
+          throw new Error(_.str('wrong number of arguments expected: ', def.length,' arguments, got: ', arguments.length));
+        }
+        this(obj)
+      };
+      obj.table = obj.table || _.hashMap();
+      obj.table = _.assoc(obj.table, , def);
+      return method.bind(obj);
+    }
+    else if (_.isObject(obj)) {
+      // treat as a single dispatch obj
+      obj[_.name(name)] = def;
+      return def;
+    }
+    else {
+      throw new Error(_.str("'", obj, "' is not a valid value"));
+    }
+  });*/
+  globalEnv.define('class', function(args, methods, name) {
+    var attrs = _.map(_.rest(args), function(name) { return _.str(name).replace(/^:/, '') });
+    var ctr = function(/** values */) {
+      var obj = this;
+      var prefix = !name ? '' : _.str(name).replace(/^:/, '').toLowerCase();
+      var values = _.toArray(args);
+      _.each(values, function(value, i) {
+        obj[_.str(prefix, '-', attrs[i])] = function() {
+          return value;
+        };
+      });
+    };
+    return function() {
+      return new (Function.prototype.bind.apply(ctr, _.cat({}, _.toArray(arguments))));
+    }
+  });
+  var evalModuleName = function(name, root) {
+    if (!_.isSymbol(name)) throw new Error('symbol expected');
+    var path = _.str(name).split('/')[0].split('.');
+    var mod = root || {};
+    _.each(path, function(name) {
+      if (!_.isObject(mod[name])) mod[name] = {};
+      mod = mod[name];
+    });
+    return mod;
+  };
+  var defineModule = function(name) {
+    return evalModuleName(name, ROOT_OBJECT);
+  };
+  var getModule = function(name) {
+    if (!_.isSymbol(name)) throw new Error('symbol expected');
+    var path = _.str(name).split('/')[0].split('.');
+    var mod = ROOT_OBJECT;
+    _.each(path, function(name) {
+      if (!_.isObject(mod[name])) {
+        throw new Error(_.str("module '", name, "' does not exist"));
+      }
+      mod = mod[name];
+    });
+    return mod;
+  }
+  globalEnv.define('module', defineModule);
+  pbnj.MODULE_SCOPE = pbnj.core; // default scope
 
   var importModule = function(mod) {
     for (var fn in mod) {
@@ -243,6 +364,18 @@ goog.scope(function() {
   }
   importModule(pbnj.core);
   
+  ws.pprint = function(exp) {
+    if (exp == null) return 'nil';
+    else if (_.isBoolean(exp)) return exp == true ? 'true' : 'false';
+    else if (isQuoted(exp)) return _.str("'", ws.pprint(_.second(exp)))
+    else if (_.isNumber(exp) || _.isKeyword(exp) || _.isSymbol(exp) || _.isCollection(exp)) return _.str(exp);
+    else if (exp.pprint) return exp.pprint();
+    else {
+      return _.str(exp);
+    }
+  };
+  globalEnv.define('pprint', ws.pprint);
+
   ws.eval = function(exp, env) {
     var env = env || globalEnv;
     var exp = macroexpand(exp);
@@ -252,9 +385,11 @@ goog.scope(function() {
     else if (isDefinition(exp)) return evalDefinition(exp, env);
     else if (isCond(exp)) return evalCond(exp, env);
     else if (isLambda(exp)) return evalLambda(exp, env);
+    else if (isBlock(exp)) return evalBlock(exp, env);
     else if (isAssignment(exp)) return evalAssignment(exp, env);
     else if (isVariableIntrospection(exp)) return evalVariableIntrospection(exp, env);
     else if (isMacro(exp)) return evalMacro(exp, env);
+    else if (isThrownException(exp)) return evalThrownException(exp, env);
     else if (isApplication(exp)) return evalApplication(exp, env);
     else {
       throw new Error(_.str("invalid expression: '", exp, "'"));
@@ -262,7 +397,7 @@ goog.scope(function() {
   };
   globalEnv.define('eval', ws.eval);
   globalEnv.define('apply', function(func, args) {
-    if (arguments.length !== 1) throw new Error(_.str('wrong number of arguments expected: 1 arguments, got: ', arguments.length));
+    if (arguments.length !== 2) throw new Error(_.str('wrong number of arguments expected: 2 arguments, got: ', arguments.length));
     if (!_.isFunction(func)) throw new Error(_.str("'", func, "' is not a function"));
     return func.apply(null, args ? _.intoArray(args) : [])
   });
@@ -290,7 +425,6 @@ goog.scope(function() {
     });
     return value;
   };
-
   globalEnv.define('read-string', ws.readString);
 
   if (module != void 0 && module.exports) {
@@ -299,6 +433,30 @@ goog.scope(function() {
       var buffer = fs.readFileSync(file);
       return ws.readString(buffer.toString());
     };
-    globalEnv.define('read-file', ws.readFile);
+    ws.readFile(_.str(__dirname, "/wonderscript/core.ws"))
   }
+  else {
+    ws.readFile = function(file) {
+      var xhr = new XMLHttpRequest();
+      var res = null;
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+          if (xhr.status === 200) {
+            res = xhr.responseText;
+          }
+          else {
+            throw new Error(_.str("There was an error processing the path: '", file, "'"));
+          }
+        }
+      };
+      xhr.open('GET', file, false);
+      xhr.send();
+      return ws.readString(res);
+    };
+    ws.readFile("src/pbnj/wonderscript/core.ws")
+  }
+  globalEnv.define('read-file', ws.readFile);
+
+  globalEnv.define('*environment*', 'development');
+  globalEnv.define('*root-object*', ROOT_OBJECT);
 });
