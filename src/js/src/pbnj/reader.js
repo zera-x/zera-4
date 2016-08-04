@@ -17,7 +17,7 @@ goog.scope(function() {
   var pair = pbnj.core.pair;
   var syntax = pbnj.core.syntax;
 
-  function inputStream(input) {
+  function inputStream(input, source) {
     var pos = 0, line = 1, col = 0;
     return {
       next: next,
@@ -28,7 +28,7 @@ goog.scope(function() {
       line: lineNumber,
       column: columnNumber
     };
-    function source() { return 'input' }
+    function source() { return source || 'input' }
     function lineNumber() { return line }
     function columnNumber() { return col }
     function next() {
@@ -198,7 +198,7 @@ goog.scope(function() {
     }
 
     function readString() {
-      return dispatch.string(readEscaped('"'));
+      return syntax('string', dispatch.string(readEscaped('"')), input);
     }
 
     function readNumber() {
@@ -211,26 +211,26 @@ goog.scope(function() {
         }
         return isDigit(ch);
       });
-      return dispatch.number(hasDot ? parseFloat(num) : parseInt(num));
+      return syntax('number', dispatch.number(hasDot ? parseFloat(num) : parseInt(num)), input);
     }
 
     function readSymbol() {
       var sym = readWhile(isSymbol);
       if (sym === 'true' || sym === 'false') {
-        return dispatch.boolean(sym);
+        return syntax('boolean', dispatch.boolean(sym), input);
       }
       else if (sym === 'nil') {
-        return dispatch.nil(sym);
+        return syntax('nil', dispatch.nil(sym), input);
       }
       else {
-        return dispatch.symbol(sym);
+        return syntax('symbol', dispatch.symbol(sym), input);
       }
     }
 
     function readKeyword() {
       input.next();
       var kw = readWhile(isSymbol);
-      return dispatch.keyword(kw);
+      return syntax('keyword', dispatch.keyword(kw), input);
     }
 
     function readCollection(tag, end) {
@@ -245,12 +245,12 @@ goog.scope(function() {
           buffer.push(readNext());
         }
       }
-      return dispatch[tag](buffer);
+      return syntax(tag, dispatch[tag](buffer), input);
     }
 
     function readQuotedForm() {
       input.next();
-      return dispatch.quote(readNext());
+      return syntax('quote', dispatch.quote(readNext()), input);
     }
 
     function readNext() {

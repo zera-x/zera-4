@@ -70,6 +70,9 @@
 (define * mult)
 (define / div)
 
+(define-function add1 [n] (+ 1 n))
+(define-function sub1 [n] (- 1 n))
+
 (define-syntax comment [exp] nil)
 
 (define-syntax let [exp]
@@ -140,8 +143,7 @@
 ; TODO: make a version of this for the core lib with mori types
 (define entries ->array)
 
-(define-function pprint
-  [exp]
+(define-function pprint [exp]
   (cond (number? exp) (str exp)
         (string? exp) (str "\"" exp "\"")
         (symbol? exp) (str exp)

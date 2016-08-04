@@ -17,6 +17,9 @@ goog.scope(function() {
     return _.isNull(exp) || _.isUndefined(exp) || _.isKeyword(exp) || _.isBoolean(exp) || _.isString(exp) || _.isNumber(exp) || _.isDate(exp) || _.isRegExp(exp) || _.isMap(exp) || _.isVector(exp) || _.isSet(exp);
   };
 
+  var evalSelfEvaluating = function(exp) {
+  };
+
   var isQuoted = function(exp) {
     return _.isList(exp) && _.equals(_.first(exp), _.symbol('quote'));
   };
@@ -50,14 +53,16 @@ goog.scope(function() {
 
   var evalDefinition = function(exp, env) {
     var rest = _.rest(exp);
-    var name = _.name(_.first(rest));
-    var ns = _.namespace(_.first(rest));
+    var ident = _.first(rest);
+    var name = _.name(ident);
+    var ns = _.namespace(ident);
     env.define(name);
     var value = ws.eval(_.second(rest), env);
     if (!env.parent || ns != null) {
       var mod = ns != null ? getModule(_.symbol(ns)) : pbnj.MODULE_SCOPE;
       mod[name] = value;
     }
+    if (_.isFunction(value)) value.ident = ident;
     return env.define(name, value);
   };
 
@@ -69,13 +74,23 @@ goog.scope(function() {
     return fn.arity || fn.length;
   };
 
-  var evalLambda = function(exp, env) {
+  var wsError = function(msg, callStack) {
+    return apply(_.str,
+            _.map(callStack,
+              function(call) {
+                return _.str(_.nth(call, 0), '(', _.nth(call, 1), ') - ', _.nth(call, 2), ':', _.nth(call, 3), ':', _.nth(call, 4)) }));
+  };
+
+  var callStack = mori.list();
+  var evalLambda = function(syn, env) {
+    var exp = syn.value;
     var rest = _.rest(exp);
     var names = _.first(rest);
     var body = _.second(rest);
     var scope = env.extend();
     var argCount = _.count(names);
     var lambda = function lambda() {
+      _.conj(callStack, _.vector(lambda.ident || 'lambda', argCount, syn.source, syn.line, syn.column));
       var args = arguments;
       if (argCount !== args.length) {
         throw new Error(_.str('wrong number of arguments expected: ', argCount, ' got: ', args.length));
@@ -85,7 +100,13 @@ goog.scope(function() {
         scope.define(name, i < args.length ? args[i] : false);
         i++;
       });
-      return ws.eval(body, scope);
+      try {
+        return ws.eval(body, scope);
+      }
+      catch (e) {
+        var msg = e.message ? e.message() : e;
+        throw new Error(wsError(msg, callStack));
+      }
     };
     lambda.arity = argCount;
     lambda.pprint = lambda.toString = function() {
@@ -379,7 +400,7 @@ goog.scope(function() {
   ws.eval = function(exp, env) {
     var env = env || globalEnv;
     var exp = macroexpand(exp);
-    if (isSelfEvaluating(exp)) return exp;
+    if (isSelfEvaluating(exp)) return evalSelfEvaluating(exp);
     else if (isVariable(exp)) return evalVariable(exp, env);
     else if (isQuoted(exp)) return evalQuote(exp);
     else if (isDefinition(exp)) return evalDefinition(exp, env);

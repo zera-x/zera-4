@@ -64,16 +64,123 @@
             (error "malformed expression: a definition should be a list of 2 or 3 elements"))))
 
 (define-function emit-function [exp]
-  nil)
+  (let [size (count exp)]
+    (cond (= size 3)
+            (str (first exp) "(" (emitter (second exp)) ")" (emit-block (rest (rest exp))))
+          (= size 4)
+            (str (first exp) " " (second exp) "(" (emitter (second (rest exp))) ")" (emit-block (rest (rest (rest exp)))))
+          :else
+            (error "should be a list of 3 or 4 elements"))))
 
 (define-function emit-statement [exp]
   (let [size (count exp)]
     (cond (= size 1)
             (str (first exp) ";")
           (= size 2)
-            (str (first exp) " " (second exp) ";")
+            (str (first exp) " " (emitter (second exp)) ";")
           :else
             (error "should be a list of 1 or 2 elements"))))
+
+(define-function emit-colon-statement [exp]
+  (let [size (count exp)]
+    (cond (= size 1)
+            (str (first exp) ":")
+          (= size 2)
+            (str (first exp) " " (emitter (second exp)) ":")
+          :else
+            (error "should be a list of 1 or 2 elements"))))
+
+(define-function emit-control-flow [exp]
+  (let [size (count exp)]
+    (cond (= size 3)
+            (str (first exp) "(" (emitter (second exp)) ")" (emit-block (rest (rest exp))))
+          :else
+            (error "should be a list of 3 elements"))))
+
+(define-function emit-named-block [exp]
+  (let [size (count exp)]
+    (cond (= size 2)
+            (str (first exp) (emit-block (rest exp)))
+          :else
+            (error "should be a list of 2 elements"))))
+
+(define-function emit-for-loop [exp]
+  (let [size (count exp)
+        terms (second exp)]
+    (cond (= size 3)
+            (str "for(" (join (map terms emitter) ";")  ")" (emit-block (rest (rest exp))))
+          :else
+            (error "should be a list of 3 elements"))))
+
+(define-function emit-object-resolution [exp]
+  (let [size (count exp)
+        obj (second exp)
+        prop (second (rest exp))]
+    (cond (= size 3)
+            (str (emitter obj) "['" prop "']")
+          :else
+            (error "should be a list of 3 elements"))))
+
+(define-function emit-method-call [exp]
+  (let [size (count exp)
+        obj (second exp)
+        method (second (rest exp))
+        args (rest (rest (rest exp)))]
+    (cond (>= size 3)
+            (str (emitter obj) "['" method "'](" (join (map args emitter) ",") ")")
+          :else
+            (error "should be a list of at least 3 elements"))))
+
+(define-function emit-class-init [exp]
+  (let [size (count exp)
+        class (second exp)
+        args (rest (rest exp))]
+    (cond (>= size 2)
+            (str "(new" (emitter class) "(" (join (map args emitter) ",") "))")
+          :else
+            (error "should be a list of at least 2 elements"))))
+
+(define-function emit-property-assignment [exp]
+  (let [size (count exp)
+        obj (second exp)
+        prop (second (rest exp))
+        value (second (rest (rest exp)))]
+    (cond (= size 4)
+            (str "(" (emitter obj) "['" prop "']=" (emitter value) ")")
+          :else
+            (error "should be a list of 4 elements"))))
+
+(define-function emit-assignment [exp]
+  (let [size (count exp)
+        obj (second exp)
+        value (second (rest (rest exp)))]
+    (cond (= size 3)
+            (str "(" (emitter obj) "=" (emitter value) ")")
+          :else
+            (error "should be a list of 3 elements"))))
+
+(define-function emit-unary-operator [exp]
+  (let [size (count exp)]
+    (cond (= size 2)
+            (str (first exp) (second exp))
+          :else
+            (error "should be a list of 2 elements"))))
+
+(define-function emit-binary-operator [exp]
+  (let [size (count exp)]
+    (cond (>= size 3)
+            (join (map (rest exp) emitter) (str (first exp)))
+          :else
+            (error "should be a list of at least 3 elements"))))
+
+(define-function emit-negation [exp]
+  (let [size (count exp)]
+    (cond (= size 2)
+            (emit-unary-operator (list '! (second exp)))
+          :else
+            (error "should be a list of 2 elements"))))
+
+(define-function emit-quote [exp] (JSON/stringify exp))
 
 (define-function pbnj.jess/emitter [exp]
   (cond (nil? exp) (emit-nil exp)
@@ -90,15 +197,15 @@
                   (= tag 'type) (emit-typeof exp)
                   (= tag 'label) (emit-label exp)
                   (= tag 'do) (emit-block (rest exp))
-                  (or (= tag 'var) (= tag 'let) (= tag 'const))
+                  (has '#{var let const} tag)
                     (emit-definition exp)
                   (or (= tag 'function) (= tag 'function*))
                     (emit-function exp)
-                  (or (= tag 'return) (= tag 'break) (= tag 'continue) (= tag 'throw) (= tag 'delete))
+                  (has '#{return break continue throw delete} tag)
                     (emit-statement exp)
                   (or (= tag 'case) (= tag 'default))
                     (emit-colon-statment exp)
-                  (or (= tag 'catch) (= tag 'while) (= tag 'switch))
+                  (has '#{catch while switch} tag)
                     (emit-control-flow exp)
                   (= tag 'for) (emit-for-loop)
                   (= tag 'try) (emit-named-block exp)
@@ -109,7 +216,7 @@
                   (= tag 'set!) (emit-assignment exp)
                   (or (= tag '!) (= tag 'not)) (emit-negation exp)
                   (or (= tag '++) (= tag '--) (= tag '~)) (emit-unary-operator exp)
-                  (has-key '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
+                  (has '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
                     (emit-binary-operator exp)
                   (= tag 'quote) (emit-quote exp)
                   :else 

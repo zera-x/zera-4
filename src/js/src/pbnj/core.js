@@ -15,6 +15,25 @@ goog.scope(function() {
   };
   extend(_, mori);
 
+  function Syntax(type, value, input) {
+    this.type = type;
+    this.value = value;
+    this.source = input.source();
+    this.line = input.line();
+    this.column = input.column();
+    Object.freeze(this);
+  };
+  Syntax.prototype = {};
+  Object.freeze(Syntax.prototype);
+
+  _.syntax = function(type, value, input) {
+    return new Syntax(type, value, input);
+  };
+
+  _.isSyntax = function(val) {
+    return val instanceof Syntax;
+  };
+
   // Arithmetic
   
   _.add = function(a, b) {
