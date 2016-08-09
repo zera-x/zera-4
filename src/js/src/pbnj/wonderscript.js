@@ -14,19 +14,30 @@ goog.scope(function() {
   }
 
   var isSelfEvaluating = function(exp) {
-    return _.isNull(exp) || _.isUndefined(exp) || _.isKeyword(exp) || _.isBoolean(exp) || _.isString(exp) || _.isNumber(exp) || _.isDate(exp) || _.isRegExp(exp) || _.isMap(exp) || _.isVector(exp) || _.isSet(exp);
+    return _.isNull(exp) ||
+           _.isUndefined(exp) ||
+           _.isKeyword(exp) ||
+           _.isBoolean(exp) ||
+           _.isString(exp) ||
+           _.isNumber(exp) ||
+           _.isDate(exp) ||
+           _.isRegExp(exp) ||
+           _.isMap(exp) ||
+           _.isVector(exp) ||
+           _.isSet(exp);
   };
 
-  var evalSelfEvaluating = function(exp) {
+  var evalSelfEvaluating = _.identity;
+
+  var makeTagPredicate = function(tag) {
+    return function(exp) {
+      return _.isList(exp) && _.isSymbol(_.first(exp)) && _.equals(_.first(exp), tag);
+    };
   };
 
-  var isQuoted = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('quote'));
-  };
+  var isQuoted = makeTagPredicate(_.symbol('quote'));
 
-  var evalQuote = function(exp) {
-    return _.second(exp);
-  };
+  var evalQuote = _.second;
 
   var isVariable = _.isSymbol;
 
@@ -43,13 +54,10 @@ goog.scope(function() {
     else {
       val = env.lookup(name).get(name);
     }
-    if (val == null) throw new Error(_.str("Undefined variable: '", exp, "'"));
     return val;
   };
 
-  var isDefinition = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('define'));
-  }
+  var isDefinition = makeTagPredicate(_.symbol('define'));
 
   var evalDefinition = function(exp, env) {
     var rest = _.rest(exp);
@@ -62,62 +70,98 @@ goog.scope(function() {
       var mod = ns != null ? getModule(_.symbol(ns)) : pbnj.MODULE_SCOPE;
       mod[name] = value;
     }
-    if (_.isFunction(value)) value.ident = ident;
+    if (_.isFunction(value)) {
+      value.$lang$ws$ident = ident;
+      env.setIdent(name);
+    }
     return env.define(name, value);
   };
 
-  var isLambda = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('lambda'));
-  };
+  var isLambda = makeTagPredicate(_.symbol('lambda'));
 
   var arity = function(fn) {
-    return fn.arity || fn.length;
+    return fn.$lang$ws$arity || fn.length;
   };
 
-  var wsError = function(msg, callStack) {
-    return apply(_.str,
-            _.map(callStack,
-              function(call) {
-                return _.str(_.nth(call, 0), '(', _.nth(call, 1), ') - ', _.nth(call, 2), ':', _.nth(call, 3), ':', _.nth(call, 4)) }));
+  var invocableToFn = function(invocable, args) {
+    var func = null;
+    if (_.isKeyword(invocable) && _.isMap(_.first(args))) {
+      func = function() { return _.get(arguments[0], invocable) };
+    }
+    else if (_.isKeyword(invocable) && _.isSet(_.first(args))) {
+      func = function() { return _.hasKey(arguments[0], invocable) };
+    }
+    else if (_.isAssociative(invocable)) {
+      func = function() { return _.get(invocable, arguments[0]) };
+    }
+    else if (_.isSet(invocable)) {
+      func = function() { return _.hasKey(invocable, arguments[0]) };
+    }
+    else {
+      throw new Error(_.str("'", invocable, "' is not invocable"));
+    }
+    return func;
   };
 
-  var callStack = mori.list();
-  var evalLambda = function(syn, env) {
-    var exp = syn.value;
+  var funcIdent = function(func) {
+    return func.$lang$ws$ident || func.name || 'anonymous';
+  };
+
+  ws.apply = function(func, args) {
+    if (isInvocable(func)) {
+      var func = invocableToFn(func);
+    }
+
+    if (arguments.length !== 2) throw new Error(_.str('wrong number of arguments expected: 2 arguments, got: ', arguments.length));
+    if (!_.isFunction(func)) throw new Error(_.str("'", func, "' is not a function"));
+
+    return func.apply(null, args ? _.intoArray(args) : [])
+  };
+
+  var evalLambda = function(exp, env) {
     var rest = _.rest(exp);
     var names = _.first(rest);
     var body = _.second(rest);
     var scope = env.extend();
     var argCount = _.count(names);
-    var lambda = function lambda() {
-      _.conj(callStack, _.vector(lambda.ident || 'lambda', argCount, syn.source, syn.line, syn.column));
+
+    _.each(names, function(name) {
+      var sname = _.str(name);
+      if (sname[0] === '&') {
+        argCount *= -1;
+      }
+    });
+
+    var lambda = function() {
       var args = arguments;
-      if (argCount !== args.length) {
+      if (argCount < -1 && args.length < Math.abs(argCount) - 1) {
+        throw new Error(_.str('wrong number of arguments expected at least: ', Math.abs(argCount) - 1, ' got: ', args.length));
+      }
+      else if (argCount > 0 && argCount !== args.length) {
         throw new Error(_.str('wrong number of arguments expected: ', argCount, ' got: ', args.length));
       }
+
       var i = 0;
       _.each(names, function(name) {
-        scope.define(name, i < args.length ? args[i] : false);
+        var sname = _.str(name);
+        if (sname[0] === '&') {
+          scope.define(sname.replace(/^&/, ''), _.list.apply(null, [].slice.call(args, i)));
+        }
+        else {
+          scope.define(sname, i < args.length ? args[i] : false);
+        }
         i++;
       });
-      try {
-        return ws.eval(body, scope);
-      }
-      catch (e) {
-        var msg = e.message ? e.message() : e;
-        throw new Error(wsError(msg, callStack));
-      }
+
+      return ws.eval(body, scope);
     };
-    lambda.arity = argCount;
-    lambda.pprint = lambda.toString = function() {
-      return exp.toString();
-    };
+
+    lambda.$lang$ws$arity = argCount;
+    lambda.$lang$ws$code = exp;
     return lambda;
   };
 
-  var isBlock = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('do'));
-  };
+  var isBlock = makeTagPredicate(_.symbol('do'));
 
   var evalBlock = function(exp, env) {
     var body = _.rest(exp);
@@ -126,6 +170,7 @@ goog.scope(function() {
     _.each(body, function(exp) {
       value = ws.eval(exp, scope)
     });
+    scope.setIdent('do');
     return value;
   };
 
@@ -139,7 +184,7 @@ goog.scope(function() {
 
   var evalApplication = function(exp, env) {
     var func = _.first(exp);
-    var args = _.intoArray(_.map(_.rest(exp), function(exp) { return ws.eval(exp, env) }));
+    var args = _.map(_.rest(exp), function(exp) { return ws.eval(exp, env) });
 
     if (isVariable(func)) {
       func = evalVariable(func, env); 
@@ -148,50 +193,34 @@ goog.scope(function() {
       func = evalLambda(func, env);
     }
 
-    if (_.isFunction(func)) {
-      return func.apply(null, _.intoArray(args));
-    }
-    else if (_.isKeyword(func) && _.isMap(args[0])) {
-      return _.get(args[0], func);
-    }
-    else if (_.isKeyword(func) && _.isSet(args[0])) {
-      return _.hasKey(args[0], func);
-    }
-    else if (_.isAssociative(func)) {
-      return _.get(func, args[0]);
-    }
-    else if (_.isSet(func)) {
-      return _.hasKey(func, args[0]);
+    if (_.isFunction(func) || isInvocable(func)) {
+      return ws.apply(func, args);
     }
     else {
       throw new Error(_.str("'", func, "' is not a function"));
     }
   };
 
-  var isCond = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('cond'));
-  };
+  var isCond = makeTagPredicate(_.symbol('cond'));
 
   var isFalsy = function(val) {
     return val === false || _.isNull(val) || _.isUndefined(val);
   };
 
   var evalCond = function(exp, env) {
-    var rest = _.intoArray(_.rest(exp));
+    var rest = _.rest(exp);
     var pairs = _.pair(rest);
-    for (var i = 0; i < pairs.length; ++i) {
-      var pred = pairs[i][0];
-      var cons = pairs[i][1];
+    for (var i = 0; i < _.count(pairs); i++) {
+      var pred = _.nth(_.nth(pairs, i), 0);
+      var cons = _.nth(_.nth(pairs, i), 1);
       if (_.equals(pred, _.keyword('else')) || !isFalsy(ws.eval(pred, env))) {
         return ws.eval(cons, env);
       }
-    }
+    };
     return null;
   };
 
-  var isMacro = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('define-syntax'));
-  };
+  var isMacro = makeTagPredicate(_.symbol('define-syntax'));
 
   var MACROS = {};
   var evalMacro = function(exp, env) {
@@ -203,12 +232,14 @@ goog.scope(function() {
     var currentScope = pbnj.MODULE_SCOPE;
     var mod = _.namespace(name) ? getModule(_.symbol(_.namespace(name))) : pbnj.MODULE_SCOPE;
     mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
-    mod['@@MACROS@@'][_.name(name)] = evalLambda(lambda, env);
+    var fn = evalLambda(lambda, env);
+    fn.$lang$ws$ident = name; // give it an ident for stacktrace
+    mod['@@MACROS@@'][_.name(name)] = fn;
     return name;
   };
 
   var macroexpand = function(exp) {
-    if (exp == null) return exp;
+    if (exp == null) return exp
     var macro = null;
     var name = _.isList(exp) ? _.first(exp) : exp;
     var ns = _.isSymbol(name) ? _.namespace(name) : null;
@@ -221,9 +252,7 @@ goog.scope(function() {
     return exp;
   };
 
-  var isVariableIntrospection = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('defined?'));
-  };
+  var isVariableIntrospection = makeTagPredicate(_.symbol('defined?'));
 
   var evalVariableIntrospection = function(exp, env) {
     var name = _.str(ws.eval(_.second(exp), env));
@@ -236,24 +265,36 @@ goog.scope(function() {
     }
   };
 
-  var isAssignment = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('set!'));
-  };
+  var isAssignment = makeTagPredicate(_.symbol('set!'));
 
   var evalAssignment = function(exp, env) {
-    var name = _.str(_.second(exp));
+    var name = _.str(_.second(exp).value);
     var value = ws.eval(_.second(_.rest(exp)), env);
     env.lookup(name).set(name, value);
     return value;
   };
 
-  var isThrownException = function(exp) {
-    return _.isList(exp) && _.equals(_.first(exp), _.symbol('throw'));
-  };
+  var isThrownException = makeTagPredicate(_.symbol('throw'));
 
   var evalThrownException = function(exp, env) {
     var error = ws.eval(_.second(exp), env);
-    throw error;
+    throw new Error(wsError(error, env.stacktrace()));
+  };
+
+  var type = function(value) {
+    var t = typeof value;
+    if (value == null) return 'nil';
+    else if (t === 'object' && _.isCollection(value)) {
+      if (_.isList(value)) return 'list';
+      else if (_.isMap(value)) return 'map';
+      else if (_.isSet(value)) return 'set';
+      else {
+        return 'collection';
+      }
+    }
+    else {
+      return t;
+    }
   };
 
   var globalEnv = pbnj.env();
@@ -349,8 +390,8 @@ goog.scope(function() {
     }
   });
   var evalModuleName = function(name, root) {
-    if (!_.isSymbol(name)) throw new Error('symbol expected');
-    var path = _.str(name).split('/')[0].split('.');
+    if (name.type === 'symbol') throw new Error('symbol expected');
+    var path = _.str(name.value).split('/')[0].split('.');
     var mod = root || {};
     _.each(path, function(name) {
       if (!_.isObject(mod[name])) mod[name] = {};
@@ -390,7 +431,7 @@ goog.scope(function() {
     else if (_.isBoolean(exp)) return exp == true ? 'true' : 'false';
     else if (isQuoted(exp)) return _.str("'", ws.pprint(_.second(exp)))
     else if (_.isNumber(exp) || _.isKeyword(exp) || _.isSymbol(exp) || _.isCollection(exp)) return _.str(exp);
-    else if (exp.pprint) return exp.pprint();
+    else if (exp.$lang$ws$code) return ws.pprint(exp.$lang$ws$code);
     else {
       return _.str(exp);
     }
@@ -417,11 +458,7 @@ goog.scope(function() {
     }
   };
   globalEnv.define('eval', ws.eval);
-  globalEnv.define('apply', function(func, args) {
-    if (arguments.length !== 2) throw new Error(_.str('wrong number of arguments expected: 2 arguments, got: ', arguments.length));
-    if (!_.isFunction(func)) throw new Error(_.str("'", func, "' is not a function"));
-    return func.apply(null, args ? _.intoArray(args) : [])
-  });
+  globalEnv.define('apply', ws.apply);
 
   ws.compile = function(exp, emitter) {
     var env = env || globalEnv;
@@ -439,45 +476,64 @@ goog.scope(function() {
   };
   globalEnv.define('compile', ws.compile);
 
-  ws.readString = function(str) {
-    var value = null;
-    _.each(pbnj.reader.readString(str), function(exp) {
-      value = ws.eval(exp, globalEnv);
-    });
-    return value;
+  var wsError = function(e, trace) {
+    var wsStack = ''; //_.str(ws.pprint(exp), ' @ ', stream.source(), ':', stream.line(), ':', stream.column(), '\n');
+    if (!_.isEmpty(trace)) {
+    wsStack += _.reduce(
+            _.map(trace,
+              function(call) {
+                return _.str(call[0], ' @ ', call[1], ':', call[2], ':', call[3]) }),
+            function(s, x) {
+              return _.str(s, "\n", x) });
+    }
+    return _.str(e.message ? e.message : e, ":\n", wsStack, e.stack ? _.str("\n", e.stack) : null);
+  };
+
+  ws.readStream = function(stream) {
+    var env = globalEnv.setSource(stream.source());
+    try {
+      var value = null;
+      while (!stream.eof()) {
+        var exp = stream.peek();
+        value = ws.eval(exp, env);
+        if (_.isFunction(value) || isBlock(exp)) {
+          //console.log(exp.toString());
+          env.setLocation(stream.line(), stream.column());
+          //console.log(env.stacktrace());
+        }
+        stream.next();
+      }
+      return value;
+    }
+    catch(e) {
+      throw new Error(wsError(e, env.stacktrace()));
+    }
+  };
+  globalEnv.define('read-stream', ws.readStream);
+
+  ws.readString = function(str, input) {
+    //console.log(str);
+    var stream = pbnj.reader.readString(str, input);
+    return ws.readStream(stream);
   };
   globalEnv.define('read-string', ws.readString);
 
+  ws.readFile = function(file) {
+    var stream = pbnj.reader.readFile(file);
+    return ws.readStream(stream);
+  };
+  globalEnv.define('read-file', ws.readFile);
+
   if (module != void 0 && module.exports) {
-    var fs = require('fs');
-    ws.readFile = function(file) {
-      var buffer = fs.readFileSync(file);
-      return ws.readString(buffer.toString());
-    };
     ws.readFile(_.str(__dirname, "/wonderscript/core.ws"))
   }
   else {
-    ws.readFile = function(file) {
-      var xhr = new XMLHttpRequest();
-      var res = null;
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState === XMLHttpRequest.DONE) {
-          if (xhr.status === 200) {
-            res = xhr.responseText;
-          }
-          else {
-            throw new Error(_.str("There was an error processing the path: '", file, "'"));
-          }
-        }
-      };
-      xhr.open('GET', file, false);
-      xhr.send();
-      return ws.readString(res);
-    };
     ws.readFile("src/pbnj/wonderscript/core.ws")
   }
-  globalEnv.define('read-file', ws.readFile);
 
+  ws.__LINE__ = 0;
+  globalEnv.define('*line*', ws.__LINE__);
   globalEnv.define('*environment*', 'development');
-  globalEnv.define('*root-object*', ROOT_OBJECT);
+  // TODO: detect browser?
+  globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'javascript');
 });

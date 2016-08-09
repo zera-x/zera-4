@@ -49,7 +49,8 @@
 (define empty? isEmpty)
 
 ; other mori functions
-(define has-key hasKey)
+(define has? hasKey)
+(define has-key? hasKey)
 (define hash-map hashMap)
 (define sorted-set sortedSet)
 (define get-in getIn)
@@ -70,16 +71,14 @@
 (define * mult)
 (define / div)
 
-(define-function add1 [n] (+ 1 n))
-(define-function sub1 [n] (- 1 n))
-
 (define-syntax comment [exp] nil)
 
 (define-syntax let [exp]
   (do
     (define bindings (pair (second exp)))
-    (cons 'do (concat (map bindings (lambda [pair] (list 'define (pair 0) (pair 1))))
-                      (rest (rest exp))))))
+    (cons 'do
+          (concat (map bindings (lambda [pair] (list 'define (pair 0) (pair 1))))
+                  (rest (rest exp)))))))
 
 (define-syntax on [exp] true)
 (define-syntax off [exp] false)
@@ -113,14 +112,24 @@
     (list 'cond pred conse)))
 
 (define-syntax or [exp]
-  (list 'if (second exp) (list 'if (second (rest exp)) true true) false))
+  (let [size (count exp)]
+    (cond (= size 1) nil
+          (= size 2) (second exp)
+          :else
+            (let [forms (rest exp)]
+              (list 'if (second exp) (second exp) (cons 'or (rest (rest exp))))))))
 
 (define-syntax and [exp]
   (list 'if (second exp) (list 'if (second (rest exp)) true false) false))
 
 (define-syntax define-function [exp]
-  (let [r (rest exp)]
-    (list 'define (first r) (cons 'lambda (cons (second r) (rest (rest r)))))))
+  (let [r (rest exp)
+        size (count exp)]
+    (cond (>= size 4)
+            (list 'define (first r)
+                  (cons 'lambda (cons (second r) (rest (rest r)))))
+          :else
+            (throw (str "a function definition should be a list of at least 4 elements, got: " size)))))
 
 (define-syntax define-once [exp]
   (let [r (rest exp)]
@@ -133,6 +142,11 @@
         args (rest (rest exp))]
     (list 'define name (cons 'struct (cons (keyword (str name)) args)))))
 
+(define-syntax not= [exp]
+  (list 'not (cons '= (rest exp))))
+
+(define-function add1 [n] (+ 1 n))
+(define-function sub1 [n] (- 1 n))
 
 (define-function join
   [col delim]
@@ -161,3 +175,21 @@
                   :else ["'(" ")"])]
              (str (delims 0) (join (map exp pprint) " ") (delims 1)))
         :else (str exp))) 
+
+(read-file "src/pbnj/jess.ws")
+
+(define-function object [&parent]
+  (if (empty? parent)
+    (list '. 'Object 'create)
+    (list '. 'Object 'create (first parent))))
+
+
+(define-function send [obj method &args]
+  (cons '. (cons obj (cons (symbol (namespace method) (name method)) args))))
+
+(comment 
+(define-function make [ctr &args]
+  (do
+    (if-not (function? ctr) (throw (str "'" ctr "' is not a contructor")))
+    (pbnj.jess/eval (list 'new (list '. 'apply '(. bind '(. Function prototype)) )))))
+)

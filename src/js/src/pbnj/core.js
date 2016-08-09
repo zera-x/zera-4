@@ -18,21 +18,40 @@ goog.scope(function() {
   function Syntax(type, value, input) {
     this.type = type;
     this.value = value;
-    this.source = input.source();
-    this.line = input.line();
-    this.column = input.column();
+    this.line = input && input.line ? input.line() : 0;
+    this.column = input && input.line ? input.column() : 0;
+    if (_.isSymbol(input)) {
+      this.source = _.str(input);
+    }
+    else if (input && input.source) {
+      this.source = input.source();
+    }
+    else {
+      this.source = 'unknown';
+    }
     Object.freeze(this);
   };
-  Syntax.prototype = {};
+  
+  Syntax.prototype.toString = function() {
+    return _.str('(syntax ', this.value, ')');
+  };
+  
   Object.freeze(Syntax.prototype);
 
-  _.syntax = function(type, value, input) {
+  _.makeSyntax = function(type, value, input) {
     return new Syntax(type, value, input);
   };
+
+  _['syntax-value'] = function(syn) { return syn.value };
+  _['syntax-type'] = function(syn) { return syn.type };
+  _['syntax-line'] = function(syn) { return syn.line };
+  _['syntax-column'] = function(syn) { return syn.column };
 
   _.isSyntax = function(val) {
     return val instanceof Syntax;
   };
+
+  _['->string'] = function(obj) { return obj.toString() };
 
   // Arithmetic
   
@@ -104,7 +123,7 @@ goog.scope(function() {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isBoolean = _['boolean?'] = function(val) {
+  _.isBoolean = function(val) {
     return val === true || val === false || Object.prototype.toString.call(val) === '[object Boolean]';
   };
 

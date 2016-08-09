@@ -45,6 +45,48 @@ goog.scope(function() {
     return this.vars[name] = value;
   };
 
+  env.setLocation = function(line, column) {
+    this.line = line;
+    this.column = column;
+    return this;
+  };
+
+  var getter = function(dim) {
+    return function() {
+      var scope = this;
+      while (scope) {
+        if (scope[dim]) return scope[dim];
+        scope = scope.parent;
+      }
+      return null;
+    }
+  };
+
+  env.setSource = function(source) {
+    this.source = source;
+    return this;
+  };
+
+  env.setIdent = function(ident) {
+    this.ident = ident;
+    return this;
+  };
+
+  env.getLine = getter('line');
+  env.getColumn = getter('column');
+  env.getSource = getter('source');
+  env.getIdent = getter('ident');
+
+  env.stacktrace = function() {
+    var trace = [];
+    var scope = this;
+    while (scope) {
+      trace.push([scope.ident, scope.source, scope.line, scope.column]);
+      scope = scope.parent;
+    }
+    return trace;
+  };
+
   pbnj.env = function(parent) {
     return new Env(parent);
   };

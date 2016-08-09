@@ -15,9 +15,9 @@ goog.scope(function() {
   // see: http://clojure.org/reference/reader 
 
   var pair = pbnj.core.pair;
-  var syntax = pbnj.core.syntax;
+  var _ = pbnj.core;
 
-  function inputStream(input, source) {
+  function inputStream(input, sourceName) {
     var pos = 0, line = 1, col = 0;
     return {
       next: next,
@@ -28,7 +28,7 @@ goog.scope(function() {
       line: lineNumber,
       column: columnNumber
     };
-    function source() { return source || 'input' }
+    function source() { return sourceName }
     function lineNumber() { return line }
     function columnNumber() { return col }
     function next() {
@@ -84,7 +84,7 @@ goog.scope(function() {
   var TYPE_DISPATCH = {
     mori: {
       string: function (rep) { return rep },
-      symbol: function (rep) { return mori.symbol.apply(mori, rep.split('/')) },
+      symbol: function (rep) { return mori.symbol.apply(mori, rep === '/' ? [rep] : rep.split('/')) },
       boolean: function (rep) { return rep === 'true' ? true : false; },
       nil: function (rep) { return null },
       number: function (rep) { return parseFloat(rep) },
@@ -92,7 +92,7 @@ goog.scope(function() {
       vector: function (rep) { return mori.vector.apply(mori, rep) },
       set: function (rep) { return mori.set(rep) },
       map: function (rep) { return mori.hashMap.apply(mori, rep) },
-      keyword: function (rep) { return mori.keyword.apply(mori, rep.split('/')) },
+      keyword: function (rep) { return mori.keyword.apply(mori, rep === '/' ? [rep] : rep.split('/')) },
       quote: function (form) { return mori.list(mori.symbol('quote'), form) }
     },
     js: {
@@ -135,6 +135,9 @@ goog.scope(function() {
       next: next,
       peek: peek,
       eof: eof,
+      source: input.source,
+      line: input.line,
+      column: input.column,
       croak: input.croak
     };
 
@@ -198,7 +201,7 @@ goog.scope(function() {
     }
 
     function readString() {
-      return syntax('string', dispatch.string(readEscaped('"')), input);
+      return dispatch.string(readEscaped('"'));
     }
 
     function readNumber() {
@@ -211,26 +214,26 @@ goog.scope(function() {
         }
         return isDigit(ch);
       });
-      return syntax('number', dispatch.number(hasDot ? parseFloat(num) : parseInt(num)), input);
+      return dispatch.number(hasDot ? parseFloat(num) : parseInt(num));
     }
 
     function readSymbol() {
       var sym = readWhile(isSymbol);
       if (sym === 'true' || sym === 'false') {
-        return syntax('boolean', dispatch.boolean(sym), input);
+        return dispatch.boolean(sym);
       }
       else if (sym === 'nil') {
-        return syntax('nil', dispatch.nil(sym), input);
+        return dispatch.nil(sym);
       }
       else {
-        return syntax('symbol', dispatch.symbol(sym), input);
+        return dispatch.symbol(sym);
       }
     }
 
     function readKeyword() {
       input.next();
       var kw = readWhile(isSymbol);
-      return syntax('keyword', dispatch.keyword(kw), input);
+      return dispatch.keyword(kw);
     }
 
     function readCollection(tag, end) {
@@ -245,12 +248,12 @@ goog.scope(function() {
           buffer.push(readNext());
         }
       }
-      return syntax(tag, dispatch[tag](buffer), input);
+      return dispatch[tag](buffer);
     }
 
     function readQuotedForm() {
       input.next();
-      return syntax('quote', dispatch.quote(readNext()), input);
+      return dispatch.quote(readNext());
     }
 
     function readNext() {
@@ -308,18 +311,88 @@ goog.scope(function() {
    * @param {string} str
    * @returns {Array<Object>}
    */
-  function readString(str, dispatch) {
+  function readString(str, input) {
     if (str == null || typeof str !== 'string') return [];
     var tokens = [];
-    var stream = tokenStream(inputStream(str), dispatch);
-    while (!stream.eof()) tokens.push(stream.next());
-    return tokens;
+    return tokenStream(inputStream(str, input || 'string-input'));
   }
+
+  var readFile = null;
+  if (module != void 0 && module.exports) {
+    var fs = require('fs');
+    /**
+     * @param {string} str
+     * @returns {Array<Object>}
+     */
+    var readFileNode = function(file, dispatch) {
+      if (file == null || typeof file !== 'string') return [];
+      var str = fs.readFileSync(file).toString();
+      return readString(str, file);
+    };
+  }
+  else {
+    var readFileBrowser = function(file) {
+      var xhr = new XMLHttpRequest();
+      var res = null;
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+          if (xhr.status === 200) {
+            res = xhr.responseText;
+          }
+          else {
+            throw new Error(_.str("There was an error processing the path: '", file, "'"));
+          }
+        }
+      };
+      xhr.open('GET', file, false);
+      xhr.send();
+      return readString(res, file);
+    };
+  }
+
+
+  var readJS = function(exp) {
+    if (exp === null || exp === void 0) return null;
+    var type = typeof exp;
+    switch (type) {
+      case 'boolean':
+      case 'number':
+        return exp;
+      case 'string':
+        if (exp.startsWith('"') && exp.endsWith('"')) {
+          return exp;
+        }
+        else if (exp.startsWith(':')) {
+          return _.keyword(exp);
+        } 
+        else {
+          return _.symbol(exp);
+        }
+      case 'object':
+        if (_.isArray(exp)) {
+          return _.list.apply(null, _.map(exp, readJS));
+        }
+        else {
+          return _.reduce(exp,
+                     function (hmap, value, key) {
+                       return _.assoc(hmap, _.keyword(key), readJS(value)) }, _.hashMap());
+        }
+      default:
+        throw new Error(_.str("'", exp, "' is an invalid expression"));
+    }
+  };
+
+  var readJSON = function(str) {
+    return readJS(JSON.parse(str));
+  };
 
   pbnj.reader = {
     inputStream: inputStream,
     tokenStream: tokenStream,
     readString: readString,
+    readJS: readJS,
+    readJSON: readJSON,
+    readFile: module != void 0 && module.exports ? readFileNode : readFileBrowser,
     TYPE_DISPATCH: TYPE_DISPATCH
   };
 });
