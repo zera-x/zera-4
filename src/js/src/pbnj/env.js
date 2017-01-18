@@ -29,7 +29,7 @@ goog.scope(function() {
 
   env.get = function(name) {
     if (name in this.vars) {
-      return this.vars[name]
+      return this.vars[name];
     }
     throw new Error(_.str("Undefined variable: '", name, "'"));
   };
@@ -38,11 +38,13 @@ goog.scope(function() {
     var scope = this.lookup(name);
     // cannot define globals from a nested environment
     if (!scope && this.parent) throw new Error(_.str("Undefined variable: '", name, "'"));
-    return (scope || this).vars[name] = value;
+    (scope || this).vars[name] = value;
+    return value;
   };
 
   env.define = function(name, value) {
-    return this.vars[name] = value;
+    this.vars[name] = value;
+    return value;
   };
 
   env.setLocation = function(line, column) {
@@ -59,7 +61,7 @@ goog.scope(function() {
         scope = scope.parent;
       }
       return null;
-    }
+    };
   };
 
   env.setSource = function(source) {

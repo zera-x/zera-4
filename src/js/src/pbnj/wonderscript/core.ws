@@ -116,11 +116,18 @@
     (cond (= size 1) nil
           (= size 2) (second exp)
           :else
-            (let [forms (rest exp)]
-              (list 'if (second exp) (second exp) (cons 'or (rest (rest exp))))))))
+            (let [forms (rest exp)
+                  or* (first forms)]
+              (list 'if or* or* (cons 'or (rest forms)))))))
 
 (define-syntax and [exp]
-  (list 'if (second exp) (list 'if (second (rest exp)) true false) false))
+  (let [size (count exp)]
+    (cond (= size 1) true
+          (= size 2) (second exp)
+          :else
+            (let [forms (rest exp)
+                  and* (first forms)]
+              (list 'if and* (cons 'and (rest forms)) and*)))))
 
 (define-syntax define-function [exp]
   (let [r (rest exp)
@@ -176,20 +183,35 @@
              (str (delims 0) (join (map exp pprint) " ") (delims 1)))
         :else (str exp))) 
 
+; JS Interop / OOP
 (read-file "src/pbnj/jess.ws")
+(read-file "src/pbnj/pidgin/jess.ws")
 
-(define-function object [&parent]
-  (if (empty? parent)
-    (list '. 'Object 'create)
-    (list '. 'Object 'create (first parent))))
+(define-syntax .- [exp] (list 'pbnj.jess/eval (list 'quote exp)))
 
+(define-syntax . [exp]
+  (let [size (count exp)]
+    (cond (= size 2)
+            (list (list '.- (second exp) (second (rest exp))))
+          (> size 2)
+            (cons (list '.- (second exp) (second (rest exp))) (rest (rest (rest exp))))
+          :else
+            (throw "a method invocation requires at least 2 arguments"))))
 
-(define-function send [obj method &args]
-  (cons '. (cons obj (cons (symbol (namespace method) (name method)) args))))
+(define-syntax .? [exp]
+  (let [obj (second exp)
+        method (second (rest exp))
+        args (rest (rest (rest exp)))]
+    (list 'if (list '.- obj method) (cons '. (cons obj (cons method args))) nil)))
 
-(comment 
-(define-function make [ctr &args]
-  (do
-    (if-not (function? ctr) (throw (str "'" ctr "' is not a contructor")))
-    (pbnj.jess/eval (list 'new (list '. 'apply '(. bind '(. Function prototype)) )))))
+(comment
+(define-syntax .. [exp]
+  (let [size (count exp)]
+    (cond (= size 3)
+            (list '. (second exp) (second (rest exp)))
+          (> size 3)
+            (cons '.. (list '. (second exp) (second (rest exp)) (rest (rest (rest exp)))))
+          :else (throw ".. requires at least 2 arguments"))))
 )
+
+(define-syntax new [exp] (list 'pbnj.jess/eval (list 'quote exp)))

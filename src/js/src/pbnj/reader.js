@@ -142,7 +142,7 @@ goog.scope(function() {
     };
 
     function isDigit(ch) {
-      return /[0-9]/.test(ch);
+      return /[0-9\_\,]/.test(ch);
     }
 
     function isWhitespace(ch) {
@@ -214,6 +214,7 @@ goog.scope(function() {
         }
         return isDigit(ch);
       });
+      num = num.replace(/[,_]/g, '');
       return dispatch.number(hasDot ? parseFloat(num) : parseInt(num));
     }
 
@@ -261,11 +262,11 @@ goog.scope(function() {
       if (input.eof()) return null;
 
       var ch = input.peek();
-      if (ch == ";") {
+      if (ch === ";") {
         skipComment();
         return readNext();
       }
-      else if (ch == '"') {
+      else if (ch === '"') {
         return readString();
       }
       else if (isDigit(ch)) {
