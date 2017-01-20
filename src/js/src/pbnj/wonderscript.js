@@ -179,6 +179,14 @@ goog.scope(function() {
     return _.isKeyword(exp) || _.isAssociative(exp) || _.isSet(exp);
   };
 
+  var isJSObject = function(exp) {
+    return _.isObject(exp);
+  };
+
+  var evalJSObject = function(exp) {
+    return exp;
+  };
+
   var isApplication = ws.isApplication = function(exp) {
     /*if (_.isList(exp)) {
       var first = _.first(exp);
@@ -376,28 +384,13 @@ goog.scope(function() {
     else if (isMacro(exp)) return evalMacro(exp, env);
     else if (isThrownException(exp)) return evalThrownException(exp, env);
     else if (isApplication(exp)) return evalApplication(exp, env);
+    else if (isJSObject(exp)) return evalJSObject(exp);
     else {
       throw new Error(_.str("invalid expression: '", exp, "'"));
     }
   };
   globalEnv.define('eval', ws.eval);
   globalEnv.define('apply', ws.apply);
-
-  ws.compile = function(exp, emitter) {
-    var env = env || globalEnv;
-    var emitter = emitter || pbnj.emitter.js;
-    if (isSelfEvaluating(exp)) return emitter(ws.compile).selfEvaluating(exp);
-    else if (isVariable(exp)) return emitter(ws.compile).variable(exp, env);
-    else if (isQuoted(exp)) return emitter(ws.compile).quote(exp);
-    else if (isDefinition(exp)) return emitter(ws.compile).definition(exp, env);
-    else if (isCond(exp)) return emitter(ws.compile).cond(exp, env);
-    else if (isLambda(exp)) return emitter(ws.compile).lambda(exp, env);
-    else if (isApplication(exp)) return emitter(ws.compile).application(exp, env);
-    else {
-      throw new Error(_.str("invalid expression: '", exp, "'"));
-    }
-  };
-  globalEnv.define('compile', ws.compile);
 
   var wsError = function(e, trace) {
     var wsStack = ''; //_.str(ws.pprint(exp), ' @ ', stream.source(), ':', stream.line(), ':', stream.column(), '\n');

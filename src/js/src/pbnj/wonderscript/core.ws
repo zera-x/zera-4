@@ -103,13 +103,13 @@
 
 (define-syntax unless [exp]
   (let [pred (second exp)
-        conse (second (rest exp))]
-    (list 'cond (list 'not pred) conse)))
+        acts (rest (rest exp))]
+    (list 'cond (list 'not pred) (cons 'do acts))))
 
 (define-syntax when [exp]
   (let [pred (second exp)
-        conse (second (rest exp))]
-    (list 'cond pred conse)))
+        acts (rest (rest exp))]
+    (list 'cond pred (cons 'do acts))))
 
 (define-syntax or [exp]
   (let [size (count exp)]
@@ -185,7 +185,6 @@
 
 ; JS Interop / OOP
 (read-file "src/pbnj/jess.ws")
-(read-file "src/pbnj/pidgin/jess.ws")
 
 (define-syntax .- [exp] (list 'pbnj.jess/eval (list 'quote exp)))
 
