@@ -59,6 +59,7 @@ goog.scope(function() {
 
   var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('define'));
 
+  // TODO: add meta data, (see Clojure's Vars)
   var evalDefinition = function(exp, env) {
     var rest = _.rest(exp);
     var ident = _.first(rest);
@@ -159,6 +160,12 @@ goog.scope(function() {
 
     lambda.$lang$ws$arity = argCount;
     lambda.$lang$ws$code = exp;
+    lambda.toString = function() {
+      if (this.$lang$ws$ident) {
+        return ws.inspect(_.list(_.symbol('define'), _.symbol(this.$lang$ws$ident), this.$lang$ws$code));
+      }
+      return ws.inspect(this.$lang$ws$code);
+    };
     return lambda;
   };
 
@@ -357,16 +364,20 @@ goog.scope(function() {
   };
   importModule(pbnj.core);
   
-  ws.pprint = function(exp) {
+  ws.inspect = function(exp) {
     if (exp == null) return 'nil';
     else if (_.isBoolean(exp)) return exp === true ? 'true' : 'false';
-    else if (isQuoted(exp)) return _.str("'", ws.pprint(_.second(exp)));
+    else if (isQuoted(exp)) return _.str("'", ws.inspect(_.second(exp)));
     else if (_.isNumber(exp) || _.isKeyword(exp) || _.isSymbol(exp) || _.isCollection(exp)) return _.str(exp);
-    else if (exp.$lang$ws$code) return ws.pprint(exp.$lang$ws$code);
+    else if (exp.$lang$ws$code) return ws.inspect(exp.$lang$ws$code);
     else {
       return _.str(exp);
     }
   };
+  globalEnv.define('inspect', ws.inspect);
+  ws.pprint = function(exp) {
+    console.log(ws.inspect(exp));
+  }
   globalEnv.define('pprint', ws.pprint);
 
   ws.eval = function(exp, env) {
@@ -451,5 +462,5 @@ goog.scope(function() {
   globalEnv.define('*line*', ws.__LINE__);
   globalEnv.define('*environment*', 'development');
   // TODO: detect browser?
-  globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'javascript');
+  globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'browser');
 });

@@ -132,11 +132,31 @@
 (define-syntax define-function [exp]
   (let [r (rest exp)
         size (count exp)]
-    (cond (>= size 4)
+    (if (> size 4) (println (inspect (nth exp 4))))
+    (if (> size 5) (println (inspect (nth exp 5))))
+    (cond (= size 4)
             (list 'define (first r)
                   (cons 'lambda (cons (second r) (rest (rest r)))))
           :else
-            (throw (str "a function definition should be a list of at least 4 elements, got: " size)))))
+            (throw (str "a function definition should be a list of exactly 4 elements, got: " size " " (inspect exp))))))
+
+(define-syntax procedure [exp]
+  (let [size (count exp)
+        args (second exp)
+        body (rest (rest exp))]
+    (cond (>= size 3)
+            (list 'lambda args (cons 'do body))
+          :else
+            (throw (str "an anonymous procedure should be a list of at least 3 elements, got: " size)))))
+
+(define-syntax define-procedure [exp]
+  (let [r (rest exp)
+        size (count exp)]
+    (cond (>= size 4)
+            (list 'define (first r)
+                  (cons 'procedure (cons (second r) (rest (rest r)))))
+          :else
+            (throw (str "a procedure definition should be a list of at least 4 elements, got: " size)))))
 
 (define-syntax define-once [exp]
   (let [r (rest exp)]

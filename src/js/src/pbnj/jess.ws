@@ -10,11 +10,9 @@
         ns (namespace exp)]
     (if (nil? ns) nm (str ns "." nm))))
 
-(define-function emit-string [exp]
-  (str "\"" exp "\""))
+(define-function emit-string [exp] (str "\"" exp "\""))
 
-(define-function emit-expression [exp]
-  (str "(" compile(exp) ")"))
+(define-function emit-expression [exp] (str "(" (compile exp) ")"))
 
 (define-function emit-block [exp]
   (str "{" (join (map exp compile) ";") "}"))
@@ -93,17 +91,17 @@
 
 (define-function emit-control-flow [exp]
   (let [size (count exp)]
-    (cond (= size 3)
+    (cond (>= size 3)
             (str (first exp) "(" (compile (second exp)) ")" (emit-block (rest (rest exp))))
           :else
             (throw "a control flow statement should be a list of 3 elements"))))
 
 (define-function emit-named-block [exp]
   (let [size (count exp)]
-    (cond (= size 2)
+    (cond (>= size 2)
             (str (first exp) (emit-block (rest exp)))
           :else
-            (throw "a named block should be a list of 2 elements"))))
+            (throw "a named block should be a list of at least 2 elements"))))
 
 (define-function emit-for-loop [exp]
   (let [size (count exp)
@@ -176,7 +174,7 @@
 (define-function emit-negation [exp]
   (let [size (count exp)]
     (cond (= size 2)
-            (emit-unary-operator (list '! (second exp)))
+            (emit-unary-operator (list '! (second (compile exp))))
           :else
             (throw "negation should be a list of 2 elements"))))
 
@@ -200,6 +198,13 @@
                             ":"
                             (compile (second pair)))) nil) "})"))
 
+(define-function pbnj.jess/emit-array [exp]
+  (str "(["
+       (reduce exp
+               (lambda [s x]
+                       (str (if (nil? s) "" (str s ","))
+                            (compile x))) nil) "])"))
+
 (define-function pbnj.jess/compile [exp]
   (cond (nil? exp) (emit-nil exp)
         (number? exp) (emit-number exp)
@@ -208,6 +213,7 @@
         (keyword? exp) (emit-symbol exp)
         (string? exp) (emit-string exp)
         (map? exp) (emit-object exp)
+        (vector? exp) (emit-array exp)
         (list? exp)
           (let [tag (first exp)]
             (cond (= tag 'if-else) (emit-if-else exp)
@@ -241,10 +247,22 @@
                   (= tag 'quote) (emit-quote exp)
                   :else 
                     ; method resolution and class instantiation short require regex or JS string functions
-                    (emit-function-application exp) ))
+                    (emit-function-application exp) )
         :else
           (throw (str "invalid form: '" exp "'")) ))
   )
 
 (define-function pbnj.jess/eval [exp]
-  (js/eval (compile exp)))
+  (let [code (compile exp)]
+    (println (inspect code))
+  (js/eval code)))
+
+(define-function compile-stream [stream]
+  (list 'function []
+        (list 'var 'buffer [])
+        (list 'while (list '! (list '. stream 'eof))
+              (list '. 'buffer 'push (list 'eval (list 'pbnj.jess.compile (list '. 'stream 'next)))))
+        (list '. 'buffer 'join "\n")))
+
+(define-function pbnj.jess/compile-string [input source]
+  (compile-stream (pbnj.reader/readString input source)))

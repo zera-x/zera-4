@@ -78,7 +78,7 @@ goog.scope(function() {
     ')': 'list',
     ']': 'vector',
     '}': 'map',
-    '}': 'set',
+    //'}': 'set',
   };
 
   var TYPE_DISPATCH = {
