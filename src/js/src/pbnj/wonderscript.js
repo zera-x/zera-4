@@ -296,7 +296,7 @@ goog.scope(function() {
   var isAssignment = ws.isAssignment = makeTagPredicate(_.symbol('set!'));
 
   var evalAssignment = function(exp, env) {
-    var name = _.str(_.second(exp).value);
+    var name = _.str(_.second(exp));
     var value = ws.eval(_.second(_.rest(exp)), env);
     env.lookup(name).set(name, value);
     return value;

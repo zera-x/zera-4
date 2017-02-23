@@ -38,10 +38,6 @@ goog.scope(function() {
 
   jess.pprint = pprint;
 
-  jess.eval = function (form) {
-    return eval(jess.emit(form));
-  };
-
   jess.readFile = function(file) {
     return jess.readStream(pbnj.reader.readFile(file));
   };

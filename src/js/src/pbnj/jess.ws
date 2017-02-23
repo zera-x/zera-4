@@ -14,8 +14,7 @@
 
 (define-function emit-expression [exp] (str "(" (compile exp) ")"))
 
-(define-function emit-block [exp]
-  (str "{" (join (map exp compile) ";") "}"))
+(define-function emit-block [exp] (join (map exp compile) ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
@@ -65,11 +64,14 @@
 (define-function emit-function [exp]
   (let [ident (second exp)]
     (cond (sequential? ident)
-            (str "(" (first exp) (emit-argument-list (second exp)) (emit-block (rest (rest exp))) ")")
+            (str (first exp) (emit-argument-list (second exp)) "{" (emit-block (rest (rest exp))) "}")
           (symbol? ident)
-            (str "(" (first exp) " " (second exp) (emit-argument-list (second (rest exp))) (emit-block (rest (rest (rest exp)))) ")")
+            (str (first exp) " " (second exp) (emit-argument-list (second (rest exp))) "{" (emit-block (rest (rest (rest exp)))) "}")
           :else
             (throw "malformed function expression"))))
+
+(define-function emit-peren [exp]
+  (str "(" (compile exp) ")"))
 
 (define-function emit-statement [exp]
   (let [size (count exp)]
@@ -92,14 +94,14 @@
 (define-function emit-control-flow [exp]
   (let [size (count exp)]
     (cond (>= size 3)
-            (str (first exp) "(" (compile (second exp)) ")" (emit-block (rest (rest exp))))
+            (str (first exp) "(" (compile (second exp)) "){" (emit-block (rest (rest exp))) "}")
           :else
             (throw "a control flow statement should be a list of 3 elements"))))
 
 (define-function emit-named-block [exp]
   (let [size (count exp)]
     (cond (>= size 2)
-            (str (first exp) (emit-block (rest exp)))
+            (str (first exp) "{" (emit-block (rest exp)) "}")
           :else
             (throw "a named block should be a list of at least 2 elements"))))
 
@@ -107,7 +109,7 @@
   (let [size (count exp)
         terms (second exp)]
     (cond (>= size 3)
-            (str "for(" (join (map terms compile) ";")  ")" (emit-block (rest (rest exp))))
+            (str "for(" (join (map terms compile) ";")  "){" (emit-block (rest (rest exp))) "}")
           :else
             (throw "a for loop should be a list of at least 3 elements"))))
 
@@ -116,7 +118,7 @@
         obj (second exp)
         prop (second (rest exp))]
     (cond (= size 3)
-            (str (compile obj) "['" prop "']")
+            (str (compile obj) "[" (compile prop) "]")
           :else
             (throw "property access should be a list of 3 elements"))))
 
@@ -143,7 +145,9 @@
         prop (second (rest exp))
         value (second (rest (rest exp)))]
     (cond (= size 4)
-            (str "(" (compile obj) "['" prop "']=" (compile value) ")")
+            (if (vector? prop)
+              (str "(" (compile obj) "[" (join (map prop compile) "][") "]=" (compile value) ")")
+              (str "(" (compile obj) "[" (compile prop) "]=" (compile value) ")"))
           :else
             (throw "property assignment should be a list of 4 elements"))))
 
@@ -205,51 +209,72 @@
                        (str (if (nil? s) "" (str s ","))
                             (compile x))) nil) "])"))
 
-(define-function pbnj.jess/compile [exp]
-  (cond (nil? exp) (emit-nil exp)
-        (number? exp) (emit-number exp)
-        (boolean? exp) (emit-boolean exp)
-        (symbol? exp) (emit-symbol exp)
-        (keyword? exp) (emit-symbol exp)
-        (string? exp) (emit-string exp)
-        (map? exp) (emit-object exp)
-        (vector? exp) (emit-array exp)
-        (list? exp)
-          (let [tag (first exp)]
-            (cond (= tag 'if-else) (emit-if-else exp)
-                  (= tag 'if) (emit-if exp)
-                  (= tag '?) (emit-existential exp)
-                  (= tag 'instance?) (emit-instanceof exp)
-                  (= tag 'type) (emit-typeof exp)
-                  (= tag 'label) (emit-label exp)
-                  (= tag 'do) (emit-block (rest exp))
-                  (or (= tag 'var) (= tag 'let) (= tag 'const))
-                    (emit-definition exp)
-                  (or (= tag 'function) (= tag 'function*))
-                    (emit-function exp)
-                  (has? '#{return break continue throw delete} tag)
-                    (emit-statement exp)
-                  (or (= tag 'case) (= tag 'default))
-                    (emit-colon-statment exp)
-                  (has? '#{catch while switch} tag)
-                    (emit-control-flow exp)
-                  (= tag 'for) (emit-for-loop exp)
-                  (= tag 'try) (emit-named-block exp)
-                  (= tag '.-) (emit-object-resolution exp)
-                  (= tag '.) (emit-method-call exp)
-                  (= tag 'new) (emit-class-init exp)
-                  (= tag '.-set!) (emit-property-assignment exp)
-                  (= tag 'set!) (emit-assignment exp)
-                  (or (= tag '!) (= tag 'not)) (emit-negation exp)
-                  (has? '#{++ -- ~} tag) (emit-unary-operator exp)
-                  (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
-                    (emit-binary-operator exp)
-                  (= tag 'quote) (emit-quote exp)
-                  :else 
-                    ; method resolution and class instantiation short require regex or JS string functions
-                    (emit-function-application exp) )
-        :else
-          (throw (str "invalid form: '" exp "'")) ))
+(define MACROS {})
+
+(define-function eval-macro-definition [exp]
+  (let [size (count exp)]
+    (cond (= size 4)
+            (let [name (first (rest exp))
+                  args (first (rest (rest exp)))
+                  body (rest (rest (rest exp)))
+                  fn (pbnj.wonderscript/eval (cons 'lambda (cons args body)))]
+              (set! MACROS (assoc MACROS name fn))
+              nil) ) ))
+
+(define-function pbnj.jess/macroexpand [exp]
+  (let [tag (first exp)
+        xfr (get MACROS tag)]
+    (if xfr (apply xfr (rest exp)) exp)))
+
+(define-function pbnj.jess/compile [exp_]
+  (let [exp (macroexpand exp_)]
+    (cond (nil? exp) (emit-nil exp)
+          (number? exp) (emit-number exp)
+          (boolean? exp) (emit-boolean exp)
+          (symbol? exp) (emit-symbol exp)
+          (keyword? exp) (emit-symbol exp)
+          (string? exp) (emit-string exp)
+          (map? exp) (emit-object exp)
+          (vector? exp) (emit-array exp)
+          (list? exp)
+            (let [tag (first exp)]
+              (cond (= tag 'if-else) (emit-if-else exp)
+                    (= tag 'if) (emit-if exp)
+                    (= tag '?) (emit-existential exp)
+                    (= tag 'instance?) (emit-instanceof exp)
+                    (= tag 'type) (emit-typeof exp)
+                    (= tag 'label) (emit-label exp)
+                    (= tag 'do) (emit-block (rest exp))
+                    (or (= tag 'var) (= tag 'let) (= tag 'const))
+                      (emit-definition exp)
+                    (or (= tag 'function) (= tag 'function*))
+                      (emit-function exp)
+                    (has? '#{return break continue throw delete} tag)
+                      (emit-statement exp)
+                    (or (= tag 'case) (= tag 'default))
+                      (emit-colon-statment exp)
+                    (has? '#{catch while switch} tag)
+                      (emit-control-flow exp)
+                    (= tag 'for) (emit-for-loop exp)
+                    (= tag 'try) (emit-named-block exp)
+                    (= tag '.-) (emit-object-resolution exp)
+                    (= tag '.) (emit-method-call exp)
+                    (= tag 'new) (emit-class-init exp)
+                    (= tag '.-set!) (emit-property-assignment exp)
+                    (= tag 'set!) (emit-assignment exp)
+                    (or (= tag '!) (= tag 'not)) (emit-negation exp)
+                    (has? '#{++ -- ~} tag) (emit-unary-operator exp)
+                    (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
+                      (emit-binary-operator exp)
+                    (= tag 'quote) (emit-quote exp)
+                    (= tag 'macro) (eval-macro-definition exp)
+                    (= tag 'paren) (emit-paren exp)
+                    (= tag 'comma) ","
+                    :else 
+                      ; method resolution and class instantiation short require regex or JS string functions
+                      (emit-function-application exp) )
+          :else
+            (throw (str "invalid form: '" exp "'")) )))
   )
 
 (define-function pbnj.jess/eval [exp]
@@ -257,7 +282,7 @@
     (println (inspect code))
   (js/eval code)))
 
-(define-function compile-stream [stream]
+(define-procedure compile-stream [stream]
   (list 'function []
         (list 'var 'buffer [])
         (list 'while (list '! (list '. stream 'eof))
@@ -266,3 +291,5 @@
 
 (define-function pbnj.jess/compile-string [input source]
   (compile-stream (pbnj.reader/readString input source)))
+
+(pbnj.jess/readFile "src/pbnj/jess/core.jess")

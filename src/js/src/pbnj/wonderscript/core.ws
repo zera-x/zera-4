@@ -33,6 +33,7 @@
 (define arguments? isArguments)
 (define element? isElement)
 (define map-object mapObject)
+(define map-indexed mapIndexed)
 
 ; arrays
 (define array? isArray)
@@ -234,3 +235,6 @@
 )
 
 (define-syntax new [exp] (list 'pbnj.jess/eval (list 'quote exp)))
+
+
+

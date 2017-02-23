@@ -476,8 +476,7 @@ goog.scope(function() {
   _.exists = function(val) { return val != null };
 
   _.cons = function(v, col) {
-    if (mori.isSeqable(col)) return mori.cons(v, col);
-    return [v].concat(col);
+    return mori.cons(v, col);
   };
 
   /**

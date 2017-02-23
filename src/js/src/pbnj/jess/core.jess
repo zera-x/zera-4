@@ -1,0 +1,23 @@
+
+(macro class [nm fields &methods]
+  (let [klass (symbol nm)
+        assigns (map-indexed
+                  (lambda [i f]
+                          (list '.-set! 'this (name f) (list '.- 'arguments i))) fields)
+        ctr (cons 'function (cons nm (cons (apply vector fields) assigns)))
+        meths (mori/map (lambda [meth]
+                           (let [n (str (first meth))
+                                 args (first (rest meth))
+                                 body (rest (rest meth))]
+                             (list '.-set! klass (vector "prototype" n) (cons 'function (cons args body))))) methods)
+        proto (cons 'do (cons (list '.-set! klass "prototype" (hash-map)) meths))]
+    (list 'do ctr proto klass)))
+
+(class Point [x y])
+
+(var p1 (new Point 3 4))
+
+(console.log p1.x)
+(console.log p1.y)
+(console.log (instance? p1 Point))
+(console.log (type 1))
