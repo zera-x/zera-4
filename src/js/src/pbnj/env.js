@@ -5,9 +5,12 @@ goog.require('pbnj.core');
 goog.scope(function() {
   var _ = pbnj.core;
 
+  var level = 0;
+
   function Env(parent) {
     this.vars = Object.create(parent ? parent.vars : null);
     this.parent = parent;
+    this.level = level++;
   }
 
   var env = Env.prototype;
@@ -50,6 +53,8 @@ goog.scope(function() {
   env.setLocation = function(line, column) {
     this.line = line;
     this.column = column;
+    this.vars['*line*'] = line;
+    this.vars['*column*'] = column;
     return this;
   };
 
@@ -66,6 +71,7 @@ goog.scope(function() {
 
   env.setSource = function(source) {
     this.source = source;
+    this.vars['*source*'] = source;
     return this;
   };
 

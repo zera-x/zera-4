@@ -1,3 +1,4 @@
+; vim: ft=clojure
 
 (macro class [nm fields &methods]
   (let [klass (symbol nm)
@@ -10,14 +11,26 @@
                                  args (first (rest meth))
                                  body (rest (rest meth))]
                              (list '.-set! klass (vector "prototype" n) (cons 'function (cons args body))))) methods)
-        proto (cons 'do (cons (list '.-set! klass "prototype" (hash-map)) meths))]
-    (list 'do ctr proto klass)))
+        proto (cons (list '.-set! klass "prototype" (hash-map)) meths)]
+    (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass))))))
 
-(class Point [x y])
+(macro fn [args &body]
+  (do
+    (unless (vector? args) (throw "arguments should be a vector"))
+    (cons 'function (cons args body))))
+
+
+(class Point [x y]
+       (toString [] (return (pbnj.core.str "(" this.x ", " this.y ")")))
+       (distance [that] (return (Math.sqrt (+ (Math.pow (- that.x this.x) 2) (Math.pow (- that.y this.y) 2))))))
+
+(set! window.point (function [x y] (return (new Point x y))))
 
 (var p1 (new Point 3 4))
 
-(console.log p1.x)
+(console.log (.- p1 x))
 (console.log p1.y)
 (console.log (instance? p1 Point))
 (console.log (type 1))
+(console.log (. p1 toString))
+

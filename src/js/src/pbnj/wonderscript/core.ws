@@ -176,11 +176,9 @@
 (define-function add1 [n] (+ 1 n))
 (define-function sub1 [n] (- 1 n))
 
-(define-function join
+(define-procedure join
   [col delim]
-  (reduce col
-          (lambda [s x]
-                  (str s delim x)))))
+  (reduce col (lambda [s x] (str s delim x))))
 
 ; TODO: make a version of this for the core lib with mori types
 (define entries ->array)
@@ -235,6 +233,3 @@
 )
 
 (define-syntax new [exp] (list 'pbnj.jess/eval (list 'quote exp)))
-
-
-

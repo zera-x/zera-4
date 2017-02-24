@@ -1,3 +1,4 @@
+(println (str *source* ":" *line*))
 ; vim: ft=clojure
 (module 'pbnj.jess)
 
@@ -14,7 +15,7 @@
 
 (define-function emit-expression [exp] (str "(" (compile exp) ")"))
 
-(define-function emit-block [exp] (join (map exp compile) ";"))
+(define-procedure emit-block [exp] (join (map exp compile) ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
@@ -57,7 +58,7 @@
           :else
             (throw "malformed expression: a definition should be a list of 2 or 3 elements"))))
 
-(define-function emit-argument-list [args]
+(define-procedure emit-argument-list [args]
   (if (empty? args) "()"
       (str "(" (join (map args compile) ",") ")")))
 
@@ -118,7 +119,7 @@
         obj (second exp)
         prop (second (rest exp))]
     (cond (= size 3)
-            (str (compile obj) "[" (compile prop) "]")
+            (str (compile obj) "[" (if (number? prop) prop (str "'" prop "'")) "]")
           :else
             (throw "property access should be a list of 3 elements"))))
 
@@ -128,7 +129,7 @@
         method (second (rest exp))
         args (rest (rest (rest exp)))]
     (cond (>= size 3)
-            (compile (cons (list '.- obj method) args))
+            (compile (cons (list '.- obj (str method)) args))
           :else
             (throw "a method call should be a list of at least 3 elements"))))
 
@@ -146,8 +147,8 @@
         value (second (rest (rest exp)))]
     (cond (= size 4)
             (if (vector? prop)
-              (str "(" (compile obj) "[" (join (map prop compile) "][") "]=" (compile value) ")")
-              (str "(" (compile obj) "[" (compile prop) "]=" (compile value) ")"))
+              (str (compile obj) "[" (join (map prop compile) "][") "]=" (compile value))
+              (str (compile obj) "[" (compile prop) "]=" (compile value)))
           :else
             (throw "property assignment should be a list of 4 elements"))))
 
@@ -270,11 +271,13 @@
                     (= tag 'macro) (eval-macro-definition exp)
                     (= tag 'paren) (emit-paren exp)
                     (= tag 'comma) ","
+                    (= tag 'comment) ""
                     :else 
                       ; method resolution and class instantiation short require regex or JS string functions
                       (emit-function-application exp) )
           :else
-            (throw (str "invalid form: '" exp "'")) )))
+            (do
+              (throw (str "invalid form: '" exp "'"))) )))
   )
 
 (define-function pbnj.jess/eval [exp]
@@ -292,4 +295,5 @@
 (define-function pbnj.jess/compile-string [input source]
   (compile-stream (pbnj.reader/readString input source)))
 
+(println (str *source* ":" *line*))
 (pbnj.jess/readFile "src/pbnj/jess/core.jess")

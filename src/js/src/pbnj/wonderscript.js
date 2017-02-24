@@ -54,6 +54,7 @@ goog.scope(function() {
     else {
       val = env.lookup(name).get(name);
     }
+    //if (name === 'delim') console.log('lookup', name, val);
     return val;
   };
 
@@ -74,7 +75,7 @@ goog.scope(function() {
     }
     if (_.isFunction(value)) {
       value.$lang$ws$ident = ident;
-      env.setIdent(name);
+      env.setIdent(_.str(ident));
     }
     return env.define(name, value);
   };
@@ -120,11 +121,11 @@ goog.scope(function() {
     return func.apply(null, args ? _.intoArray(args) : []);
   };
 
+  var lambdaID = 0;
   var evalLambda = function(exp, env) {
     var rest = _.rest(exp);
     var names = _.first(rest);
     var body = _.second(rest);
-    var scope = env.extend();
     var argCount = _.count(names);
 
     _.each(names, function(name) {
@@ -134,7 +135,12 @@ goog.scope(function() {
       }
     });
 
+    var id = _.str('lambda-', lambdaID++);
+
     var lambda = function() {
+      var scope = env.extend();
+      scope.setIdent(id);
+
       var args = arguments;
       if (argCount < -1 && args.length < Math.abs(argCount) - 1) {
         throw new Error(_.str('wrong number of arguments expected at least: ', Math.abs(argCount) - 1, ' got: ', args.length));
@@ -158,13 +164,14 @@ goog.scope(function() {
       return ws.eval(body, scope);
     };
 
+    lambda.$lang$ws$id = id;
     lambda.$lang$ws$arity = argCount;
     lambda.$lang$ws$code = exp;
     lambda.toString = function() {
-      if (this.$lang$ws$ident) {
-        return ws.inspect(_.list(_.symbol('define'), _.symbol(this.$lang$ws$ident), this.$lang$ws$code));
-      }
-      return ws.inspect(this.$lang$ws$code);
+      return _.str('#<Lambda id: ', lambda.$lang$ws$id,
+                   ' ident: ', ws.inspect(lambda.$lang$ws$ident),
+                   ' arity: ', lambda.$lang$ws$arity,
+                   ' code: ', ws.inspect(this.$lang$ws$code));
     };
     return lambda;
   };
@@ -310,6 +317,7 @@ goog.scope(function() {
   };
 
   var globalEnv = pbnj.env();
+  globalEnv.define('*source*', null);
   globalEnv.define('not', function(x) { return !x; });
   globalEnv.define('identical?', function(a, b) { return a === b; });
   globalEnv.define('equiv?', function(a, b) { return a == b; });
@@ -325,7 +333,7 @@ goog.scope(function() {
   globalEnv.define('arity', arity);
 
   var evalModuleName = function(name, root) {
-    if (name.type === 'symbol') throw new Error('symbol expected');
+    if (!_.isSymbol(name)) throw new Error('symbol expected');
     var path = _.str(name.value).split('/')[0].split('.');
     var mod = root || {};
     _.each(path, function(name) {
@@ -458,8 +466,6 @@ goog.scope(function() {
     ws.readFile("src/pbnj/wonderscript/core.ws");
   }
 
-  ws.__LINE__ = 0;
-  globalEnv.define('*line*', ws.__LINE__);
   globalEnv.define('*environment*', 'development');
   // TODO: detect browser?
   globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'browser');
