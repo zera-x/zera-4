@@ -13,9 +13,9 @@
 
 (define-function emit-string [exp] (str "\"" exp "\""))
 
-(define-function emit-expression [exp] (str "(" (compile exp) ")"))
+(define-function emit-expression [exp] (str "(" (compile (second exp)) ")"))
 
-(define-procedure emit-block [exp] (join (map exp compile) ";"))
+(define-procedure emit-block [exp] (str (join (map exp compile) ";") ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
@@ -269,7 +269,7 @@
                       (emit-binary-operator exp)
                     (= tag 'quote) (emit-quote exp)
                     (= tag 'macro) (eval-macro-definition exp)
-                    (= tag 'paren) (emit-paren exp)
+                    (= tag 'paren) (emit-expression exp)
                     (= tag 'comma) ","
                     (= tag 'comment) ""
                     :else 

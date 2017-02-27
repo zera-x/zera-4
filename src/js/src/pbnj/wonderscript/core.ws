@@ -233,3 +233,13 @@
 )
 
 (define-syntax new [exp] (list 'pbnj.jess/eval (list 'quote exp)))
+
+(define-syntax define-class [exp]
+  (list 'define (second exp) (list 'pbnj.jess/eval (list 'quote (cons 'class (rest exp))))))
+
+(define-syntax class [exp]
+  (list 'pbnj.jess/compile (list 'quote (cons 'class (cons 'Class (rest (rest exp)))))))
+
+(define-class PeristentList [h t]
+  (first [] this.h)
+  (rest  [] this.t))
