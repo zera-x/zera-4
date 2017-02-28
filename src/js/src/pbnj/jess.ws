@@ -15,7 +15,7 @@
 
 (define-function emit-expression [exp] (str "(" (compile (second exp)) ")"))
 
-(define-procedure emit-block [exp] (str (join (map exp compile) ";") ";"))
+(define-function emit-block [exp] (str (join (map exp compile) ";") ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
@@ -58,7 +58,7 @@
           :else
             (throw "malformed expression: a definition should be a list of 2 or 3 elements"))))
 
-(define-procedure emit-argument-list [args]
+(define-function emit-argument-list [args]
   (if (empty? args) "()"
       (str "(" (join (map args compile) ",") ")")))
 
@@ -285,7 +285,7 @@
     (println (inspect code))
   (js/eval code)))
 
-(define-procedure compile-stream [stream]
+(define-function compile-stream [stream]
   (list 'function []
         (list 'var 'buffer [])
         (list 'while (list '! (list '. stream 'eof))

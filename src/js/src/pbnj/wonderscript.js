@@ -21,13 +21,38 @@ goog.scope(function() {
            _.isString(exp) ||
            _.isNumber(exp) ||
            _.isDate(exp) ||
-           _.isRegExp(exp) ||
-           _.isMap(exp) ||
-           _.isVector(exp) ||
-           _.isSet(exp);
+           _.isRegExp(exp);
   };
 
   var evalSelfEvaluating = _.identity;
+
+  var isCollectionLiteral = ws.isCollectionLiteral = function(exp) {
+    return _.isMap(exp) || _.isVector(exp) || _.isSet(exp);
+  };
+
+  var evalCollectionLiteral = function(exp, env) {
+    if (_.isMap(exp)) {
+      return mori.into(mori.hashMap(),
+              mori.map(
+                function(xs) { return mori.vector(ws.eval(mori.nth(xs, 0), env), ws.eval(mori.nth(xs, 1), env)) },
+                exp));
+    }
+    else if (_.isVector(exp)) {
+      return mori.into(mori.vector(),
+              mori.map(
+                function(x) { return ws.eval(x, env) },
+                exp));
+    }
+    else if (_.isSet(exp)) {
+      return mori.into(mori.set(),
+              mori.map(
+                function(x) { return ws.eval(x, env) },
+                exp));
+    }
+    else {
+      throw new Error(str('invalid form: ', exp));
+    }
+  };
 
   var makeTagPredicate = function(tag) {
     return function(exp) {
@@ -121,19 +146,40 @@ goog.scope(function() {
     return func.apply(null, args ? _.intoArray(args) : []);
   };
 
+
+  // (lambda [x] x)
+  // (lambda ([x] x)
+  //         ([x y] [x y]))
   var lambdaID = 0;
   var evalLambda = function(exp, env) {
     var rest = _.rest(exp);
     var names = _.first(rest);
-    var body = _.second(rest);
-    var argCount = _.count(names);
+    var argCount = 0, bodies = {};
+    if (_.isVector(names)) {
+      argCount = _.count(names);
 
-    _.each(names, function(name) {
-      var sname = _.str(name);
-      if (sname[0] === '&') {
-        argCount *= -1;
-      }
-    });
+      _.each(names, function(name) {
+        var sname = _.str(name);
+        if (sname[0] === '&') {
+          argCount = (argCount - 1) * -1;
+        }
+      });
+
+      bodies[argCount] = {arity: argCount, args: names, code: _.rest(rest)};
+      var body = bodies[argCount].body;
+    }
+    else if (_.isList(names)) {
+      _.each(rest, function(fn) {
+        var args = _.first(fn);
+        var body = _.rest(fn);
+        var argCount = _.reduce(args, function(sum, arg) { return (_.str(arg)[0] === '&' ? (sum + 1) * -1 : sum + 1) }, 0);
+        bodies[argCount] = {arity: argCount, args: args, code: body};
+      });
+      argCount = _.first(_.sort(_.map(_.pluck(bodies, 'arity'), Math.abs))) * -1;
+    }
+    else {
+      throw new Error('malformed expression: the second element of a lambda expression should be an argument vector or the beginning of a list of lambda bodies');
+    }
 
     var id = _.str('lambda-', lambdaID++);
 
@@ -141,19 +187,30 @@ goog.scope(function() {
       var scope = env.extend();
       scope.setIdent(id);
 
+      var ident = lambda.$lang$ws$ident || id;
+
       var args = arguments;
-      if (argCount < -1 && args.length < Math.abs(argCount) - 1) {
-        throw new Error(_.str('wrong number of arguments expected at least: ', Math.abs(argCount) - 1, ' got: ', args.length));
+      if (argCount <= 0 && args.length < Math.abs(argCount)) {
+        throw new Error(_.str('"', ident, '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length));
       }
       else if (argCount > 0 && argCount !== args.length) {
-        throw new Error(_.str('wrong number of arguments expected: ', argCount, ' got: ', args.length));
+        throw new Error(_.str('"', ident, '" wrong number of arguments expected: ', argCount, ' got: ', args.length));
+      }
+      var argc = args.length;
+      var body = bodies[argc];
+      if (body == null) {
+        for (var i = (argc * -1); i <= 0; i++) {
+          body = bodies[i];
+          if (body != null) break;
+        }
       }
 
       var i = 0;
-      _.each(names, function(name) {
+      _.each(body.args, function(name) {
         var sname = _.str(name);
         if (sname[0] === '&') {
-          scope.define(sname.replace(/^&/, ''), _.list.apply(null, [].slice.call(args, i)));
+          var list = _.list.apply(null, [].slice.call(args, i))
+          scope.define(sname.replace(/^&/, ''), list);
         }
         else {
           scope.define(sname, i < args.length ? args[i] : false);
@@ -161,7 +218,11 @@ goog.scope(function() {
         i++;
       });
 
-      return ws.eval(body, scope);
+      var ret = null;
+      _.each(body.code, function(exp) {
+        ret = ws.eval(exp, scope);
+      });
+      return ret;
     };
 
     lambda.$lang$ws$id = id;
@@ -255,9 +316,24 @@ goog.scope(function() {
     return null;
   };
 
-  var isMacro = makeTagPredicate(_.symbol('define-syntax'));
+  var isSyntax = makeTagPredicate(_.symbol('define-syntax'));
+  var isMacro = makeTagPredicate(_.symbol('define-macro'));
 
-  var MACROS = {};
+  var evalSyntax = function(exp, env) {
+    var rest = _.rest(exp);
+    var name = _.first(rest);
+    var args = _.second(rest);
+    var body = _.rest(_.rest(rest));
+    var lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
+    var currentScope = pbnj.MODULE_SCOPE;
+    var mod = _.namespace(name) ? getModule(_.symbol(_.namespace(name))) : pbnj.MODULE_SCOPE;
+    mod['@@SYNTAX@@'] = mod['@@SYNTAX@@'] || {}; 
+    var fn = evalLambda(lambda, env);
+    fn.$lang$ws$ident = name; // give it an ident for stacktrace
+    mod['@@SYNTAX@@'][_.name(name)] = fn;
+    return name;
+  };
+
   var evalMacro = function(exp, env) {
     var rest = _.rest(exp);
     var name = _.first(rest);
@@ -273,6 +349,20 @@ goog.scope(function() {
     return name;
   };
 
+  var syntaxexpand = ws.syntaxexpand = function(exp) {
+    if (exp == null) return exp
+    var macro = null;
+    var name = _.isList(exp) ? _.first(exp) : exp;
+    var ns = _.isSymbol(name) ? _.namespace(name) : null;
+    if (ns === 'js') return exp;
+    var macros = ns ? getModule(_.symbol(ns))['@@SYNTAX@@'] : pbnj.MODULE_SCOPE['@@SYNTAX@@'];
+    if (macros == null) return exp;
+    else if ((macro = macros[_.name(name)])) {
+      return syntaxexpand(macro(exp));
+    }
+    return exp;
+  };
+
   var macroexpand = ws.macroexpand = function(exp) {
     if (exp == null) return exp
     var macro = null;
@@ -282,7 +372,7 @@ goog.scope(function() {
     var macros = ns ? getModule(_.symbol(ns))['@@MACROS@@'] : pbnj.MODULE_SCOPE['@@MACROS@@'];
     if (macros == null) return exp;
     else if ((macro = macros[_.name(name)])) {
-      return macroexpand(macro(exp));
+      return macroexpand(macro.apply(macro, _.intoArray(_.rest(exp))));
     }
     return exp;
   };
@@ -390,8 +480,11 @@ goog.scope(function() {
 
   ws.eval = function(exp, env) {
     var env = env || globalEnv;
-    var exp = macroexpand(exp);
+    var exp = syntaxexpand(exp);
+    exp = macroexpand(exp);
+
     if (isSelfEvaluating(exp)) return evalSelfEvaluating(exp);
+    else if (isCollectionLiteral(exp)) return evalCollectionLiteral(exp, env);
     else if (isVariable(exp)) return evalVariable(exp, env);
     else if (isQuoted(exp)) return evalQuote(exp);
     else if (isDefinition(exp)) return evalDefinition(exp, env);
@@ -401,6 +494,7 @@ goog.scope(function() {
     else if (isAssignment(exp)) return evalAssignment(exp, env);
     else if (isVariableIntrospection(exp)) return evalVariableIntrospection(exp, env);
     else if (isMacro(exp)) return evalMacro(exp, env);
+    else if (isSyntax(exp)) return evalSyntax(exp, env);
     else if (isThrownException(exp)) return evalThrownException(exp, env);
     else if (isApplication(exp)) return evalApplication(exp, env);
     else if (isJSObject(exp)) return evalJSObject(exp);

@@ -4,7 +4,7 @@
 (define-syntax define-test [exp]
   (let [name (second exp)
         body (rest (rest exp))]
-    (list 'define name (cons 'procedure (cons [] body))))) 
+    (list 'define name (cons 'function (cons [] body))))) 
 
 (define-syntax is [exp]
   (let [body (second exp)
