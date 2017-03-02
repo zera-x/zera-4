@@ -113,16 +113,9 @@
   (list 'define name
         (cons 'lambda forms)))
 
-(define-syntax define-once [exp]
-  (let [r (rest exp)]
-    (list 'if (list 'not (list 'defined? (first r)))
-      (list 'define (first r) (second r))
-      :defined)))
-
-(define-syntax define-struct [exp]
-  (let [name (second exp)
-        args (rest (rest exp))]
-    (list 'define name (cons 'struct (cons (keyword (str name)) args)))))
+(define-macro define-once [name value]
+  (if-not (defined? name)
+    (list 'define name value)))
 
 (define-syntax not= [exp]
   (list 'not (cons '= (rest exp))))
@@ -139,6 +132,7 @@
 
 ; JS Interop / OOP
 (read-file "src/pbnj/jess.ws")
+(read-file "src/pbnj/wonderscript/compiler.ws")
 
 (define-macro .-
   [obj prop]
@@ -156,17 +150,6 @@
   [klass &args]
   (list 'pbnj.jess/eval (list 'quote (cons 'new (cons klass args)))))
 
-(define-function ws->jess [exp]
-  (cond (or (number? exp) (boolean? exp)) exp
-        (string? exp) exp
-        (symbol? exp) (list 'pbnj.core.symbol (namespace exp) (name exp))
-        (keyword? exp) (list 'pbnj.core.keyword (namespace exp) (name exp))
-        (list? exp) (cons 'pbnj.core.list (map exp (lambda [x] (ws->jess x))))
-        (vector? exp) (cons 'pbnj.core.vector (map exp (lambda [x] (ws->jess x)))) 
-        (map? exp) (cons 'pbnj.core.hashMap (mapcat exp (lambda [xs] [(ws->jess (xs 0)) (ws->jess (xs 1))]))) 
-        :else
-          (throw (str "invalid expression: " (inspect exp)))))
-
 (define-macro define-class
   [klass &forms]
   (let [nm (symbol (name klass))
@@ -176,16 +159,23 @@
                              (list (first m)
                                    (second m)
                                    (list 'pbnj.wonderscript.eval
-                                         (ws->jess (cons 'do (rest (rest m))))))))]
+                                         (emit-jess (cons 'do (rest (rest m))))))))]
     (list 'define klass
           (list 'pbnj.jess/eval
                 (list 'quote (cons 'class (cons nm (cons fields methods))))))))
+
+(define-macro define-method
+  [nm value args &body]
+  )
 
 (define-class Point
   [x y]
   (toString
     [self]
     (str "(" (.- self x) ", " (.- self y) ")")))
+
+(define-method distance Point [p1 p2]
+  (Math/sqrt (+ (Math/pow (- (point-x p2) (point-x p1)) 2) (Math/pow (- (point-y p2) (point-y p1)) 2)))) 
 
 (comment
 (define-class pbnj.core/PersistentList [h t]

@@ -540,6 +540,23 @@ goog.scope(function() {
   };
   globalEnv.define('read-stream', ws.readStream);
 
+  ws.compileStream = function(stream) {
+    var env = globalEnv.setSource(stream.source());
+    try {
+      var buffer = [];
+      while (!stream.eof()) {
+        var exp = stream.peek();
+        buffer.push(ws.compile(exp));
+        stream.next();
+      }
+      return buffer.join('\n');
+    }
+    catch(e) {
+      throw new Error(wsError(e, env.stacktrace()));
+    }
+  };
+  globalEnv.define('compile-stream', ws.compileStream);
+
   ws.readString = function(str, input) {
     //console.log(str);
     var stream = pbnj.reader.readString(str, input);
@@ -547,11 +564,23 @@ goog.scope(function() {
   };
   globalEnv.define('read-string', ws.readString);
 
+  ws.compileString = function(str, input) {
+    var stream = pbnj.reader.readString(str, input);
+    return ws.compileStream(stream);
+  };
+  globalEnv.define('compile-string', ws.compileString);
+
   ws.readFile = function(file) {
     var stream = pbnj.reader.readFile(file);
     return ws.readStream(stream);
   };
   globalEnv.define('read-file', ws.readFile);
+
+  ws.compileFile = function(file) {
+    var stream = pbnj.reader.readFile(file);
+    return ws.compileStream(stream);
+  };
+  globalEnv.define('compile-file', ws.compileFile);
 
   if (module != void 0 && module.exports) {
     ws.readFile(_.str(__dirname, "/wonderscript/core.ws"));
