@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(module 'pbnj.core)
+(module pbnj.core)
 
 ; aliases
 (define list? isList)
@@ -77,7 +77,8 @@
 (define-macro let [bindings &body]
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
   (cons 'do
-        (concat (map (pair bindings) (lambda [pair] (list 'define (pair 0) (pair 1))))
+        (concat (map (pair bindings)
+                     (lambda [pair] (list 'define (pair 0) (pair 1))))
                 body)))
 
 (define-macro if
@@ -113,12 +114,8 @@
   (list 'define name
         (cons 'lambda forms)))
 
-(define-macro define-once [name value]
-  (if-not (defined? name)
-    (list 'define name value)))
-
-(define-syntax not= [exp]
-  (list 'not (cons '= (rest exp))))
+(define-macro not= [&values]
+  (list 'not (cons '= values)))
 
 (define-function add1 [n] (+ 1 n))
 (define-function sub1 [n] (- 1 n))
@@ -134,35 +131,48 @@
 (read-file "src/pbnj/jess.ws")
 (read-file "src/pbnj/wonderscript/compiler.ws")
 
-(define-macro .-
-  [obj prop]
-  (list 'pbnj.jess/eval (list 'quote (list '.- obj prop))))
+(module pbnj.core)
+
+(define SYMCOUNT 0)
+(define-function gen-sym 
+  ([] (gen-sym "sym"))
+  ([prefix]
+   (let [sym (symbol (str prefix "-" SYMCOUNT))]
+     (set! SYMCOUNT (+ 1 SYMCOUNT))
+     sym)))
 
 (define-macro .
-  ([obj method] (list (list '.- obj method)))
-  ([obj method &args] (cons (list '.- obj method) args)))
+  [obj method &args]
+  (let [name (gen-sym)]
+    (list 'do
+          (list 'define name obj)
+          (list 'apply-method name (list '.- name method) (into (vector) args)))))
 
 (define-macro .?
   [obj method &args]
   (list 'if (list '.- obj method) (cons '. (cons obj (cons method args))) nil))
 
-(define-macro new
-  [klass &args]
-  (list 'pbnj.jess/eval (list 'quote (cons 'new (cons klass args)))))
-
-(define-macro define-class
-  [klass &forms]
-  (let [nm (symbol (name klass))
-        fields (first forms)
-        methods (map (rest forms)
-                     (lambda [m]
-                             (list (first m)
-                                   (second m)
-                                   (list 'pbnj.wonderscript.eval
-                                         (emit-jess (cons 'do (rest (rest m))))))))]
-    (list 'define klass
-          (list 'pbnj.jess/eval
-                (list 'quote (cons 'class (cons nm (cons fields methods))))))))
+(define-macro define-class [nm fields &methods]
+  (let [klass (symbol nm)
+        assigns (map-indexed
+                  (lambda [i f]
+                          (list '.-set! 'this (name f) (list '.- 'arguments i))) fields)
+        ctr (cons 'function (cons nm (cons (apply vector fields) assigns)))
+        meths (map methods
+                   (lambda [meth]
+                           (let [n (str (first meth))
+                                 args (first (rest meth))
+                                 body (rest (rest meth))]
+                             (list '.-set! klass (vector "prototype" n)
+                                   (list 'fn
+                                         (into (vector) (rest args))
+                                         (list '.
+                                               (cons 'fn (cons [(first args)] (map body ws->jess)))
+                                               'apply
+                                               'this
+                                               (list '. '[this] 'concat (list 'Array.prototype.slice.call 'arguments))))))))
+        proto (cons (list '.-set! klass "prototype" (hash-map)) meths)]
+    (list 'define nm (list 'pbnj.jess/compile (list 'quote (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass)))))))))
 
 (define-macro define-method
   [nm value args &body]

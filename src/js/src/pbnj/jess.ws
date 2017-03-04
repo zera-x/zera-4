@@ -1,6 +1,6 @@
 (println (str *source* ":" *line*))
 ; vim: ft=clojure
-(module 'pbnj.jess)
+(module pbnj.jess)
 
 (define-function emit-nil [exp] "null")
 (define-function emit-number [exp] (str exp))
@@ -149,7 +149,7 @@
     (cond (= size 2)
             (str "(new " (pbnj.jess/compile (second exp)) "())")
           (> size 2)
-            (str "(new " (pbnj.jess/compile (second exp)) "(" (join (map (rest (rest exp)) compile) ",") "))"))))
+            (str "(new " (pbnj.jess/compile (second exp)) "(" (join (map (rest (rest exp)) pbnj.jess/compile) ",") "))"))))
 
 (define-function emit-property-assignment [exp]
   (let [size (count exp)
@@ -158,7 +158,7 @@
         value (second (rest (rest exp)))]
     (cond (= size 4)
             (if (vector? prop)
-              (str (pbnj.jess/compile obj) "[" (join (map prop compile) "][") "]=" (pbnj.jess/compile value))
+              (str (pbnj.jess/compile obj) "[" (join (map prop pnbj.jess/compile) "][") "]=" (pbnj.jess/compile value))
               (str (pbnj.jess/compile obj) "[" (pbnj.jess/compile prop) "]=" (pbnj.jess/compile value)))
           :else
             (throw "property assignment should be a list of 4 elements"))))
@@ -201,7 +201,7 @@
     (cond (= size 1)
             (str (pbnj.jess/compile (first exp)) "()")
           (> size 1)
-            (str (pbnj.jess/compile (first exp)) "(" (join (map (rest exp) compile) ",") ")")
+            (str (pbnj.jess/compile (first exp)) "(" (join (map (rest exp) pbnj.jess/compile) ",") ")")
           :else
             (throw "function application should be a list of at least 1 element"))))
 

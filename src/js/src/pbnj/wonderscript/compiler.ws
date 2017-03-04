@@ -1,8 +1,8 @@
 ; vim: ft=clojure
-(module 'pbnj.wonderscript)
+(module pbnj.wonderscript)
 
 (define-function pbnj.wonderscript/compile [exp]
-  (pbnj.jess/compile (emit-jess exp)))
+  (pbnj.jess/compile (ws->jess exp)))
 
 (define-function self-evaluating? [exp]
   (or (nil? exp) (number? exp) (boolean? exp) (string? exp) (date? exp) (regexp? exp)))
@@ -18,13 +18,13 @@
   (cons 'pbnj.core.hashMap
         (mapcat exp
                 (lambda [xs]
-                        [(emit-jess (xs 0)) (emit-jess (xs 1))]) )))
+                        [(ws->jess (xs 0)) (ws->jess (xs 1))]) )))
 
 (define-function vector->jess [exp]
-  (cons 'pbnj.core.vector (map exp emit-jess)))
+  (cons 'pbnj.core.vector (map exp ws->jess)))
 
 (define-function set->jess [exp]
-  (cons 'pbnj.core.set (map exp emit-jess)))
+  (cons 'pbnj.core.set (map exp ws->jess)))
 
 (define variable? symbol?)
 
@@ -46,11 +46,12 @@
   ([name value]
     (let [ns (namespace name)]
       (if ns
-        (list 'set! name (emit-jess value))
-        (list 'var name (emit-jess value))))))
+        (list 'set! name (ws->jess value))
+        (list 'var name (ws->jess value))))))
 
 (define cond? (tag-predicate 'cond))
 
+(comment
 (define-function cond->jess [&body]
   (list 'paren
     (list
@@ -59,16 +60,36 @@
                   (mapcat
                     (pair body)
                     (lambda [xs]
-                            [(if (= :else (xs 0)) :else (emit-jess (xs 0)))
-                             (list 'return (emit-jess (xs 1)))])))))))
+                            [(if (= :else (xs 0)) :else (ws->jess (xs 0)))
+                             (list 'return (ws->jess (xs 1)))])))))))
+)
+
+(define-function pbnj.wonderscript/cond->jess
+  ([pred conse] (list 'if (ws->jess pred) (ws->jess conse)))
+  ([pred conse alt] (list 'if (ws->jess pred) (ws->jess conse) (ws->jess alt)))
+  ([&body]
+   (if (not= (mod (count body) 2) 0) (throw "Expecting an even number of arguments"))
+   (let [pairs (reverse (pair body))
+         alt? (lambda [xs] (= (first xs) :else))
+         alt (first (filter pairs alt?))
+         preds (cons alt (reject pairs alt?))]
+     (reduce
+       preds
+       (lambda [l xs]
+               (if (alt? l)
+                 (cond->jess (xs 0) (xs 1) (ws->jess (second l)))
+                 (first (cons (cond->jess (xs 0) (xs 1) l)))))))))
 
 (define lambda? (tag-predicate 'lambda))
 
 (define-function lambda-body [body]
-  (reduce (reverse body)
-          (lambda [l exp]
-                  (if (empty? l) (cons (list 'return (emit-jess exp)) l) (cons (emit-jess exp) l)))
-          (list)))
+  (reduce
+    (reverse body)
+    (lambda [l exp]
+            (if (empty? l)
+              (cons (list 'return (ws->jess exp)) l)
+              (cons (ws->jess exp) l)))
+    (list)))
 
 (define-function lambda-single-body [args body]
   (list 'paren
@@ -108,24 +129,24 @@
 (define assignment? (tag-predicate 'set!))
 
 (define-function assignment->jess [var val]
-  (list 'set! var (emit-jess val)))
+  (list 'set! var (ws->jess val)))
 
 (define variable-introspection? (tag-predicate 'defined?))
 
 (define-function variable-introspection->jess [var]
-  (list '!== (list 'type (emit-jess var)) "undefined"))
+  (list '!== (list 'type (ws->jess var)) "undefined"))
 
 (define thrown-exception? (tag-predicate 'throw))
 
 (define-function thrown-exception->jess [value]
-  (list 'throw (emit-jess value)))
+  (list 'throw (ws->jess value)))
 
 (define application? list?)
 
 (define-function application->jess [fn &args]
-  (cons (emit-jess fn) (map args emit-jess)))
+  (cons (ws->jess fn) (map args ws->jess)))
 
-(define-function pbnj.wonderscript/emit-jess [exp_]
+(define-function pbnj.wonderscript/ws->jess [exp_]
   (let [exp (pbnj.wonderscript/macroexpand exp_)]
     (cond (self-evaluating? exp) exp
           (keyword? exp) (keyword->jess exp)
@@ -146,4 +167,6 @@
           :else 
             (do
               (println exp)
-              (throw (str "emit-jess: invalid form: '" exp "'"))))))
+              (throw (str "ws->jess: invalid form: '" exp "'"))))))
+
+(define pbnj.wonderscript/wsToJess ws->jess)
