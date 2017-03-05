@@ -513,6 +513,19 @@ goog.scope(function() {
     return null;
   };
 
+  var isModuleSet = ws.isModuleSet = makeTagPredicate(_.symbol('use'));
+
+  var evalModuleSet = function(exp, env) {
+    var name = _.second(exp);
+    if (_.isSymbol(name)) {
+      pbnj.MODULE_SCOPE = getModule(name);
+    }
+    else {
+      throw new Error("module name should be a symbol");
+    }
+    return null;
+  };
+
   var getModule = ws.getModule = function(name) {
     if (!_.isSymbol(name)) throw new Error('symbol expected');
     var path = _.str(name).split('/')[0].split('.');
@@ -636,6 +649,9 @@ goog.scope(function() {
     else if (isModuleRequire(exp)) {
       return evalModuleRequire(exp, env);
     }
+    else if (isModuleSet(exp)) {
+      return evalModuleSet(exp, env);
+    }
     else if (isApplication(exp)) {
       return evalApplication(exp, env);
     }
@@ -729,7 +745,7 @@ goog.scope(function() {
     ws.readFile(_.str(__dirname, "/wonderscript/core.ws"));
   }
   else {
-    //ws.readFile("src/pbnj/wonderscript/core.ws");
+    ws.readFile("src/pbnj/wonderscript/core.ws");
   }
 
   globalEnv.define('*environment*', 'development');

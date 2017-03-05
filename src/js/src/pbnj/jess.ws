@@ -221,14 +221,14 @@
               (set! MACROS (assoc MACROS name fn))
               nil) ) ))
 
-(define-function pbnj.jess/macroexpand [exp]
+(define-function macroexpand [exp]
   (let [tag (first exp)
         xfr (get MACROS tag)]
     (if xfr
-      (pbnj.jess/macroexpand (apply xfr (rest exp)))
+      (macroexpand (apply xfr (rest exp)))
       exp)))
 
-(define-function pbnj.jess/compile [exp_]
+(define-function compile [exp_]
   (let [exp (macroexpand exp_)]
     (cond (nil? exp) (emit-nil exp)
           (number? exp) (emit-number exp)
