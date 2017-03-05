@@ -10,6 +10,11 @@ goog.scope(function() {
   function Env(parent) {
     this.vars = Object.create(parent ? parent.vars : null);
     this.parent = parent;
+    if (!parent) {
+      this.vars['*source*'] = 'unknown';
+      this.vars['*scope-name*'] = 'global';
+      this.vars['*line*'] = 1;
+    }
     this.level = level++;
   }
 
@@ -27,7 +32,7 @@ goog.scope(function() {
       }
       scope = scope.parent;
     }
-    throw new Error(_.str("Undefined variable: '", name, "'"));
+    return null;
   };
 
   env.get = function(name) {
@@ -77,6 +82,7 @@ goog.scope(function() {
 
   env.setIdent = function(ident) {
     this.ident = ident;
+    this.vars['*scope-name*'] = ident;
     return this;
   };
 
@@ -89,7 +95,10 @@ goog.scope(function() {
     var trace = [];
     var scope = this;
     while (scope) {
-      trace.push([scope.ident, scope.source, scope.line, scope.column]);
+      var source = scope.lookup('*source*').get('*source*');
+      var name = scope.lookup('*scope-name*').get('*scope-name*');
+      var line = scope.lookup('*line*').get('*line*');
+      trace.unshift([source, name, line]);
       scope = scope.parent;
     }
     return trace;
@@ -97,6 +106,10 @@ goog.scope(function() {
 
   pbnj.env = function(parent) {
     return new Env(parent);
+  };
+
+  pbnj.core.isEnv = function(val) {
+    return val instanceof Env;
   };
 
   if (module != void 0 && module.exports) {

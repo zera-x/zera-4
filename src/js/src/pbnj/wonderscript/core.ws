@@ -78,7 +78,7 @@
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
   (cons 'do
         (concat (map (pair bindings)
-                     (lambda [pair] (list 'define (pair 0) (pair 1))))
+                     (lambda [pair] (list 'define- (pair 0) (pair 1))))
                 body)))
 
 (define-macro if
@@ -114,6 +114,11 @@
   (list 'define name
         (cons 'lambda forms)))
 
+(define-macro define-function-
+  [name &forms]
+  (list 'define- name
+        (cons 'lambda forms)))
+
 (define-macro not= [&values]
   (list 'not (cons '= values)))
 
@@ -128,8 +133,10 @@
 (define entries ->array)
 
 ; JS Interop / OOP
-(read-file "src/pbnj/jess.ws")
-(read-file "src/pbnj/wonderscript/compiler.ws")
+
+(require pbnj.jess)
+(require pbnj.wonderscript.compiler)
+(comment
 
 (module pbnj.core)
 
@@ -172,7 +179,7 @@
                                                'this
                                                (list '. '[this] 'concat (list 'Array.prototype.slice.call 'arguments))))))))
         proto (cons (list '.-set! klass "prototype" (hash-map)) meths)]
-    (list 'define nm (list 'pbnj.jess/compile (list 'quote (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass)))))))))
+    (list 'define nm (list 'pbnj.jess/eval (list 'quote (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass)))))))))
 
 (define-macro define-method
   [nm value args &body]
@@ -187,7 +194,6 @@
 (define-method distance Point [p1 p2]
   (Math/sqrt (+ (Math/pow (- (point-x p2) (point-x p1)) 2) (Math/pow (- (point-y p2) (point-y p1)) 2)))) 
 
-(comment
 (define-class pbnj.core/PersistentList [h t]
   (first [] this.h)
   (rest  [] this.t)

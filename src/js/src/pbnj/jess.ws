@@ -1,4 +1,3 @@
-(println (str *source* ":" *line*))
 ; vim: ft=clojure
 (module pbnj.jess)
 
@@ -158,20 +157,14 @@
         value (second (rest (rest exp)))]
     (cond (= size 4)
             (if (vector? prop)
-              (str (pbnj.jess/compile obj) "[" (join (map prop pnbj.jess/compile) "][") "]=" (pbnj.jess/compile value))
-              (str (pbnj.jess/compile obj) "[" (pbnj.jess/compile prop) "]=" (pbnj.jess/compile value)))
+              (str (pbnj.jess/compile obj) "['" (join prop "']['") "']=" (pbnj.jess/compile value))
+              (str (pbnj.jess/compile obj) "['" prop "']=" (pbnj.jess/compile value)))
           :else
             (throw "property assignment should be a list of 4 elements"))))
 
-(define-function pbnj.jess/emit-assignment [exp]
-  (let [size (count exp)
-        obj (second exp)
-        value (second (rest exp))]
-    (cond (= size 3)
-            (str "(" (pbnj.jess/compile obj) "="
-                 (if (symbol? value) value (pbnj.jess/compile value)) ")")
-          :else
-            (throw "assignment should be a list of 3 elements"))))
+(define-function emit-assignment [obj value]
+  (str "(" (pbnj.jess/compile obj) "="
+       (if (symbol? value) value (pbnj.jess/compile value)) ")"))
 
 (define-function emit-unary-operator [exp]
   (let [size (count exp)]
@@ -196,14 +189,11 @@
 
 (define-function emit-quote [exp] (JSON/stringify exp))
 
-(define-function emit-function-application [exp]
-  (let [size (count exp)]
-    (cond (= size 1)
-            (str (pbnj.jess/compile (first exp)) "()")
-          (> size 1)
-            (str (pbnj.jess/compile (first exp)) "(" (join (map (rest exp) pbnj.jess/compile) ",") ")")
-          :else
-            (throw "function application should be a list of at least 1 element"))))
+(define-function emit-function-application
+  ([fn]
+   (str (pbnj.jess/compile fn) "()"))
+  ([fn &args]
+   (str (pbnj.jess/compile fn) "(" (join (map args pbnj.jess/compile) ",") ")")))
 
 (define-function pbnj.jess/emit-object [exp]
   (str "({"
@@ -217,7 +207,7 @@
 (define-function pbnj.jess/emit-array [exp]
   (str "([" (join (map exp pbnj.jess/compile) ",") "])"))
 
-(define MACROS {})
+(define pbnj.jess/MACROS {})
 
 (define-function eval-macro-definition [exp]
   (let [size (count exp)]
@@ -226,13 +216,17 @@
                   args (first (rest (rest exp)))
                   body (rest (rest (rest exp)))
                   fn (pbnj.wonderscript/eval (cons 'lambda (cons args body)))]
+              (println (inspect MACROS))
+              (println (inspect pbnj.jess/MACROS))
               (set! MACROS (assoc MACROS name fn))
               nil) ) ))
 
 (define-function pbnj.jess/macroexpand [exp]
   (let [tag (first exp)
         xfr (get MACROS tag)]
-    (if xfr (apply xfr (rest exp)) exp)))
+    (if xfr
+      (pbnj.jess/macroexpand (apply xfr (rest exp)))
+      exp)))
 
 (define-function pbnj.jess/compile [exp_]
   (let [exp (macroexpand exp_)]
@@ -270,7 +264,7 @@
                     (= tag '.) (emit-method-call exp)
                     (= tag 'new) (emit-class-init exp)
                     (= tag '.-set!) (emit-property-assignment exp)
-                    (= tag 'set!) (emit-assignment exp)
+                    (= tag 'set!) (apply emit-assignment (rest exp))
                     (or (= tag '!) (= tag 'not)) (emit-negation exp)
                     (has? '#{++ -- ~} tag) (emit-unary-operator exp)
                     (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
@@ -283,7 +277,7 @@
                     (= tag 'comment) ""
                     :else 
                       ; method resolution and class instantiation short require regex or JS string functions
-                      (emit-function-application exp) )
+                      (apply emit-function-application (rest exp)) )
           :else
             (do
               (throw (str "invalid form: '" exp "'"))) )))
@@ -294,15 +288,7 @@
     (println (inspect code))
   (js/eval code)))
 
-(define-function compile-stream [stream]
-  (list 'function []
-        (list 'var 'buffer [])
-        (list 'while (list '! (list '. stream 'eof))
-              (list '. 'buffer 'push (list 'eval (list 'pbnj.jess.compile (list '. 'stream 'next)))))
-        (list '. 'buffer 'join "\n")))
-
 (define-function pbnj.jess/compile-string [input source]
   (pbnj.jess/compile-stream (pbnj.reader/readString input source)))
 
-(println (str *source* ":" *line*))
 (pbnj.jess/readFile "src/pbnj/jess/core.jess")
