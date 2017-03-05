@@ -1,7 +1,7 @@
 ; vim: ft=clojure
-(module 'pbnj.wonderscript.test-suite)
+(module pbnj.wonderscript.test-suite)
 
-(read-file "src/pbnj/wonderscript/test.ws")
+(require "src/pbnj/wonderscript/test.ws")
 
 ;; Reference test suite for WonderScript implementations
 

@@ -67,6 +67,7 @@ goog.scope(function() {
   var isVariable = ws.isVariable = _.isSymbol;
 
   var lookupVariable = function(sym, env) {
+    var env = env || globalEnv;
     if (_.isSymbol(sym)) {
       var name = _.name(sym);
       var ns = _.namespace(sym);
@@ -91,9 +92,18 @@ goog.scope(function() {
           return ROOT_OBJECT;
         }
         else {
-          var mod = getModule(_.symbol(ns));
-          if (name === 'x') {
-            console.log('mod: ', mod)
+          var mod = findModule(_.symbol(ns));
+          if (ns === 't') {
+            console.log('mod: ', mod);
+          }
+          if (mod == null) {
+            mod = lookupVariable(_.symbol(ns));
+            if (ns === 't') {
+              console.log('mod: ', mod);
+            }
+            if (mod == null) {
+              throw new Error(_.str("Undefined variable: '", sym, "'"));
+            }
           }
           return mod;
         }
@@ -124,7 +134,7 @@ goog.scope(function() {
     var ns    = _.namespace(ident);
 
     // define value in module scope
-    var mod = ns === null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns));
+    var mod = ns == null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns));
     if (!mod) throw new Error(_.str("module ", ns ," is undefined"));
     if (!mod["@@SCOPE@@"]) {
       mod["@@SCOPE@@"] = globalEnv.extend();
@@ -170,16 +180,16 @@ goog.scope(function() {
   var invocableToFn = function(invocable, args) {
     var func = null;
     if (_.isKeyword(invocable) && _.isMap(_.first(args))) {
-      func = function() { return _.get(arguments[0], invocable); };
+      func = function(map) { return _.get(map, invocable); };
     }
     else if (_.isKeyword(invocable) && _.isSet(_.first(args))) {
-      func = function() { return _.hasKey(arguments[0], invocable); };
+      func = function(set) { return _.hasKey(set, invocable); };
     }
     else if (_.isAssociative(invocable)) {
-      func = function() { return _.get(invocable, arguments[0]); };
+      func = function(key) { return _.get(invocable, key); };
     }
     else if (_.isSet(invocable)) {
-      func = function() { return _.hasKey(invocable, arguments[0]); };
+      func = function(elem) { return _.hasKey(invocable, elem); };
     }
     else {
       throw new Error(_.str("'", invocable, "' is not invocable"));
@@ -194,7 +204,7 @@ goog.scope(function() {
   ws.apply = function(func_, args, obj) {
     var obj = obj ? obj : null;
     if (isInvocable(func_)) {
-      var func = invocableToFn(func_);
+      var func = invocableToFn(func_, args);
     }
     else {
       var func = func_;
@@ -387,8 +397,8 @@ goog.scope(function() {
     var args = _.second(rest);
     var body = _.rest(_.rest(rest));
     var lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
-    var currentScope = pbnj.MODULE_SCOPE;
-    var mod = _.namespace(name) ? getModule(_.symbol(_.namespace(name))) : pbnj.MODULE_SCOPE;
+    var ns = _.namespace(name);
+    var mod = ns ? getModule(_.symbol(ns)) : pbnj.MODULE_SCOPE;
     mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
     var fn = evalLambda(lambda, env);
     fn.$lang$ws$ident = name; // give it an ident for stacktrace
@@ -400,7 +410,14 @@ goog.scope(function() {
     var name = _.first(exp);
     if (_.isList(exp) && _.isSymbol(name)) {
       var ns = _.namespace(name);
-      var macros = (ns == null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns)))['@@MACROS@@'];
+      var mod = (ns == null ? pbnj.MODULE_SCOPE : findModule(_.symbol(ns)))
+      if (mod == null) {
+        mod = getVariable(lookupVariable(_.symbol(ns)), ns);
+        if (mod == null) {
+          return exp;
+        }
+      }
+      var macros = mod['@@MACROS@@'];
       var m = (macros && macros[_.name(name)]);
       var macro = m == null ? pbnj.core["@@MACROS@@"][name] : m;
       if (macro) {
@@ -490,6 +507,7 @@ goog.scope(function() {
     if (mod) {
       mod["@@SCOPE@@"] = env.extend().setIdent(_.str(name));
       mod["@@NAME@@"] = name;
+      mod.$lang$ws$type = 'module';
       pbnj.MODULE_SCOPE = mod;
       globalEnv.define(name, mod);
     }
@@ -503,12 +521,19 @@ goog.scope(function() {
 
   var evalModuleRequire = function(exp, env) {
     var name = _.second(exp);
-    if (_.isSymbol(name)) {
+    if (_.isString(name)) {
+      ws.readFile(name, env.extend().setIdent('require'));
+    }
+    else if (_.isSymbol(name)) {
       var path = _.str("src/", _.str(name).split('.').join('/'), ".ws");
       ws.readFile(path, env.extend().setIdent('require'));
+      var mod = findModule(name);
+      if (mod == null) {
+        throw new Error(_.str('module ', name, ' does not exist'));
+      }
     }
     else {
-      throw new Error("module name should be a symbol");
+      throw new Error("module name should be a symbol or string");
     }
     return null;
   };
@@ -524,6 +549,17 @@ goog.scope(function() {
       throw new Error("module name should be a symbol");
     }
     return null;
+  };
+
+  var findModule = ws.getModule = function(name) {
+    if (!_.isSymbol(name)) throw new Error('symbol expected');
+    var path = _.str(name).split('/')[0].split('.');
+    var mod = ROOT_OBJECT;
+    for (var i = 0; i < path.length; i++) {
+      mod = mod[path[i]];
+      if (mod == null) break; //throw new Error(_.str('module ', name, ' is undefined'));
+    }
+    return mod;
   };
 
   var getModule = ws.getModule = function(name) {
@@ -742,10 +778,10 @@ goog.scope(function() {
   globalEnv.define('compile-file', ws.compileFile);
 
   if (module != void 0 && module.exports) {
-    ws.readFile(_.str(__dirname, "/wonderscript/core.ws"));
+    ws.readFile(_.str(__dirname, "/core.ws"));
   }
   else {
-    ws.readFile("src/pbnj/wonderscript/core.ws");
+    ws.readFile("src/pbnj/core.ws");
   }
 
   globalEnv.define('*environment*', 'development');

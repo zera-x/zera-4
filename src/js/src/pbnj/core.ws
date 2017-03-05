@@ -132,21 +132,133 @@
 ; TODO: make a version of this for the core lib with mori types
 (define entries ->array)
 
-; JS Interop / OOP
+(define-macro define-test [nm &body]
+  (list 'define nm
+        {:test/name (list 'quote nm)
+         :test/fn (cons 'lambda (cons [] (concat body [[(list 'quote nm) :passed]])))}))
 
-(require pbnj.jess)
-(require pbnj.wonderscript.compiler)
-(comment
+(define-macro is [body]
+  (list 'if-not body (list 'throw (str "FAILURE: " (inspect body) " is false"))))
 
-(module pbnj.core)
+(define-macro is-not [body]
+  (list 'is (list 'not body)))
 
-(define SYMCOUNT 0)
+(define-function run-test [t] ((:test/fn t)))
+
+(define-function collect-tests [module]
+  (filter (into [] (values module)) (lambda [m] (and (map? m) (:test/name m)))))
+
+(define-function run-tests [module]
+  (into [] (map (collect-tests module) run-test)))
+
+
+(define-test test-literals
+  (is (= 1 (read-string "1")))
+  (is (= -1 (read-string "-1")))
+  (is (= 3.14159 (read-string "3.14159")))
+  (is (= 3000 (read-string "3_000")))
+  (is (= "abc" (read-string "\"abc\"")))
+  (is (= :a (read-string ":a")))
+  (is (= 'b (read-string "'b")))
+  (is (= '(1 2 3) (read-string "'(1 2 3)")))
+  (is (= [1 2 3] (read-string "[1 2 3]")))
+  (is (= {:a 1 :b 2 :c 3} (read-string "{:a 1 :b 2 :c 3}")))
+  (is (= 5000 (read-string "5,000")))
+  (is (= 5000 (read-string "5_000")))
+  (is (= 5 (read-string "5.000"))))
+
+(define-test test-let
+  (is (= [1 2]
+         (let [x 1
+               y (+ x 1)]
+           (is (= x 1))
+           (is (= y 2))
+           [x y]))))
+
+(define-test test-if
+  (is (= 1 (if true 1)))
+  (is (= 1 (if true 1 2)))
+  (is (= 2 (if false 1 2)))
+  (is (= nil (if false 1)))
+  (is (= 2 (if nil 1 2))))
+
+(define-test test-if-not
+  (is (= 1 (if-not false 1)))
+  (is (= 1 (if-not false 1 2)))
+  (is (= 2 (if-not true 1 2)))
+  (is (= nil (if-not true 1)))
+  (is (= 1 (if-not nil 1 2))))
+
+(define-test test-unless
+  (is (= 5 (unless false 1 2 3 4 5)))
+  (is (= nil (unless true 1 2 3 4 5))))
+
+(define-test test-when
+  (is (= 5 (when true 1 2 3 4 5)))
+  (is (= nil (when false 1 2 3 4 5))))
+
+(define-test test-or
+  (is (or true))
+  (is (or false true))
+  (is (or false false true))
+  (is (or false false false true))
+  (is-not (or false))
+  (is-not (or false false))
+  (is-not (or false false false)))
+
+(define-test test-add
+  (is (and true))
+  (is (and true true))
+  (is (and true true true))
+  (is-not (and false))
+  (is-not (and false false))
+  (is-not (and false false false))
+  (is-not (and false true))
+  (is-not (and false true true))
+  (is-not (and true true false)))
+
+(define-test test-define-function
+  (define-function ident [x] x)
+  (define-function inc [x] (+ 1 x))
+  (is (= 1 (ident 1)))
+  (is (= :a (pbnj.core/ident :a)))
+  (is (= 4 (inc 3)))
+  (is (= 5 (pbnj.core/inc 4))))
+
+(define-test test-define-function-
+  (define-function- ident- [x] x)
+  (define-function- inc- [x] (+ 1 x))
+  ;(is (= :a (pbnj.core/ident- :a)))
+  ;(is (= 5 (pbnj.core/+1- 4)))
+  (is (= 1 (ident- 1)))
+  (is (= 4 (inc- 3))))
+
+(define-test test-not=
+  (is (not= 1 2))
+  (is (not= :a :b))
+  (is (not= 1 :a))
+  (is-not (not= 1 1))
+  (is-not (not= :a :a))
+  (is-not (not= [1 2 3 4] [1 2 3 4])))
+
+(require "src/pbnj/jess.ws")
+(require "src/pbnj/wonderscript/compiler.ws")
+
+(use pbnj.core)
+
+(define *sym-count* 0)
 (define-function gen-sym 
   ([] (gen-sym "sym"))
   ([prefix]
-   (let [sym (symbol (str prefix "-" SYMCOUNT))]
-     (set! SYMCOUNT (+ 1 SYMCOUNT))
+   (let [sym (symbol (str prefix "-" *sym-count*))]
+     (set! *sym-count* (+ 1 *sym-count*))
      sym)))
+
+(define-test test-gen-sym
+  (is (symbol? (gen-sym)))
+  (is (symbol? (gen-sym "prefix")))
+  (is-not (= (gen-sym) (gen-sym)))
+  (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
 
 (define-macro .
   [obj method &args]
@@ -155,9 +267,21 @@
           (list 'define name obj)
           (list 'apply-method name (list '.- name method) (into (vector) args)))))
 
+(define-test test-.
+  (let [d (new js/Date 2016 10 25)]
+    (is (= (. d getMonth) 10))
+    (is (= (. d getFullYear) 2016))
+    (is (= (. d getDate) 25))
+    (is (= (. js/Math abs -3) 3))))
+
 (define-macro .?
   [obj method &args]
   (list 'if (list '.- obj method) (cons '. (cons obj (cons method args))) nil))
+
+(define-test test-.?
+  (let [d (new js/Date 2016 10 25)]
+    (is (= (.? d getMonth) 10))
+    (is (= (.? d missing-method) nil))))
 
 (define-macro define-class [nm fields &methods]
   (let [klass (symbol nm)
@@ -181,15 +305,23 @@
         proto (cons (list '.-set! klass "prototype" (hash-map)) meths)]
     (list 'define nm (list 'pbnj.jess/eval (list 'quote (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass)))))))))
 
+(define-test test-define-class
+  (define-class Point
+    [x y]
+    (toString
+      [self]
+      (str "(" (.- self x) ", " (.- self y) ")")))
+  (let [p (new Point 3 4)]
+    (is (= 3 (.- p x)))
+    (is (= 4 (.- p y)))
+    (is (= "(3, 4)", (str p)))
+    (is (= "(3, 4)", (. p toString)))))
+
+(comment
 (define-macro define-method
   [nm value args &body]
   )
 
-(define-class Point
-  [x y]
-  (toString
-    [self]
-    (str "(" (.- self x) ", " (.- self y) ")")))
 
 (define-method distance Point [p1 p2]
   (Math/sqrt (+ (Math/pow (- (point-x p2) (point-x p1)) 2) (Math/pow (- (point-y p2) (point-y p1)) 2)))) 

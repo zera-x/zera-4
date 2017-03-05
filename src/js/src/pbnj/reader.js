@@ -22,6 +22,7 @@ goog.scope(function() {
     return {
       next: next,
       peek: peek,
+      peekAhead: peekAhead,
       eof: eof,
       croak: croak,
       source: source,
@@ -41,6 +42,9 @@ goog.scope(function() {
         col++;
       }
       return ch;
+    }
+    function peekAhead() {
+      return input.charAt(pos+1);
     }
     function peek() {
       return input.charAt(pos);
@@ -204,17 +208,21 @@ goog.scope(function() {
       return dispatch.string(readEscaped('"'));
     }
 
-    function readNumber() {
+    function readNumber(hasSign) {
       var hasDot = false;
+      var sign = hasSign ? input.next() : null;
       var num = readWhile(function(ch) {
         if (ch === '.') {
-          if (hasDot) return false;
+          if (hasDot) throw new Error("unexpexted '.'");
           hasDot = true;
           return true;
         }
+        if (hasSign && (ch === '-' || ch === '+')) {
+          throw new Error(_.str("unexpected '", ch, "'"));
+        }
         return isDigit(ch);
       });
-      num = num.replace(/[,_]/g, '');
+      num = _.str(sign, num.replace(/[,_]/g, ''));
       return dispatch.number(hasDot ? parseFloat(num) : parseInt(num));
     }
 
@@ -269,8 +277,8 @@ goog.scope(function() {
       else if (ch === '"') {
         return readString();
       }
-      else if (isDigit(ch)) {
-        return readNumber();
+      else if (isDigit(ch) || (ch === '-' || ch === '+') && isDigit(input.peekAhead())) {
+        return readNumber(ch === '-' || ch === '+');
       }
       else if (isSymbol(ch)) {
         return readSymbol();

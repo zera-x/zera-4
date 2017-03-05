@@ -207,7 +207,7 @@
 (define-function pbnj.jess/emit-array [exp]
   (str "([" (join (map exp pbnj.jess/compile) ",") "])"))
 
-(define pbnj.jess/MACROS {})
+(define *jess-macros* {})
 
 (define-function eval-macro-definition [exp]
   (let [size (count exp)]
@@ -216,14 +216,12 @@
                   args (first (rest (rest exp)))
                   body (rest (rest (rest exp)))
                   fn (pbnj.wonderscript/eval (cons 'lambda (cons args body)))]
-              (println (inspect MACROS))
-              (println (inspect pbnj.jess/MACROS))
-              (set! MACROS (assoc MACROS name fn))
+              (set! *jess-macros* (assoc *jess-macros* name fn))
               nil) ) ))
 
 (define-function macroexpand [exp]
   (let [tag (first exp)
-        xfr (get MACROS tag)]
+        xfr (get *jess-macros* tag)]
     (if xfr
       (macroexpand (apply xfr (rest exp)))
       exp)))
