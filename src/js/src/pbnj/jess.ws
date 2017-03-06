@@ -359,4 +359,4 @@
 (define-test function
   (is (= 1, ((eval '(paren (function [x] (return x)))) 1))))
 
-(pbnj.jess/readFile "src/pbnj/jess/core.jess")
+(pbnj.jess/readFile "src/pbnj/core.jess")
