@@ -75,10 +75,18 @@
 (define-macro define-once [nm value]
   (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))
 
+(define-macro defined-in-module?
+  ([nm] (list '.- 'pbnj/MODULE_SCOPE nm))
+  ([mod nm]
+   (list '.- mod nm)))
+
+(define-macro define-in-module-once [nm value]
+  (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
+
 (define-macro define-test [nm &body]
   (do
     (define- t (keyword (namespace nm) (name nm)))
-    (define-once *tests* {})
+    (define-in-module-once *tests* {})
     (list 'set! '*tests*
           (list 'assoc '*tests* (keyword (namespace nm) (name nm))
                 {:test/name (keyword (namespace nm) (name nm))
@@ -416,25 +424,37 @@
 
 (define-macro define-class [nm fields &methods]
   (let [klass (symbol nm)
-        assigns (map-indexed
-                  (lambda [i f]
-                          (list '.-set! 'this (name f) f)) fields)
+        assigns
+        (map-indexed
+          (lambda [i f]
+                  (list '.-set! 'this (name f) f)) fields)
         ctr (cons 'function (cons nm (cons (apply vector fields) assigns)))
-        meths (map methods
-                   (lambda [meth]
-                           (let [n (str (first meth))
-                                 args (first (rest meth))
-                                 body (rest (rest meth))]
-                             (list '.-set! klass (vector "prototype" n)
-                                   (list 'fn
-                                         (into (vector) (rest args))
+        meths
+        (map methods
+             (lambda [meth]
+                     (let [n (str (first meth))
+                           args (first (rest meth))
+                           body (rest (rest meth))]
+                       (list '.-set! klass (vector "prototype" n)
+                             (list 'function
+                                   (into (vector) (rest args))
+                                   (list 'return
                                          (list '.
-                                               (cons 'fn (cons [(first args)] (map body pbnj.wonderscript/ws->jess)))
+                                               (cons 'fn
+                                                     (cons
+                                                       (if (empty? args) [] [(first args)])
+                                                       (map body pbnj.wonderscript/ws->jess)))
                                                'apply
                                                'this
-                                               (list '. '[this] 'concat (list 'Array.prototype.slice.call 'arguments))))))))
-        proto (cons (list '.-set! klass "prototype" (hash-map)) meths)]
-    (list 'define nm (list 'pbnj.jess/eval (list 'quote (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass)))))))))
+                                               (list '.
+                                                     '[this]
+                                                     'concat
+                                                     (list 'Array.prototype.slice.call 'arguments)))))))))
+        proto (cons (list '.-set! klass "prototype" (hash-map)) meths)
+        code (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass))))]
+    (pprint code)
+    (pprint (pbnj.jess/compile code))
+    (list 'define nm (list 'pbnj.jess/eval (list 'quote code)))))
 
 (define-test define-class
   (define-class Point

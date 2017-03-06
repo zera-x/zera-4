@@ -230,7 +230,7 @@
 
 (define-function compile [exp_]
   (let [exp (macroexpand exp_)]
-    (cond (nil? exp) (emit-nil exp)
+    (cond (or (nil? exp) (= exp 'null)) (emit-nil exp)
           (number? exp) (emit-number exp)
           (boolean? exp) (emit-boolean exp)
           (symbol? exp) (emit-symbol exp)
@@ -240,11 +240,11 @@
           (vector? exp) (emit-array exp)
           (list? exp)
             (let [tag (first exp)]
-              (cond (= tag 'if-else) (emit-if-else exp)
+              (cond (or (= tag 'if-else) (= tag 'cond)) (emit-if-else exp)
                     (= tag 'if) (emit-if exp)
                     (= tag '?) (emit-existential exp)
                     (= tag 'instance?) (emit-instanceof exp)
-                    (= tag 'type) (emit-typeof exp)
+                    (= tag 'typeof) (emit-typeof exp)
                     (= tag 'label) (emit-label exp)
                     (= tag 'do) (emit-block (rest exp))
                     (definition? exp) (emit-definition exp)
@@ -289,7 +289,7 @@
 (define-function compile-string [input source]
   (compile-stream (pbnj.reader/readString input source)))
 
-(define-test test-literals
+(define-test literals
   (is (= (compile nil) "null"))
   (is (= (compile 1) "1"))
   (is (= (compile 3435) "3435"))
@@ -307,12 +307,12 @@
   (is (= (compile (vector)) "([])"))
   (is (= (compile (vector 1 2 3 4 5)) "([1,2,3,4,5])")))
 
-(define-test test-if-else
+(define-test if-else
   (is (= (compile '(if-else true 1)) "if(true){1}"))
   (is (= (compile '(if-else true 1 false 2)) "if(true){1}else if(false){2}"))
   (is (= (compile '(if-else true 1 false 2 :else 3)) "if(true){1}else if(false){2}else{3}")))
 
-(define-test test-if
+(define-test if
   (is (= (compile '(if true 1)) "(true)?(1):(null)"))
   (is (= (compile '(if true 1 2)) "(true)?(1):(2)"))
   (is (= (eval '(if true 1)) 1))
@@ -320,8 +320,43 @@
   (is (= (eval '(if false 1 2)) 2))
   (is (= (eval '(if false 1)) nil)))
 
-(define-test test-?
+(define-test ?
   (is-not (eval '(? nil)))
+  (is (eval '(? true)))
+  (is (eval '(? false)))
+  (is (eval '(? {})))
+  (is (eval '(? [])))
+  (is (eval '(? "")))
+  (is (eval '(? 0))))
 
+(define-test instance?
+  (is (eval '(instance? (new Date) Date)))
+  (is-not (eval '(instance? Math Date))))
+
+(define-test typeof
+  (is (= "number" (eval '(typeof 1))))
+  (is (= "string" (eval '(typeof "aasfwewrqfwdf"))))
+  (is (= "object" (eval '(typeof nil))))
+  (is (= "boolean" (eval '(typeof true))))
+  (is (= "object" (eval '(typeof {}))))
+  (is (= "object" (eval '(typeof [])))))
+
+(define-test do
+  (is (= "1;2;3;4;" (compile '(do 1 2 3 4)))))
+
+(define-test var
+  (is (= "var x;" (compile '(var x))))
+  (is (= "var x=1;" (compile '(var x 1)))))
+
+(define-test let
+  (is (= "let x;" (compile '(let x))))
+  (is (= "let x=1;" (compile '(let x 1)))))
+
+(define-test const
+  (is (= "const x;" (compile '(const x))))
+  (is (= "const x=1;" (compile '(const x 1)))))
+
+(define-test function
+  (is (= 1, ((eval '(paren (function [x] (return x)))) 1))))
 
 (pbnj.jess/readFile "src/pbnj/jess/core.jess")
