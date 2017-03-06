@@ -5,16 +5,16 @@
 (define-function emit-number [exp] (str exp))
 (define-function emit-boolean [exp] (if exp "true" "false"))
 
-(define-function pbnj.jess/emit-symbol [exp]
+(define-function emit-symbol [exp]
   (let [nm (name exp)
         ns (namespace exp)]
     (if (nil? ns) nm (str ns "." nm))))
 
 (define-function emit-string [exp] (str "\"" exp "\""))
 
-(define-function emit-expression [exp] (str "(" (pbnj.jess/compile (second exp)) ")"))
+(define-function emit-expression [exp] (str "(" (compile (second exp)) ")"))
 
-(define-function emit-block [exp] (str (join (map exp pbnj.jess/compile) ";") ";"))
+(define-function emit-block [exp] (str (join (map exp compile) ";") ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
@@ -23,32 +23,32 @@
     (reduce (pair (rest exp))
       (lambda [memo exp]
               (cond (nil? memo)
-                      (str "if(" (pbnj.jess/compile (exp 0)) "){" (pbnj.jess/compile (exp 1)) "}")
+                      (str "if(" (compile (exp 0)) "){" (compile (exp 1)) "}")
                     (= :else (exp 0))
-                      (str memo "else{" (pbnj.jess/compile (exp 1)) "}")
+                      (str memo "else{" (compile (exp 1)) "}")
                     :else
-                      (str memo "else if(" (pbnj.jess/compile (exp 0)) "){" (pbnj.jess/compile (exp 1)) "}"))) nil)))
+                      (str memo "else if(" (compile (exp 0)) "){" (compile (exp 1)) "}"))) nil)))
 
 (define-function emit-if [exp]
   (let [pred (second exp)
         conse (first (rest (rest exp)))
         alt (second (rest (rest exp)))]
-    (str "(" (pbnj.jess/compile pred) ")?(" (pbnj.jess/compile conse) "):(" (pbnj.jess/compile alt) ")")))
+    (str "(" (compile pred) ")?(" (compile conse) "):(" (compile alt) ")")))
 
 (define-function emit-existential [exp]
-  (let [value (pbnj.jess/compile (second exp))]
+  (let [value (compile (second exp))]
     (str "((typeof " value "!==\"undefined\")&&(" value "!==null))")))
 
 (define-function emit-instanceof [exp]
-  (str "(" (pbnj.jess/compile (second exp)) " instanceof " (pbnj.jess/compile (first (rest (rest exp)))) ")"))
+  (str "(" (compile (second exp)) " instanceof " (compile (first (rest (rest exp)))) ")"))
 
 (define-function emit-typeof [exp]
-  (str "(typeof " (pbnj.jess/compile (second exp)) ")"))
+  (str "(typeof " (compile (second exp)) ")"))
 
 (define-function emit-label [exp]
   (str (name (second exp)) ":"))
 
-(define-function pbnj.jess/definition? [exp]
+(define-function definition? [exp]
   (let [tag (first exp)]
     (or (= tag 'var) (= tag 'let) (= tag 'const))))
 
@@ -57,7 +57,7 @@
     (cond (= size 2)
             (str (first exp) " " (second exp) ";")
           (= size 3)
-            (str (first exp) " " (second exp) "=" (pbnj.jess/compile (first (rest (rest exp)))) ";")
+            (str (first exp) " " (second exp) "=" (compile (first (rest (rest exp)))) ";")
           :else
             (throw "malformed expression: a definition should be a list of 2 or 3 elements"))))
 
@@ -75,37 +75,37 @@
             (throw "malformed function expression"))))
 
 (define-function emit-peren [exp]
-  (str "(" (pbnj.jess/compile exp) ")"))
+  (str "(" (compile exp) ")"))
 
 (define-function emit-statement [exp]
   (let [size (count exp)]
     (cond (= size 1)
             (str (first exp) ";")
           (= size 2)
-            (str (first exp) " " (pbnj.jess/compile (second exp)) ";")
+            (str (first exp) " " (compile (second exp)) ";")
           :else
             (throw "a statement should be a list of 1 or 2 elements"))))
 
 (define-function emit-return 
   ([] "return;")
   ([val]
-   (if (pbnj.jess/definition? val)
+   (if (definition? val)
      (str (emit-definition val) "return " (second val) ";")
-     (str "return " (pbnj.jess/compile val) ";"))))
+     (str "return " (compile val) ";"))))
 
 (define-function emit-colon-statement [exp]
   (let [size (count exp)]
     (cond (= size 1)
             (str (first exp) ":")
           (= size 2)
-            (str (first exp) " " (pbnj.jess/compile (second exp)) ":")
+            (str (first exp) " " (compile (second exp)) ":")
           :else
             (throw "a colon statement should be a list of 1 or 2 elements"))))
 
 (define-function emit-control-flow [exp]
   (let [size (count exp)]
     (cond (>= size 3)
-            (str (first exp) "(" (pbnj.jess/compile (second exp)) "){" (emit-block (rest (rest exp))) "}")
+            (str (first exp) "(" (compile (second exp)) "){" (emit-block (rest (rest exp))) "}")
           :else
             (throw "a control flow statement should be a list of 3 elements"))))
 
@@ -129,7 +129,7 @@
         obj (second exp)
         prop (second (rest exp))]
     (cond (= size 3)
-            (str (pbnj.jess/compile obj) "[" (if (number? prop) prop (str "'" prop "'")) "]")
+            (str (compile obj) "[" (if (number? prop) prop (str "'" prop "'")) "]")
           :else
             (throw "property access should be a list of 3 elements"))))
 
@@ -139,16 +139,16 @@
         method (second (rest exp))
         args (rest (rest (rest exp)))]
     (cond (>= size 3)
-            (pbnj.jess/compile (cons (list '.- obj (str method)) args))
+            (compile (cons (list '.- obj (str method)) args))
           :else
             (throw "a method call should be a list of at least 3 elements"))))
 
-(define-function pbnj.jess/emit-class-init [exp]
+(define-function emit-class-init [exp]
   (let [size (count exp)]
     (cond (= size 2)
-            (str "(new " (pbnj.jess/compile (second exp)) "())")
+            (str "(new " (compile (second exp)) "())")
           (> size 2)
-            (str "(new " (pbnj.jess/compile (second exp)) "(" (join (map (rest (rest exp)) pbnj.jess/compile) ",") "))"))))
+            (str "(new " (compile (second exp)) "(" (join (map (rest (rest exp)) compile) ",") "))"))))
 
 (define-function emit-property-assignment [exp]
   (let [size (count exp)
@@ -157,14 +157,14 @@
         value (second (rest (rest exp)))]
     (cond (= size 4)
             (if (vector? prop)
-              (str (pbnj.jess/compile obj) "['" (join prop "']['") "']=" (pbnj.jess/compile value))
-              (str (pbnj.jess/compile obj) "['" prop "']=" (pbnj.jess/compile value)))
+              (str (compile obj) "['" (join prop "']['") "']=" (compile value))
+              (str (compile obj) "['" prop "']=" (compile value)))
           :else
             (throw "property assignment should be a list of 4 elements"))))
 
 (define-function emit-assignment [obj value]
-  (str "(" (pbnj.jess/compile obj) "="
-       (if (symbol? value) value (pbnj.jess/compile value)) ")"))
+  (str "(" (compile obj) "="
+       (if (symbol? value) value (compile value)) ")"))
 
 (define-function emit-unary-operator [exp]
   (let [size (count exp)]
@@ -176,14 +176,14 @@
 (define-function emit-binary-operator [exp]
   (let [size (count exp)]
     (cond (>= size 3)
-            (join (map (rest exp) pbnj.jess/compile) (str (first exp)))
+            (join (map (rest exp) compile) (str (first exp)))
           :else
             (throw "a binary operator should be a list of at least 3 elements"))))
 
 (define-function emit-negation [exp]
   (let [size (count exp)]
     (cond (= size 2)
-            (emit-unary-operator (list '! (second (pbnj.jess/compile exp))))
+            (emit-unary-operator (list '! (second (compile exp))))
           :else
             (throw "negation should be a list of 2 elements"))))
 
@@ -191,21 +191,23 @@
 
 (define-function emit-function-application
   ([fn]
-   (str (pbnj.jess/compile fn) "()"))
+   (str (compile fn) "()"))
   ([fn &args]
-   (str (pbnj.jess/compile fn) "(" (join (map args pbnj.jess/compile) ",") ")")))
+   (str (compile fn) "(" (join (map args compile) ",") ")")))
 
-(define-function pbnj.jess/emit-object [exp]
+(define-function emit-object [exp]
   (str "({"
        (reduce exp
                (lambda [s pair]
                        (str (if (nil? s) "" (str s ","))
-                            (pbnj.jess/compile (first pair))
+                            (compile (first pair))
                             ":"
-                            (pbnj.jess/compile (second pair)))) nil) "})"))
+                            (compile (second pair)))) nil) "})"))
 
-(define-function pbnj.jess/emit-array [exp]
-  (str "([" (join (map exp pbnj.jess/compile) ",") "])"))
+(define-function emit-array [exp]
+  (if (empty? exp)
+    "([])"
+    (str "([" (join (map exp compile) ",") "])")))
 
 (define *jess-macros* {})
 
@@ -245,7 +247,7 @@
                     (= tag 'type) (emit-typeof exp)
                     (= tag 'label) (emit-label exp)
                     (= tag 'do) (emit-block (rest exp))
-                    (pbnj.jess/definition? exp) (emit-definition exp)
+                    (definition? exp) (emit-definition exp)
                     (or (= tag 'function) (= tag 'function*))
                       (emit-function exp)
                     (= tag 'return)
@@ -278,15 +280,48 @@
                       (apply emit-function-application (rest exp)) )
           :else
             (do
-              (throw (str "invalid form: '" exp "'"))) )))
-  )
+              (throw (str "invalid form: '" exp "'"))) ))))
 
-(define-function pbnj.jess/eval [exp]
-  (let [code (pbnj.jess/compile exp)]
-    (println (inspect code))
+(define-function eval [exp]
+  (let [code (compile exp)]
   (js/eval code)))
 
-(define-function pbnj.jess/compile-string [input source]
-  (pbnj.jess/compile-stream (pbnj.reader/readString input source)))
+(define-function compile-string [input source]
+  (compile-stream (pbnj.reader/readString input source)))
+
+(define-test test-literals
+  (is (= (compile nil) "null"))
+  (is (= (compile 1) "1"))
+  (is (= (compile 3435) "3435"))
+  (is (= (compile 3.14159) "3.14159"))
+  (is (= (compile -3.14159) "-3.14159"))
+  (is (= (compile true) "true"))
+  (is (= (compile false) "false"))
+  (is (= (compile 'symbol) "symbol"))
+  (is (= (compile 'namespaced/symbol) "namespaced.symbol"))
+  (is (= (compile :keyword) "keyword"))
+  (is (= (compile :namespaced/keyword) "namespaced.keyword"))
+  (is (= (compile "test") "\"test\""))
+  (is (= (compile (hash-map)) "({})"))
+  (is (= (compile (hash-map :a 1 :b 2)) "({a:1,b:2})"))
+  (is (= (compile (vector)) "([])"))
+  (is (= (compile (vector 1 2 3 4 5)) "([1,2,3,4,5])")))
+
+(define-test test-if-else
+  (is (= (compile '(if-else true 1)) "if(true){1}"))
+  (is (= (compile '(if-else true 1 false 2)) "if(true){1}else if(false){2}"))
+  (is (= (compile '(if-else true 1 false 2 :else 3)) "if(true){1}else if(false){2}else{3}")))
+
+(define-test test-if
+  (is (= (compile '(if true 1)) "(true)?(1):(null)"))
+  (is (= (compile '(if true 1 2)) "(true)?(1):(2)"))
+  (is (= (eval '(if true 1)) 1))
+  (is (= (eval '(if true 1 2)) 1))
+  (is (= (eval '(if false 1 2)) 2))
+  (is (= (eval '(if false 1)) nil)))
+
+(define-test test-?
+  (is-not (eval '(? nil)))
+
 
 (pbnj.jess/readFile "src/pbnj/jess/core.jess")

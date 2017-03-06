@@ -77,7 +77,7 @@ goog.scope(function() {
         if (scope === null) {
           if (pbnj.MODULE_SCOPE[name] == null) {
             if (pbnj.core[name] == null) {
-              throw new Error(_.str("Undefined variable: '", sym, "'"));
+              return null;
             }
             return pbnj.core;
           }
@@ -93,17 +93,8 @@ goog.scope(function() {
         }
         else {
           var mod = findModule(_.symbol(ns));
-          if (ns === 't') {
-            console.log('mod: ', mod);
-          }
           if (mod == null) {
-            mod = lookupVariable(_.symbol(ns));
-            if (ns === 't') {
-              console.log('mod: ', mod);
-            }
-            if (mod == null) {
-              throw new Error(_.str("Undefined variable: '", sym, "'"));
-            }
+            return lookupVariable(_.symbol(ns));
           }
           return mod;
         }
@@ -118,9 +109,9 @@ goog.scope(function() {
 
   var evalVariable = function(exp, env) {
     var name = _.name(exp);
-    var val = getVariable(lookupVariable(exp, env), name);
-    //if (val) return val;
-    //throw new Error(_.str("Undefined variable: '", exp, "'"));
+    var mod = lookupVariable(exp, env);
+    if (mod === null) throw new Error(_.str("Undefined variable: '", exp, "'"));
+    var val = getVariable(mod, name);
     return val;
   };
 
@@ -378,6 +369,7 @@ goog.scope(function() {
 
   var evalCond = function(exp, env) {
     var rest = _.rest(exp);
+    if (_.count(rest) % 2 !== 0) throw new Error(_.str('cond requires an even number of elements ', ws.inspect(exp)));
     var pairs = _.pair(rest);
     for (var i = 0; i < _.count(pairs); i++) {
       var pred = _.nth(_.nth(pairs, i), 0);
@@ -410,9 +402,12 @@ goog.scope(function() {
     var name = _.first(exp);
     if (_.isList(exp) && _.isSymbol(name)) {
       var ns = _.namespace(name);
+      if (ns === 'js') return exp;
       var mod = (ns == null ? pbnj.MODULE_SCOPE : findModule(_.symbol(ns)))
       if (mod == null) {
-        mod = getVariable(lookupVariable(_.symbol(ns)), ns);
+        var scope = lookupVariable(_.symbol(ns))
+        if (scope === null) return exp;
+        mod = getVariable(scope, ns);
         if (mod == null) {
           return exp;
         }
@@ -430,14 +425,9 @@ goog.scope(function() {
   var isVariableIntrospection = ws.isVariableIntrospection = makeTagPredicate(_.symbol('defined?'));
 
   var evalVariableIntrospection = function(exp, env) {
-    var name = _.str(ws.eval(_.second(exp), env));
-    try {
-      env.lookup(name);
-      return true;
-    }
-    catch (e) {
-      return false;
-    }
+    var name = _.second(exp);
+    var mod = lookupVariable(name, env);
+    return mod === null ? false : true;
   };
 
   var isAssignment = ws.isAssignment = makeTagPredicate(_.symbol('set!'));
@@ -445,6 +435,7 @@ goog.scope(function() {
   var evalAssignment = function(exp, env) {
     var name = _.second(exp);
     var scope = lookupVariable(name, env);
+    if (scope === null) throw new Error(_.str("Undefined variable '", name, "'"));
     var value = ws.eval(_.second(_.rest(exp)), env);
     var ns = _.namespace(name);
     if (_.isEnv(scope)) {
@@ -452,7 +443,9 @@ goog.scope(function() {
     }
     else {
       scope[name] = value;
-      env.set(name, value);
+      if (env = env.lookup(name)) {
+        env.set(name, value);
+      }
     }
     return value;
   };
