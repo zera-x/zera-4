@@ -6,7 +6,8 @@
 (define- html pbnj.peanutbutter/html)
 (define- define-component pbnj.peanutbutter/define-component)
 (define- render pbnj.peanutbutter/render)
-(define- js pbnj.jess/compile)
+
+; TODO: add error reporting and history, need to add try/catch blocks to WonderScript
 
 (define-component :layout
   (lambda

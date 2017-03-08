@@ -620,6 +620,9 @@ goog.scope(function() {
     else if (_.isBoolean(exp)) {
       return exp === true ? 'true' : 'false';
     }
+    else if (_.isString(exp)) {
+      return _.str('"', exp, '"');
+    }
     else if (isQuoted(exp)) {
       return _.str("'", ws.inspect(_.second(exp)));
     }
