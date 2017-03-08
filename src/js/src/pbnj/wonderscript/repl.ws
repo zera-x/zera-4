@@ -32,7 +32,9 @@
   (lambda []
      [:div {:class "repl-in", :style "font-family: Monaco, monospace"}
       [:span {:class "repl-cursor"} (str (current-module-name) ">&nbsp;")]
-      [:span {:class "repl-content" :style "width: 600px; display: inline-block" :contenteditable "true"}]]]))
+      [:input {:class "repl-content form-control"
+               :type "text"
+               :style "border: none; width: 600px; display: inline-block; font-family: Monaco, monospace; font-size: 1em;"}]]))
 
 (define-component :repl-out
   (lambda [content]
@@ -41,13 +43,16 @@
       [:span {:class "repl-content" :style "width: 100%"} content]]]))
 
 (define-function replContent []
-  (. (. (js/jQuery ".repl-content") last) text))
+  (. (. (js/jQuery ".repl-content") last) val))
 
 (define-function html-encode [s]
   (. (. s replace "<" "&lt;") replace ">" "&gt;"))
 
 (define-function appendOutput [content]
   (. (js/jQuery "#repl") append (html [[:repl-out (html-encode content)] [:repl-in]])))
+
+(define-function focus []
+  (. (. (js/jQuery ".repl-content") last) focus))
 
 (define-component :repl
   (lambda
@@ -57,10 +62,12 @@
       '(. document addEventListener "keydown"
           (function [event]
             (cond (=== event.keyIdentifier "Enter")
-                  (pbnj.wonderscript.repl.appendOutput
-                    (pbnj.wonderscript.inspect
-                      (pbnj.wonderscript.readString
-                        (pbnj.wonderscript.repl.replContent)))))))]
+                  (do
+                    (pbnj.wonderscript.repl.appendOutput
+                      (pbnj.wonderscript.inspect
+                        (pbnj.wonderscript.readString
+                          (pbnj.wonderscript.repl.replContent))))
+                    (pbnj.wonderscript.repl.focus)))))]
      [:repl-in]]))
 
 (define-function main []
