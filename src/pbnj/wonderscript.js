@@ -3,7 +3,6 @@ goog.provide('pbnj.wonderscript');
 goog.require('pbnj.core');
 goog.require('pbnj.env');
 goog.require('pbnj.reader');
-goog.require('pbnj.emitter');
 
 goog.scope(function() {
   var ws = pbnj.wonderscript;
@@ -590,6 +589,72 @@ goog.scope(function() {
     }
   };
 
+  var isTryBlock = ws.isTryBlock = makeTagPredicate(_.symbol('try'));
+  var isCatchBlock = ws.isCatchBlock = makeTagPredicate(_.symbol('catch'));
+  var isFinallyBlock = ws.isFinallyBlock = makeTagPredicate(_.symbol('finally'));
+
+  var evalCatchBlock = function(exp, e, env) {
+    var binds = _.second(exp);
+    var body = _.rest(_.rest(exp));
+    var expr, value = null;
+    var scope = env.extend().setIdent('catch');
+
+    if (!_.isVector(binds) || _.count(binds) !== 2) {
+      console.log('binds', ws.inspect(binds));
+      throw new Error("bindings should be a vector of 2 elements");
+    }
+
+    var vari = _.first(binds);
+    var klass = ws.eval(_.second(binds), scope);
+
+    if (e instanceof klass) {
+      scope.define(_.str(vari), e);
+      while (expr = _.first(body)) {
+        value = ws.eval(expr, scope);
+        body = _.rest(body);
+      }
+    }
+    return value;
+  };
+
+  var evalFinallyBlock = function(exp, env) {
+    var body = _.rest(exp), expr, value;
+    while (expr = _.first(body)) {
+      value = ws.eval(expr, env);
+      body = _.rest(body);
+    }
+    return value;
+  };
+
+  var evalTryBlock = function(exp, env) {
+    var body = _.rest(exp), expr, value;
+    var catchBlock = _.filter(body, isCatchBlock);
+    var finallyBlock = _.first(_.filter(body, isFinallyBlock));
+    body = _.reject(body, function(exp) { return isFinallyBlock(exp) || isCatchBlock(exp) });
+    var scope = env.extend().setIdent('try');
+    if (!catchBlock && !finallyBlock) throw new Error("A try block should have a catch block or a finally block");
+    if (catchBlock) {
+      try {
+        while (expr = _.first(body)) {
+          value = ws.eval(expr, scope);
+          body = _.rest(body);
+        }
+      }
+      catch (e) {
+        var cBlock;
+        while (cBlock = _.first(catchBlock)) {
+          ws.pprint(cBlock);
+          value = evalCatchBlock(cBlock, e, scope);
+          catchBlock = _.rest(catchBlock);
+        }
+      }
+    }
+    if (finallyBlock) {
+      value = evalFinallyBlock(finallyBlock, scope);
+    }
+    return value;
+  };
+
   pbnj.MODULE_SCOPE = pbnj.core; // default scope
   pbnj.core["@@NAME@@"] = _.symbol('pbnj.core');
   pbnj.core["@@MACROS@@"] = {};
@@ -671,6 +736,9 @@ goog.scope(function() {
     else if (isBlock(exp)) {
       return evalBlock(exp, env);
     }
+    else if (isTryBlock(exp)) {
+      return evalTryBlock(exp, env);
+    }
     else if (isAssignment(exp)) {
       return evalAssignment(exp, env);
     }
@@ -730,7 +798,7 @@ goog.scope(function() {
       while (!stream.eof()) {
         var exp = stream.peek();
         value = ws.eval(exp, env);
-        if (_.isFunction(value) || isBlock(exp)) {
+        if (_.isFunction(value) || isBlock(exp) || isTryBlock(exp)) {
           env.setLocation(line, column);
         }
         else if (value && value["@@SCOPE@@"]) {
@@ -746,7 +814,7 @@ goog.scope(function() {
       console.log(e);
       console.log(env);
       console.log(fmtStacktrace(env.stacktrace()));
-      //throw new Error(wsError(e, env.stacktrace()));
+      throw e; //new Error(wsError(e, env.stacktrace()));
     }
   };
   globalEnv.define('read-stream', ws.readStream);

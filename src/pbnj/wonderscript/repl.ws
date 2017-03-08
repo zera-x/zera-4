@@ -4,6 +4,7 @@
 (module pbnj.wonderscript.repl)
 
 (define- html pbnj.peanutbutter/html)
+(define- html-encode pbnj.peanutbutter/html-encode)
 (define- define-component pbnj.peanutbutter/define-component)
 (define- render pbnj.peanutbutter/render)
 
@@ -18,7 +19,8 @@
     [:meta {:charset "utf-8"}]
     [:meta {:http-equiv "X-UA-Compatible" :content "IE=edge"}]
     [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-    [:link {:href "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
+    [:link {:rel "stylesheet"
+            :href "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"
             :integrity "sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
             :crossorigin "anonymous"}]]
    [:body
@@ -31,29 +33,46 @@
 
 (define-component :repl-in
   (lambda []
-     [:div {:class "repl-in", :style "font-family: Monaco, monospace"}
-      [:span {:class "repl-cursor"} (str (current-module-name) ">&nbsp;")]
-      [:input {:class "repl-content form-control"
+     [:div {:class "repl-in", :style {:font-family "Monaco, monospace"}}
+      [:span {:class "repl-cursor"} (str (current-module-name) "> ")]
+      [:input {:class "repl-content"
                :type "text"
-               :style "border: none; width: 600px; display: inline-block; font-family: Monaco, monospace; font-size: 1em;"}]]))
+               :autocomplete "off"
+               :autocorrect "off"
+               :style {:border :none
+                       :margin-top 5
+                       :margin-bottom 0
+                       :width 800
+                       :display :inline-block
+                       :font-family "Monaco, monospace"
+                       :font-size "1em"}}]]))
 
 (define-component :repl-out
   (lambda [content]
-     [:div {:class "repl-out", :style "font-family: Monaco, monospace"}
-      [:span {:class "repl-cursor"} "= "]
+     [:div {:class "repl-out", :style {:font-family "Monaco, monospace"}}
       [:span {:class "repl-content" :style "width: 100%"} content]]]))
 
 (define-function replContent []
   (. (. (js/jQuery ".repl-content") last) val))
 
-(define-function html-encode [s]
-  (. (. s replace "<" "&lt;") replace ">" "&gt;"))
-
 (define-function appendOutput [content]
-  (. (js/jQuery "#repl") append (html [[:repl-out (html-encode content)] [:repl-in]])))
+  (println content)
+  (. (js/jQuery "#repl") append (html [[:repl-out (fmt-output content)] [:repl-in]])))
 
 (define-function focus []
   (. (. (js/jQuery ".repl-content") last) focus))
+
+(define-function evalInput []
+  (let [in (replContent)]
+    (try
+      [:success (pbnj.wonderscript/readString in)]
+      (catch [e js/Error]
+        [:error e]))))
+
+(define-function fmt-output [out]
+  (if (= (first out) :error)
+    [:div {:class "alert alert-danger" :style {:margin-bottom 3}}, (.- (second out) message)]
+    [:div "= " (inspect (second out))]))
 
 (define-component :repl
   (lambda
@@ -65,14 +84,12 @@
             (cond (=== event.keyIdentifier "Enter")
                   (do
                     (pbnj.wonderscript.repl.appendOutput
-                      (pbnj.wonderscript.inspect
-                        (pbnj.wonderscript.readString
-                          (pbnj.wonderscript.repl.replContent))))
+                      (pbnj.wonderscript.repl.evalInput))
                     (pbnj.wonderscript.repl.focus)))))]
      [:repl-in]]))
 
 (define-function main []
-  (module user)
+  (module pbnj.user)
   (render [:layout [:repl]]))
 
 (main)

@@ -1,7 +1,9 @@
 ; vim: ft=clojure
 (module pbnj.jelly)
 
-(define nil? pbnj.peanutbutter/nil?)
+(define-function nil? [exp]
+  (or (pbnj.core/nil? exp)
+      (and (collection? exp) (empty? exp))))
 
 (define-function atom? [exp]
   (or (symbol? exp) (keyword? exp) (string? exp)))
@@ -31,7 +33,6 @@
        (render-declaration (first (filter exp map?))) " } "))
 
 (define-function css [exp]
-  (pprint exp)
   (cond (nil? exp) ""
         (number? exp) (render-number exp)
         (atom? exp) (render-atom exp)

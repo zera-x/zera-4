@@ -1,9 +1,14 @@
 ; vim: ft=clojure
+(require "src/pbnj/jelly.ws")
+
 (module pbnj.peanutbutter)
+
+(define render-declaration pbnj.jelly/render-declaration)
 
 (define *components* {})
 
-(define-function nil? [exp] (or (pbnj.core/nil? exp) (and (collection? exp) (empty? exp))))
+(define-function nil? [exp]
+  (or (pbnj.core/nil? exp) (and (collection? exp) (empty? exp))))
 
 (define render-nil (always ""))
 
@@ -22,16 +27,24 @@
 (define-function- render-single-tag [tag]
   (str "<" (render-tag-name (first tag)) " />"))
 
+(define EVENTS #{:onclick :onblur :onfocus})
+
 (define-function- render-content-tag [tag]
   (let [nm (render-tag-name (first tag))]
     (str "<" nm ">" (render-expression-list (rest tag)) "</" nm ">")))
 
+(define-function- render-attr [pair]
+  (let [attr (pair 0)
+        kattr (if (symbol? attr) (keyword (name attr)) (keyword attr))
+        v (pair 1)
+        value (cond (and (= kattr :style) (map? v)) (render-declaration v)
+                    (EVENTS kattr) (pbnj.jess/compile v)
+                    :else
+                      (str v))]
+    (str (name attr) "=\"" value "\"")))
+
 (define-function render-attrs [attrs]
-  (pbnj.core/join
-    (mori/map
-         (lambda [pair]
-                 (let [attr (pair 0)]
-                  (str (if (keyword? attr) (name attr) attr) "=\"" (pair 1) "\""))) attrs) " "))
+  (reduce (mori/map render-attr attrs) (lambda [s x] (str s " " x))))
 
 (define-function- render-attrs-tag [tag]
   (let [nm (render-tag-name (first tag))
@@ -85,6 +98,9 @@
   (or (number? exp) (boolean? exp) (string? exp)))
 
 (define render-atom str)
+
+(define-function html-encode [s]
+  (reduce (map (into [] (. s split "")) (lambda [c] (str "&#" (. c charCodeAt) ";"))) str))
 
 (define-function html
   [exp]
