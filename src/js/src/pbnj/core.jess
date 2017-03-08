@@ -12,6 +12,7 @@
                   (list)
                   (reverse body)))))))
 
+(comment
 (set! pbnj.jess.CURRENT_MODULE (pbnj.core.symbol "pbnj.jess"))
 (macro module [nm &body]
   (let [prev-mod pbnj.jess/CURRENT_MODULE
@@ -75,8 +76,7 @@
    (list 'def nm (cons 'mixin methods))))
 
 (module pbnj.core
-  (defn extend [obj mix]
-    (. mix call obj))
+  (defn extend [obj mix] (. mix call obj))
 
   (defn type [value]
     (var t (typeof value))
@@ -85,10 +85,8 @@
             (if (value.constructor.name)
               (str "object[" value.constructor.name "]")
               t)
-          :else t))
-)
+          :else t)))
 
-(comment
 (mixin Point
        (isPoint [] true))
 
@@ -103,14 +101,14 @@
 (extend Point2D.prototype Point)
 
 (macro init [ctr args]
-  (list 'new (list 'paren (list '. (list '.- ctr 'bind) 'apply ctr args)))))
+  (list 'new (list 'paren (list '. (list '.- ctr 'bind) 'apply ctr args))))
 
 (defn point []
   (if-else
     (=== arguments.length 2)
       (. Point2D.bind apply Point2D arguments)
     :else
-      (throw (new Error "invaid point")))
+      (throw (new Error "invaid point"))))
 
 (set! window.point (fn [x y] (new Point x y)))
 

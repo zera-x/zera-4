@@ -72,6 +72,12 @@
 (define * mult)
 (define / div)
 
+(define current-module
+  (lambda [] pbnj/MODULE_SCOPE))
+
+(define current-module-name
+  (lambda [] (.- pbnj/MODULE_SCOPE (symbol "@@NAME@@"))))
+
 (define-macro define-once [nm value]
   (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))
 
@@ -83,9 +89,8 @@
 (define-macro define-in-module-once [nm value]
   (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
 
-(define-macro define-test [nm &body]
+(define-macro test [nm &body]
   (do
-    (define- t (keyword (namespace nm) (name nm)))
     (define-in-module-once *tests* {})
     (list 'set! '*tests*
           (list 'assoc '*tests* (keyword (namespace nm) (name nm))
@@ -98,7 +103,7 @@
 (define-macro is-not [body]
   (list 'is (list 'not body)))
 
-(define-test literals
+(test literals
   (let [n (generate-nat)]
     (is (= n (read-string (str n)))))
   (is (= -1 (read-string "-1")))
@@ -119,7 +124,7 @@
 
 (define-macro comment [&forms] nil)
 
-(define-test comment
+(test comment
   (is (= nil (comment)))
   (is (= nil (comment asdfasdf asfasdf sfasdfasd asfasdfasd))))
 
@@ -130,7 +135,7 @@
                      (lambda [pair] (list 'define- (pair 0) (pair 1))))
                 body)))
 
-(define-test let
+(test let
   (is (= [1 2]
          (let [x 1
                y (+ x 1)]
@@ -142,7 +147,7 @@
   ([pred conse] (list 'cond pred conse))
   ([pred conse alt] (list 'cond pred conse :else alt))) 
 
-(define-test if
+(test if
   (is (= 1 (if true 1)))
   (is (= 1 (if true 1 2)))
   (is (= 2 (if false 1 2)))
@@ -153,7 +158,7 @@
   ([pred conse] (list 'cond (list 'not pred) conse))
   ([pred conse alt] (list 'cond (list 'not pred) conse :else alt)))
 
-(define-test if-not
+(test if-not
   (is (= 1 (if-not false 1)))
   (is (= 1 (if-not false 1 2)))
   (is (= 2 (if-not true 1 2)))
@@ -163,14 +168,14 @@
 (define-macro unless [pred &acts]
   (list 'cond (list 'not pred) (cons 'do acts)))
 
-(define-test unless
+(test unless
   (is (= 5 (unless false 1 2 3 4 5)))
   (is (= nil (unless true 1 2 3 4 5))))
 
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
 
-(define-test when
+(test when
   (is (= 5 (when true 1 2 3 4 5)))
   (is (= nil (when false 1 2 3 4 5))))
 
@@ -181,7 +186,7 @@
    (let [or* (first forms)]
      (list 'if or* or* (cons 'or (rest forms))))))
 
-(define-test or
+(test or
   (is (or true))
   (is (or false true))
   (is (or false false true))
@@ -197,7 +202,7 @@
    (let [and* (first forms)]
      (list 'if and* (cons 'and (rest forms)) and*))))
 
-(define-test and
+(test and
   (is (and true))
   (is (and true true))
   (is (and true true true))
@@ -213,7 +218,7 @@
   (list 'define name
         (cons 'lambda forms)))
 
-(define-test define-function
+(test define-function
   (define-function ident [x] x)
   (define-function inc [x] (+ 1 x))
   (is (= 1 (ident 1)))
@@ -226,7 +231,7 @@
   (list 'define- name
         (cons 'lambda forms)))
 
-(define-test define-function-
+(test define-function-
   (define-function- ident- [x] x)
   (define-function- inc- [x] (+ 1 x))
   ;(is (= :a (pbnj.core/ident- :a)))
@@ -237,7 +242,7 @@
 (define-macro not= [&values]
   (list 'not (cons '= values)))
 
-(define-test not=
+(test not=
   (is (not= 1 2))
   (is (not= :a :b))
   (is (not= 1 :a))
@@ -250,13 +255,27 @@
 
 (define-function join
   [col delim]
-  (reduce col (lambda [s x] (str s delim x))))
+  (let [joiner (lambda [s x] (str s delim x))]
+    (reduce col joiner)))
 
-(define-function prove [t] ((:test/fn (*tests* (keyword (namespace t) (name t))))))
+(define-function tests [mod] (.- mod *tests*))
 
-(define-test prove
-  (define-test passing-test (is (= 1 1)))
-  (define-test failing-test (is (= 0 1)))
+(define-function prove [tname]
+  (let [ns (namespace tname)
+        nm (name tname)
+        mod (if ns (eval (symbol ns)) pbnj/MODULE_SCOPE)
+        tmap (tests mod)]
+    (let [t (get tmap (keyword nm))]
+      (unless t
+        (let [ts (keys *tests*)]
+          (if (empty? ts)
+            (throw "no tests found in *tests*")
+            (throw (str "could not find test, " (inspect tname) " in *tests*, found: " (inspect ts))))))
+      ((:test/fn t)))))
+
+(test prove
+  (test passing-test (is (= 1 1)))
+  (test failing-test (is (= 0 1)))
   (is (= (prove :passing-test) [:passing-test :passed])))
 
 (define-function collect-tests [module] (vals (eval (symbol (name module) "*tests*"))))
@@ -273,16 +292,35 @@
         var (bindings 0)
         init (bindings 1)]
     (list 'do
-          (list 'define- var 0)
           (list 'define- act-nm (cons 'lambda (cons [var] body)))
           (list 'define- block-nm
-                (list 'lambda []
+                (list 'lambda [var]
                       (list 'if (list '< var init)
                             (list 'do
                                   (list act-nm var)
-                                  (list 'set! var (list '+ 1 var))
-                                  (list block-nm)))))
-          (list block-nm))))
+                                  (list block-nm (list '+ 1 var))))))
+          (list block-nm 0)
+          init)))
+
+(define-macro do-each
+  [bindings &body]
+  (if-not (and (vector? bindings) (= (count bindings) 2))
+    (throw "bindings should be a vector with two elements"))
+  (let [block-nm (gen-sym "do-each")
+        act-nm (gen-sym "do-each-act")
+        col-nm (gen-sym "col")
+        var (bindings 0)
+        col (bindings 1)]
+    (list 'do
+          (list 'if-not (list 'collection? col) (list 'throw "bound value isn't a collection"))
+          (list 'define- act-nm (cons 'lambda (cons [var] body)))
+          (list 'define- block-nm
+                (list 'lambda [col-nm]
+                      (list 'unless (list 'empty? col-nm)
+                            (list act-nm (list 'first col-nm))
+                            (list block-nm (list 'rest col-nm)))))
+          (list block-nm col)
+          col)))
 
 (define-function fraction [n]
   (- n (. js/Math floor n)))
@@ -301,7 +339,7 @@
 (define-function natural? [n]
   (and (integer? n) (positive? n)))
 
-(define-test natural?
+(test natural?
   (is (natural? 0))
   (is (natural? 1))
   (is (natural? 34))
@@ -316,7 +354,7 @@
          b (. js/Math ceil max)]
      (+ a (. js/Math floor (* (. js/Math random) (- b a)))))))
 
-(define-test generate-int
+(test generate-int
   (do-times [n 100]
     (is (integer? (generate-int)))))
 
@@ -327,8 +365,8 @@
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
-(define-test generate-nat
-  (do-times [n 100]
+(test generate-nat
+  (do-times [n 20]
     (let [m (generate-nat)]
       (is (natural? (generate-nat))))))
 
@@ -337,8 +375,8 @@
   ([min max]
    (+ (generate-int min max) (* (. js/Math random (- max min))))))
 
-(define-test generate-float
-  (do-times [n 100]
+(test generate-float
+  (do-times [n 20]
     (is (number? (generate-float)))))
 
 (define-function generate-str
@@ -348,8 +386,8 @@
          xs (take n (iterate (partial generate-nat 0x20 0x4000) (generate-nat 0x20 0x4000)))]
      (apply-method js/String (.- js/String fromCodePoint) xs))))
 
-(define-test generate-string
-  (do-times [n 100]
+(test generate-string
+  (do-times [n 20]
     (is (string? (generate-string)))))
 
 (define-function generate-keyword
@@ -362,8 +400,8 @@
       (keyword ns nm)
       (keyword nm)))))
 
-(define-test generate-keyword
-  (do-times [n 100]
+(test generate-keyword
+  (do-times [n 20]
     (is (keyword? (generate-keyword)))))
 
 (define-function generate-symbol
@@ -376,8 +414,8 @@
       (symbol ns nm)
       (symbol nm)))))
 
-(define-test generate-symbol
-  (do-times [n 100]
+(test generate-symbol
+  (do-times [n 20]
     (is (symbol? (generate-symbol)))))
 
 (require "src/pbnj/jess.ws")
@@ -393,7 +431,7 @@
      (set! *sym-count* (+ 1 *sym-count*))
      sym)))
 
-(define-test gen-sym
+(test gen-sym
   (is (symbol? (gen-sym)))
   (is (symbol? (gen-sym "prefix")))
   (is-not (= (gen-sym) (gen-sym)))
@@ -406,7 +444,7 @@
           (list 'define name obj)
           (list 'apply-method name (list '.- name method) (into (vector) args)))))
 
-(define-test .
+(test .
   (let [d (new js/Date 2016 10 25)]
     (is (= (. d getMonth) 10))
     (is (= (. d getFullYear) 2016))
@@ -417,7 +455,7 @@
   [obj method &args]
   (list 'if (list '.- obj method) (cons '. (cons obj (cons method args))) nil))
 
-(define-test .?
+(test .?
   (let [d (new js/Date 2016 10 25)]
     (is (= (.? d getMonth) 10))
     (is (= (.? d missing-method) nil))))
@@ -456,7 +494,7 @@
     (pprint (pbnj.jess/compile code))
     (list 'define nm (list 'pbnj.jess/eval (list 'quote code)))))
 
-(define-test define-class
+(test define-class
   (define-class Point
     [x y]
     (toString

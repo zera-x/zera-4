@@ -28,7 +28,12 @@
 
 (define variable? symbol?)
 
-(define variable->jess symbol->jess)
+(define-function variable->jess [sym]
+  (let [ns (namespace sym)
+        nm (name sym)]
+    (if ns
+      sym
+      (symbol (str (current-module-name)) nm))))
 
 (define-function tag-predicate [tag]
   (lambda [exp] (= tag (first exp))))
@@ -51,20 +56,7 @@
 
 (define cond? (tag-predicate 'cond))
 
-(comment
-(define-function cond->jess [&body]
-  (list 'paren
-    (list
-      (list 'function []
-            (cons 'if-else
-                  (mapcat
-                    (pair body)
-                    (lambda [xs]
-                            [(if (= :else (xs 0)) :else (ws->jess (xs 0)))
-                             (list 'return (ws->jess (xs 1)))])))))))
-)
-
-(define-function pbnj.wonderscript/cond->jess
+(define-function cond->jess
   ([pred conse] (list 'if (ws->jess pred) (ws->jess conse)))
   ([pred conse alt] (list 'if (ws->jess pred) (ws->jess conse) (ws->jess alt)))
   ([&body]
@@ -146,7 +138,7 @@
 (define-function application->jess [fn &args]
   (cons (ws->jess fn) (map args ws->jess)))
 
-(define-function pbnj.wonderscript/ws->jess [exp_]
+(define-function ws->jess [exp_]
   (let [exp (pbnj.wonderscript/macroexpand exp_)]
     (cond (self-evaluating? exp) exp
           (keyword? exp) (keyword->jess exp)

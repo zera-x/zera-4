@@ -14,6 +14,12 @@ goog.scope(function() {
       this.vars['*source*'] = 'unknown';
       this.vars['*scope-name*'] = 'global';
       this.vars['*line*'] = 1;
+      this.trace = ['unknown', 'global', 1];
+    }
+    else {
+      this.trace = [this.parent.vars['*source*'],
+                    this.parent.vars['*scope-name*'],
+                    this.parent.vars['*line*']];
     }
     this.level = level++;
   }
@@ -95,10 +101,7 @@ goog.scope(function() {
     var trace = [];
     var scope = this;
     while (scope) {
-      var source = scope.lookup('*source*').get('*source*');
-      var name = scope.lookup('*scope-name*').get('*scope-name*');
-      var line = scope.lookup('*line*').get('*line*');
-      trace.unshift([source, name, line]);
+      trace.unshift(scope.trace);
       scope = scope.parent;
     }
     return trace;

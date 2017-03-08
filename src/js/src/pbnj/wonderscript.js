@@ -214,7 +214,10 @@ goog.scope(function() {
       throw new Error(_.str('wrong number of arguments expected: 2 or 3 arguments, got: ', arguments.length));
     }
 
-    if (!_.isFunction(method)) throw new Error("method should be a function");
+    if (!_.isFunction(method)) {
+      console.log(obj, method, args);
+      throw new Error("method should be a function");
+    }
 
     return method.apply(obj, args ? _.intoArray(args) : []);
   };
@@ -306,6 +309,7 @@ goog.scope(function() {
                    ' arity: ', lambda.$lang$ws$arity,
                    ' code: ', ws.inspect(this.$lang$ws$code));
     };
+    //console.log(lambda);
     return lambda;
   };
 
@@ -438,6 +442,11 @@ goog.scope(function() {
     if (scope === null) throw new Error(_.str("Undefined variable '", name, "'"));
     var value = ws.eval(_.second(_.rest(exp)), env);
     var ns = _.namespace(name);
+    if (ns == null) {
+      if (pbnj.MODULE_SCOPE[name] != null) {
+        pbnj.MODULE_SCOPE[name] = value;
+      }
+    }
     if (_.isEnv(scope)) {
       scope.set(name, value);
     }
@@ -462,7 +471,12 @@ goog.scope(function() {
   var evalPropertyAccessor = function(exp, env) {
     var obj = ws.eval(_.second(exp), env);
     var prop = _.second(_.rest(exp));
-    return obj[prop];
+    if (_.isSymbol(prop)) {
+      return obj[_.str(prop)];
+    }
+    else {
+      return obj[ws.eval(prop, env)];
+    }
   };
 
   var isClassInstantiation = ws.isClassInstantiation = makeTagPredicate(_.symbol('new'));
@@ -507,7 +521,7 @@ goog.scope(function() {
     else {
       throw new Error(_.str('There was an error defining module "', name, '"'));
     }
-    return null;
+    return mod;
   };
 
   var isModuleRequire = ws.isModuleRequire = makeTagPredicate(_.symbol('require'));
@@ -705,23 +719,29 @@ goog.scope(function() {
   }
 
   ws.readStream = function(stream, env) {
-    var env = (env || globalEnv).extend().setSource(stream.source());
+    var env = (env || globalEnv).extend().setSource(stream.source()).setLocation(stream.line(), stream.column());
     try {
       var value = null;
+      var line = stream.line();
+      var column = stream.column();
       while (!stream.eof()) {
         var exp = stream.peek();
         value = ws.eval(exp, env);
         if (_.isFunction(value) || isBlock(exp)) {
-          //console.log(exp.toString());
-          env.setLocation(stream.line(), stream.column());
-          //console.log(env.stacktrace());
+          env.setLocation(line, column);
+        }
+        else if (value && value["@@SCOPE@@"]) {
+          env = value["@@SCOPE@@"].setLocation(line, column);
         }
         stream.next();
+        line = stream.line();
+        column = stream.column();
       }
       return value;
     }
     catch(e) {
       console.log(e);
+      console.log(env);
       console.log(fmtStacktrace(env.stacktrace()));
       //throw new Error(wsError(e, env.stacktrace()));
     }
