@@ -527,6 +527,7 @@ goog.scope(function() {
 
   var evalModuleRequire = function(exp, env) {
     var name = _.second(exp);
+    var mod = pbnj.MODULE_SCOPE;
     if (_.isString(name)) {
       ws.readFile(name, env.extend().setIdent('require'));
     }
@@ -541,7 +542,8 @@ goog.scope(function() {
     else {
       throw new Error("module name should be a symbol or string");
     }
-    return null;
+    pbnj.MODULE_SCOPE = mod;
+    return true;
   };
 
   var isModuleSet = ws.isModuleSet = makeTagPredicate(_.symbol('use'));

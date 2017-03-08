@@ -38,7 +38,7 @@
       [:input {:class "repl-content"
                :type "text"
                :autocomplete "off"
-               :autocorrect "off"
+               :spellcheck "false"
                :style {:border :none
                        :margin-top 5
                        :margin-bottom 0
@@ -71,8 +71,8 @@
 
 (define-function fmt-output [out]
   (if (= (first out) :error)
-    [:div {:class "alert alert-danger" :style {:margin-bottom 3}}, (.- (second out) message)]
-    [:div "= " (inspect (second out))]))
+    [:div {:class "alert alert-danger" :style {:margin-bottom 3}} (.- (second out) message)]
+    [:div "= " (html-encode (inspect (second out)))]))
 
 (define-component :repl
   (lambda

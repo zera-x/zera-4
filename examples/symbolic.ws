@@ -1,4 +1,4 @@
-; vim: set ft=clojure
+; vim: ft=clojure
 ; Joseph McCarthy's diff function
 ; see:
 ;   J. McCarthy, Recursive Functions of Symbolic Expressions and Their Computation by Machine, Part I, April 1960
@@ -13,7 +13,7 @@
 ;                                                                                      T → diff [car [[w]; x]]]]]]]
 ; Subtraction and exponents are an addition
 
-;(module 'pbnj.examples)
+(module pbnj.examples)
 
 (define-function diff [y x]
   (cond (or (nil? y) (nil? x))

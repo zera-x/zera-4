@@ -418,10 +418,20 @@
   (do-times [n 20]
     (is (symbol? (generate-symbol)))))
 
+(define-function maybe
+  ([value just]
+   (maybe value just nil))
+  ([value just none]
+   (if (nil? value) none (just value))))
+
+(define-function either
+  ([value left]
+   (if (nil? value) (left) nil))
+  ([value left right]
+   (if (nil? value) (left) (right value))))
+
 (require "src/pbnj/jess.ws")
 (require "src/pbnj/wonderscript/compiler.ws")
-
-(use pbnj.core)
 
 (define *sym-count* 0)
 (define-function gen-sym 
