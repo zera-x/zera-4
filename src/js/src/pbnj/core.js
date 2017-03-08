@@ -666,7 +666,7 @@ goog.scope(function() {
       return mori.remove(fn, obj);
     }
     else {
-      var iteratee = optimizeCb(fn, context);
+      var iteratee = optimizeCb(fn);
       var i, results = [];
       if (_.isArrayLike(obj)) {
         for (i = 0; i < obj.length; ++i) {

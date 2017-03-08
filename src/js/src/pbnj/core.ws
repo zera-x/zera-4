@@ -516,7 +516,7 @@
 
 (define-class pbnj.core/PersistentList [h t]
   (first [] this.h)
-  (rest  [] this.t)
+  (rest [] this.t)
   (isEmpty [] (and (nil? this.h) (nil? this.t))))
 
 (define pbnj.core.PersistentList/EMPTY (new PersistentList nil nil))
