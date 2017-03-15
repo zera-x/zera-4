@@ -129,7 +129,9 @@
         obj (second exp)
         prop (second (rest exp))]
     (cond (= size 3)
-            (str (compile obj) "[" (if (number? prop) prop (str "'" prop "'")) "]")
+            (if (vector? prop)
+              (str (compile obj) "['" (join prop "']['") "']")
+              (str (compile obj) "[" (if (number? prop) prop (str "'" prop "'")) "]"))
           :else
             (throw "property access should be a list of 3 elements"))))
 
@@ -269,6 +271,7 @@
                     (has? '#{++ -- ~} tag) (emit-unary-operator exp)
                     (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
                       (emit-binary-operator exp)
+                    (or (= tag '%) (= tag 'mod)) (emit-binary-operator (cons '% (rest exp)))
                     (= tag 'quote) (emit-quote exp)
                     (= tag 'macro) (eval-macro-definition exp)
                     (= tag 'paren) (emit-expression exp)

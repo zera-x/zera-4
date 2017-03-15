@@ -95,12 +95,12 @@
     (html (apply component (rest exp)))))
 
 (define-function atom? [exp]
-  (or (number? exp) (boolean? exp) (string? exp)))
+  (or (number? exp) (boolean? exp) (string? exp) (symbol? exp)))
 
 (define render-atom str)
 
 (define-function html-encode [s]
-  (reduce (map (into [] (. s split "")) (lambda [c] (str "&#" (. c charCodeAt) ";"))) str))
+  (reduce (map (into [] (. s (split ""))) (lambda [c] (str "&#" (. c charCodeAt) ";"))) str))
 
 (define-function html
   [exp]
@@ -111,12 +111,14 @@
         (tag? exp) (render-tag exp)
         (expression-list? exp) (render-expression-list exp)
         :else
-          (throw "invalid expression")))
+          (do
+            (println exp)
+            (throw "invalid expression"))))
 
 (define-function render-to [elem expr])
 
 (define-function render [expr]
-  (. js/document write (html expr)))
+  (. js/document (write (html expr))))
 
 (define-component :javascript
   (lambda

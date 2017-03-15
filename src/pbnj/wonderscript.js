@@ -101,6 +101,7 @@ goog.scope(function() {
     }
     throw new Error("variable should be a symbol");
   };
+  ws.lookupVariable = lookupVariable;
 
   var getVariable = function(env, name) {
     return _.isEnv(env) ? env.get(name) : env[name];
@@ -277,6 +278,7 @@ goog.scope(function() {
           body = bodies[i];
           if (body != null) break;
         }
+        if (body == null) throw new Error(_.str("wrong number of arguments for: ", ws.inspect(lambda), ' got: ', args.length));
       }
 
       var i = 0;
@@ -441,18 +443,19 @@ goog.scope(function() {
     if (scope === null) throw new Error(_.str("Undefined variable '", name, "'"));
     var value = ws.eval(_.second(_.rest(exp)), env);
     var ns = _.namespace(name);
+    var sname = _.str(name);
     if (ns == null) {
-      if (pbnj.MODULE_SCOPE[name] != null) {
-        pbnj.MODULE_SCOPE[name] = value;
+      if (pbnj.MODULE_SCOPE[sname] != null) {
+        pbnj.MODULE_SCOPE[sname] = value;
       }
     }
     if (_.isEnv(scope)) {
-      scope.set(name, value);
+      scope.set(sname, value);
     }
     else {
-      scope[name] = value;
-      if (env = env.lookup(name)) {
-        env.set(name, value);
+      scope[sname] = value;
+      if (env = env.lookup(sname)) {
+        env.set(sname, value);
       }
     }
     return value;
@@ -462,13 +465,19 @@ goog.scope(function() {
 
   var evalThrownException = function(exp, env) {
     var error = ws.eval(_.second(exp), env);
-    throw new Error(wsError(error, env.stacktrace()));
+    if (_.isString(error)) {
+      throw new Error(wsError(error, env.stacktrace()));
+    }
+    else {
+      throw error;
+    }
   };
 
   var isPropertyAccessor = ws.isPropertyAccessor = makeTagPredicate(_.symbol('.-'));
 
   var evalPropertyAccessor = function(exp, env) {
     var obj = ws.eval(_.second(exp), env);
+    if (obj == null) throw new Error("nil is not an object");
     var prop = _.second(_.rest(exp));
     if (_.isSymbol(prop)) {
       return obj[_.str(prop)];
@@ -591,6 +600,29 @@ goog.scope(function() {
     }
   };
 
+  var isMethodApplication = ws.isMethodApplication = makeTagPredicate(_.symbol('.'));
+
+  var evalMethodApplication = function(exp, env) {
+    var args = _.rest(exp);
+    var obj = ws.eval(_.first(args), env);
+    var method = _.second(args);
+    if (_.isList(method)) {
+      var mname = _.first(method);
+      var m = obj[_.str(mname)]
+      if (m == null) {
+        throw new Error(_.str('method "', ws.inspect(mname), '" does not exist'));
+      }
+      return m.apply(obj, _.intoArray(_.map(_.rest(method), function(x) { return ws.eval(x, env) })));
+    }
+    else {
+      var m = obj[_.str(method)]
+      if (m == null) {
+        throw new Error(_.str('method "', ws.inspect(method), '" does not exist'));
+      }
+      return m.apply(obj);
+    }
+  };
+
   var isTryBlock = ws.isTryBlock = makeTagPredicate(_.symbol('try'));
   var isCatchBlock = ws.isCatchBlock = makeTagPredicate(_.symbol('catch'));
   var isFinallyBlock = ws.isFinallyBlock = makeTagPredicate(_.symbol('finally'));
@@ -663,11 +695,12 @@ goog.scope(function() {
 
   var globalEnv = pbnj.core['@@SCOPE@@'] = pbnj.env().setSource('src/pbnj/wonderscript.js');
   importModule(pbnj.core);
+  ws.globalEnv = globalEnv;
   
   globalEnv.define('*source*', null);
-  globalEnv.define('not', function(x) { return !x; });
   globalEnv.define('identical?', function(a, b) { return a === b; });
   globalEnv.define('equiv?', function(a, b) { return a == b; });
+  globalEnv.define('not', function(x) { return !x; });
   globalEnv.define('=', _.equals);
   globalEnv.define('>', function(a, b) { return a > b; });
   globalEnv.define('<', function(a, b) { return a < b; });
@@ -675,11 +708,35 @@ goog.scope(function() {
   globalEnv.define('>=', function(a, b) { return a >= b; });
   globalEnv.define('mod', function(a, b) { return a % b; });
   globalEnv.define('array', function() { return Array.prototype.slice.call(arguments); });
-  globalEnv.define('object', function(parent) { return Object.create(parent ? parent : null); });
   globalEnv.define('println', console.log.bind(console));
   globalEnv.define('macroexpand', macroexpand);
   globalEnv.define('arity', arity);
   
+  ws.inspectObject = function inspectObject(obj) {
+    var buff = [];
+  
+    for (var property in obj) {
+      if (obj.hasOwnProperty(property)) {
+        var value = obj[property];
+        if (typeof value == 'string') {
+          value = _.str("'", value, "'");
+        }
+        else if (typeof value == 'object') {
+          if (value instanceof Array) {
+            value = _.str("[", value, "]");
+          }
+          else {
+            var ood = inspectObject(value);
+            value = _.str("{", ood, "}");
+          }
+        }
+        buff.push(_.str(property, ": ", value));
+      }
+    }
+  
+    return _.str('{', buff.join(', '), '}');
+  };
+
   ws.inspect = function(exp) {
     if (exp == null) {
       return 'nil';
@@ -755,6 +812,9 @@ goog.scope(function() {
     }
     else if (isPropertyAccessor(exp)) {
       return evalPropertyAccessor(exp, env);
+    }
+    else if (isMethodApplication(exp)) {
+      return evalMethodApplication(exp, env);
     }
     else if (isClassInstantiation(exp)) {
       return evalClassInstantiation(exp, env);

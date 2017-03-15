@@ -97,8 +97,23 @@
                 {:test/name (keyword (namespace nm) (name nm))
                  :test/fn (cons 'lambda (cons [] (concat body [[(keyword (namespace nm) (name nm)) :passed]])))}))))
 
+(define- format-test-results
+ (lambda [body]
+  (println "body" body)
+  (if (list? body)
+    (inspect (cons (first body) (map (rest body) eval)))
+    (inspect body))))
+
 (define-macro is [body]
-  (list 'cond (list 'not body) (list 'throw (str "FAILURE: " (inspect body) " is false"))))
+  (list 'cond (list 'not body)
+        (list 'throw
+              (list 'str
+                    "FAILURE: "
+                    (list 'inspect
+                          (list 'if (list 'list? (list 'quote body))
+                            (list 'cons (list 'first (list 'quote body)) (list 'map (list 'rest (list 'quote body)) 'eval))
+                            (list 'quote body)))
+                    " is false"))))
 
 (define-macro is-not [body]
   (list 'is (list 'not body)))
@@ -447,31 +462,50 @@
   (is-not (= (gen-sym) (gen-sym)))
   (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
 
-(define-macro .
-  [obj method &args]
-  (let [name (gen-sym)]
-    (list 'do
-          (list 'define name obj)
-          (list 'apply-method name (list '.- name method) (into (vector) args)))))
-
-(test .
-  (let [d (new js/Date 2016 10 25)]
-    (is (= (. d getMonth) 10))
-    (is (= (. d getFullYear) 2016))
-    (is (= (. d getDate) 25))
-    (is (= (. js/Math abs -3) 3))))
-
 (define-macro .?
-  [obj method &args]
-  (list 'if (list '.- obj method) (cons '. (cons obj (cons method args))) nil))
+  ([obj method]
+   (list '.? obj method nil))
+  ([obj method alt]
+   (if (list? method)
+     (list 'if (list '.- obj (first method)) (list '. obj method) alt)
+     (list 'if (list '.- obj method) (list '. obj method) alt))))
 
 (test .?
   (let [d (new js/Date 2016 10 25)]
     (is (= (.? d getMonth) 10))
-    (is (= (.? d missing-method) nil))))
+    (is (= (.? d missing-method) nil))
+    (.? d (setMonth 11))
+    (is (= (.? d (getMonth)) 11))))
+
+(define-macro ..
+  ([x form] (list '. x form))
+  ([x form &more] (cons '.. (cons (list '. x form) more))))
+
+(test ..
+  (let [xs (array 1 2 3 4 5)]
+    (.. "1,2,3,4,5"
+        (split ",")
+        (map (lambda [x &rest] (* 1 x)))
+        (forEach (lambda [x i other] (is (= x (.- xs i))))))))
+
+(define-macro ..?
+  ([x form] (list '.? x form))
+  ([x form &more] (cons '..? (cons (list '.? x form) more))))
+
+(test ..?
+  (let [xs (array 1 2 3 4 5)]
+    (..? "1,2,3,4,5"
+         (split ",")
+         (map (lambda [x &rest] (* 1 x)))
+         (forEach (lambda [x i other]
+                       (println "x" x "xs" xs (str "xs[" i "]") (.- xs i))
+                       (is (= x (.- xs i)))))))
+  (is (= nil (..? "1,2,3,4,5" (split ",") (missing-method 1 2 3 4 5)))))
+
 
 (define-macro define-class [nm fields &methods]
-  (let [klass (symbol nm)
+  (let [env (pbnj/env)
+        klass (symbol nm)
         assigns
         (map-indexed
           (lambda [i f]
@@ -491,7 +525,7 @@
                                                (cons 'fn
                                                      (cons
                                                        (if (empty? args) [] [(first args)])
-                                                       (map body pbnj.wonderscript/ws->jess)))
+                                                       (map body (lambda [exp] (pbnj.wonderscript/ws->jess exp env)))))
                                                'apply
                                                'this
                                                (list '.
@@ -500,8 +534,8 @@
                                                      (list 'Array.prototype.slice.call 'arguments)))))))))
         proto (cons (list '.-set! klass "prototype" (hash-map)) meths)
         code (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass))))]
-    (pprint code)
-    (pprint (pbnj.jess/compile code))
+    ;(pprint code)
+    ;(pprint (pbnj.jess/compile code))
     (list 'define nm (list 'pbnj.jess/eval (list 'quote code)))))
 
 (test define-class
@@ -509,7 +543,10 @@
     [x y]
     (toString
       [self]
-      (str "(" (.- self x) ", " (.- self y) ")")))
+      (str "(" (.- self x) ", " (.- self y) ")"))
+    (distance
+      [p1 p2]
+      (Math/sqrt (+ (Math/pow (- (.- p2 x) (.- p1 x)) 2) (Math/pow (- (.- p2 y) (.- p1 y)) 2))))) 
   (let [p (new Point 3 4)]
     (is (= 3 (.- p x)))
     (is (= 4 (.- p y)))

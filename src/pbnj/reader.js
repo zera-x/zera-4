@@ -114,6 +114,17 @@ goog.scope(function() {
     }
   };
 
+
+  var ESCAPE_CHARS = {
+    n: true,
+    r: true,
+    t: true,
+    v: true,
+    b: true,
+    f: true,
+    u: true
+  };
+
   function buildSet(rep) {
     var set = {};
     for (var i = 0; i < rep.length; ++i) {
@@ -188,7 +199,12 @@ goog.scope(function() {
       while (!input.eof()) {
         var ch = input.next();
         if (escaped) {
-          buffer.push(ch);
+          if (ESCAPE_CHARS[ch]) {
+            buffer.push(_.str('\\', ch));
+          }
+          else {
+            buffer.push(ch);
+          }
           escaped = false;
         }
         else if (ch == "\\") {
