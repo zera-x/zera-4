@@ -71,18 +71,30 @@
 
 (define-function history [] *history*)
 
+(define-function pushHistory [x]
+  (set! *history* (conj *history* x)))
+
+(define-function popHistory []
+  (set! *history* (rest *history*)))
+
+(define-function pushScrollHistory [x]
+  (set! *scroll-history* (conj *scroll-history* x)))
+
+(define-function popScrollHistory []
+  (set! *scroll-history* (rest *scroll-history*)))
+
 (define-function scrollHistoryBack []
   (if-not (empty? *history*)
     (let [exp (first *history*)]
-      (set! *scroll-history* (conj *scroll-history* exp))
-      (set! *history* (conj *history* (rest *history*)))
+      (pushScrollHistory exp)
+      (popHistory)
       exp)))
 
 (define-function scrollHistoryForward []
   (if-not (empty? *scroll-history*)
     (let [exp (first *scroll-history*)]
-      (set! *history* (conj *history* exp))
-      (set! *scroll-history* (conj *scroll-history* (rest *scroll-history*)))
+      (pushHistory exp)
+      (popScrollHistory)
       exp)))
 
 (define *output-count* 0)
@@ -93,7 +105,7 @@
 (define-function evalInput []
   (let [in (replContent)]
     (try
-      (set! *history* (conj *history* in))
+      (pushHistory in)
       (set! *output-count* (+ 1 *output-count*))
       (let [out (pbnj.wonderscript/readString in)
             sym (output-var)]
@@ -118,16 +130,15 @@
   nil)
 
 (define-component :repl
-  (lambda
-    []
+  (lambda []
     [:div {:id "repl"}
      [:javascript
       '(. document addEventListener "keydown"
           (function [event]
             (cond (=== event.keyIdentifier "Enter")
-                  (do
-                    (pbnj.wonderscript.repl.appendOutput
-                      (pbnj.wonderscript.repl.evalInput))
+                    (do
+                      (pbnj.wonderscript.repl.appendOutput
+                        (pbnj.wonderscript.repl.evalInput))
                     (pbnj.wonderscript.repl.setFocus))
                   (=== event.keyIdentifier "Up")
                     (pbnj.wonderscript.repl.setContent
