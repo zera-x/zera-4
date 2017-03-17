@@ -5,23 +5,62 @@ goog.require('pbnj.core');
 goog.scope(function() {
   var _ = pbnj.core;
 
-  var level = 0;
+  function WSObject(value, meta) {
+    this.$value = value;
+    this.$meta = meta;
+  }
 
+  var wso = WSObject.prototype;
+
+  wso.getMeta = function() {
+    return this.$meta;
+  };
+
+  wso.setValue = function(value) {
+    this.$value = value;
+    return this;
+  };
+
+  wso.getValue = function() {
+    return this.$value;
+  };
+
+  wso.withMeta = function(meta) {
+    this.$meta = meta;
+    return this;
+  };
+
+  wso.varyMeta = function(f, args) {
+    this.$meta = f.apply(null, [this.$meta].concat(_.intoArray(args)));
+    return this;
+  };
+
+  wso.toString = function() {
+    return _.str('#<WSObject meta: ', this.$meta, ' value: ', this.$value, '>');
+  };
+
+  var id = 0;
+
+  /**
+   * @constructor
+   * @final
+   */
   function Env(parent) {
     this.vars = Object.create(parent ? parent.vars : null);
     this.parent = parent;
+    this.define('*scope*', this);
     if (!parent) {
-      this.vars['*source*'] = 'unknown';
-      this.vars['*scope-name*'] = 'global';
-      this.vars['*line*'] = 1;
+      this.define('*source*', 'unknown');
+      this.define('*scope-name*', 'global');
+      this.define('*line*', 1);
       this.trace = ['unknown', 'global', 1];
     }
     else {
-      this.trace = [this.parent.vars['*source*'],
-                    this.parent.vars['*scope-name*'],
-                    this.parent.vars['*line*']];
+      this.trace = [this.parent.get('*source*'),
+                    this.parent.get('*scope-name*'),
+                    this.parent.get('*line*')];
     }
-    this.level = level++;
+    this.id = id++;
   }
 
   var env = Env.prototype;
@@ -41,61 +80,123 @@ goog.scope(function() {
     return null;
   };
 
-  env.get = function(name) {
+  env.getObject = function(name) {
     if (name in this.vars) {
       return this.vars[name];
     }
     throw new Error(_.str("Undefined variable: '", name, "'"));
   };
 
+  env.getObjects = function() {
+    var buffer = [];
+    var scope = this;
+    while (scope) {
+      for (var prop in scope.vars) {
+        if (Object.prototype.hasOwnProperty.call(scope.vars, prop)) {
+          buffer.push(scope.vars[prop]);
+        }
+      }
+      scope = scope.parent;
+    }
+    return mori.list.apply(null, buffer);
+  };
+
+  env.get = function(name) {
+    var obj = this.getObject(name);
+    return obj.getValue();
+  };
+
   env.set = function(name, value) {
     var scope = this.lookup(name);
     // cannot define globals from a nested environment
     if (!scope && this.parent) throw new Error(_.str("Undefined variable: '", name, "'"));
-    (scope || this).vars[name] = value;
+    (scope || this).vars[name].setValue(value);
     return value;
   };
 
-  env.define = function(name, value) {
-    this.vars[name] = value;
+  var typeTag = function(value) {
+    if (_.isFunction(value)) {
+      if (value.$lang$ws$tag) {
+        return value.$lang$ws$tag;
+      }
+      return _.keyword('js', 'Function');
+    }
+    else if (_.isKeyword(value)) {
+      return _.keyword('keyword');
+    }
+    else if (_.isSymbol(value)) {
+      return _.keyword('symbol');
+    }
+    else if (_.isCollection(value)) {
+      if (_.isList(value)) {
+        return _.keyword('list');
+      }
+      else if (_.isVector(value)) {
+        return _.keyword('vector');
+      }
+      else if (_.isMap(value)) {
+        return _.keyword('map');
+      }
+      else if (_.isSet(value)) {
+        return _.keyword('set');
+      }
+      else {
+        return _.keyword('collection');
+      }
+    }
+    else if (_.isArray(value)) {
+      return _.keyword('js', 'Array');
+    }
+    else if (_.isObject(value)) {
+      var nm = value.constructor.name;
+      if (nm === 'Object' || nm === '' || nm == null) {
+        return _.keyword('js', 'Object');
+      }
+      else {
+        return _.keyword('js', nm);
+      }
+    }
+    else {
+      return typeof value;
+    }
+  };
+
+  env.define = function(name, value, meta) {
+    var sname = _.str(name);
+    var meta = _.merge(_.hashMap(_.keyword('name'), _.symbol(sname), _.keyword('tag'), typeTag(value)), meta || _.hashMap());
+
+    var scope, m = _.hashMap();
+    if (scope = this.lookup('*scope-name*')) {
+      m = _.assoc(m, _.keyword('scope-name'), scope.get('*scope-name*'));
+    }
+    if (scope = this.lookup('*line*')) {
+      m = _.assoc(m, _.keyword('line'), scope.get('*line*'));
+    }
+    if (scope = this.lookup('*column*')) {
+      m = _.assoc(m, _.keyword('column'), scope.get('*column*'));
+    }
+    if (scope = this.lookup('*source*')) {
+      m = _.assoc(m, _.keyword('source'), scope.get('*source*'));
+    }
+    this.vars[sname] = new WSObject(value, _.merge(m, meta));
     return value;
   };
 
   env.setLocation = function(line, column) {
-    this.line = line;
-    this.column = column;
-    this.vars['*line*'] = line;
-    this.vars['*column*'] = column;
+    this.define('*line*', line);
+    this.define('*column*', column);
     return this;
   };
 
-  var getter = function(dim) {
-    return function() {
-      var scope = this;
-      while (scope) {
-        if (scope[dim]) return scope[dim];
-        scope = scope.parent;
-      }
-      return null;
-    };
-  };
-
   env.setSource = function(source) {
-    this.source = source;
-    this.vars['*source*'] = source;
+    this.define('*source*', source);
     return this;
   };
 
   env.setIdent = function(ident) {
-    this.ident = ident;
-    this.vars['*scope-name*'] = ident;
+    this.define('*scope-name*', _.symbol(_.str(ident)));
     return this;
   };
-
-  env.getLine = getter('line');
-  env.getColumn = getter('column');
-  env.getSource = getter('source');
-  env.getIdent = getter('ident');
 
   env.stacktrace = function() {
     var trace = [];
@@ -107,12 +208,18 @@ goog.scope(function() {
     return trace;
   };
 
+  /**
+   * @export
+   * @nocollapse
+   */
+  pbnj.core.Env = Env;
+
   pbnj.env = function(parent) {
-    return new Env(parent);
+    return new pbnj.core.Env(parent);
   };
 
   pbnj.core.isEnv = function(val) {
-    return val instanceof Env;
+    return val instanceof pbnj.core.Env;
   };
 
   if (module != void 0 && module.exports) {

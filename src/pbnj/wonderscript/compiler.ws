@@ -3,7 +3,34 @@
 
 (define *js-root-object* 'window)
 
-(define-function pbnj.wonderscript/compile [exp]
+(define property-accessor? isPropertyAccessor)
+(define property-assignment? isPropertyAssignment)
+(define method-application? isMethodApplication)
+(define class-instantiation? isClassInstantiation)
+
+(define-function repl-pprint [exp]
+  (pprint exp)
+  (pbnj.wonderscript.repl/pprint exp))
+
+(define-function property-accessor->jess
+  [env obj prop]
+  (list '.- (ws->jess obj env) (ws->jess prop env)))
+
+(define-function property-assignment->jess
+  [env obj prop value]
+  (list '.-set! (ws->jess obj env) (ws->jess prop env) (ws->jess value env)))
+
+(define-function method-application->jess
+  [env obj method]
+  (if (list? method)
+    (cons '. (cons (ws->jess obj env) (cons (first method) (map (rest method) (lambda [x] (ws->jess x env))))))
+    (list '. (ws->jess obj env) method)))
+
+(define-function class-instantiation->jess
+  [env klass &args]
+  (cons 'new (cons (ws->jess klass env) (map args (lambda [x] (ws->jess x env))))))
+
+(define-function compile [exp]
   (pbnj.jess/compile (ws->jess exp (pbnj/env))))
 
 (define-function self-evaluating? [exp]
@@ -22,27 +49,30 @@
   (cons 'pbnj.core.vector (map exp (lambda [x] (ws->jess x env)))))
 
 (define-function set->jess [exp env]
-  (cons 'pbnj.core.set (map exp (labmda [x] (ws->jess x env)))))
+  (cons 'pbnj.core.set (map exp (lambda [x] (ws->jess x env)))))
 
 (define variable? symbol?)
 
 (define-function variable-ns [sym env]
   (let [scope (pbnj.wonderscript/lookupVariable sym env)]
-    (if (or (nil? scope) (.? scope isEnv))
+    (if (or (nil? scope) (isEnv scope))
       nil
       (.- scope "@@NAME@@"))))
 
 (define-function variable->jess [sym env]
   (let [ns (namespace sym)
         nm (name sym)]
-    (if ns
-      sym
-      (let [ns (variable-ns sym env)
-            ns-parts (if ns (. (str ns) (split ".")) (array))]
-        (if ns
-          (let [ns-parts (. (str ns) (split "."))]
-            (list '.- *js-root-object* (into (vector) (concat ns-parts [nm]))))
-          sym)))))
+    (cond ns
+        (if (= ns "js")
+          (symbol (str *js-root-object*) nm)
+          sym)
+      :else
+        (let [ns (variable-ns sym env)
+              ns-parts (if ns (. (str ns) (split ".")) (array))]
+          (if ns
+            (let [ns-parts (. (str ns) (split "."))]
+              (list '.- *js-root-object* (into (vector) (concat ns-parts [nm]))))
+            sym)))))
 
 (define-function tag-predicate [tag]
   (lambda [exp] (= tag (first exp))))
@@ -125,7 +155,7 @@
 (define block? (tag-predicate 'do))
 
 (define-function block->jess [env &exprs]
-  (list 'paren (list (cons 'function (cons [] (lambda-body exprs))))))
+  (list 'paren (list (cons 'function (cons [] (lambda-body exprs env))))))
 
 (define assignment? (tag-predicate 'set!))
 
@@ -149,7 +179,7 @@
     (cons fn_ (map args (lambda [x] (ws->jess x env))))))
 
 (define-function ws->jess [exp_ env]
-  (let [exp (pbnj.wonderscript/macroexpand exp_)]
+  (let [exp (macroexpand exp_)]
     (cond (self-evaluating? exp) exp
           (keyword? exp) (keyword->jess exp)
           (map? exp) (map->jess exp env)
@@ -164,6 +194,10 @@
           (assignment? exp) (apply assignment->jess (cons env (rest exp)))
           (variable-introspection? exp) (apply variable-introspection->jess (cons env (rest exp)))
           (thrown-exception? exp) (apply thrown-exception->jess (cons env (rest exp)))
+          (property-accessor? exp) (apply property-accessor->jess (cons env (rest exp)))
+          (property-assignment? exp) (apply property-assignment->jess (cons env (rest exp)))
+          (method-application? exp) (apply method-application->jess (cons env (rest exp)))
+          (class-instantiation? exp) (apply class-instantiation->jess (cons env (rest exp)))
           (application? exp) (apply application->jess (cons env exp))
           :else 
             (do

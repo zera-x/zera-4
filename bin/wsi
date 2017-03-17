@@ -1,0 +1,23 @@
+require("../vendor/closure-library/closure/goog/bootstrap/nodejs.js");
+require("../vendor/closure-library/closure/goog/pbnj_deps.js");
+
+const fs   = require('fs');
+const mori = require("../dist/mori.js");
+
+goog.require('pbnj.core');
+goog.require('pbnj.wonderscript');
+
+const str        = pbnj.core.str;
+const inspect    = pbnj.wonderscript.inspect;
+const readString = pbnj.wonderscript.readString;
+
+function currentModuleName() {
+  return pbnj.MODULE_SCOPE["@@NAME@@"];
+}
+
+var input;
+while (input !== 'exit') {
+  console.log(str(currentModuleName(), '> '));
+  input = fs.readFileSync('/dev/stdin').toString();
+  console.log(inspect(readString(input)));
+}

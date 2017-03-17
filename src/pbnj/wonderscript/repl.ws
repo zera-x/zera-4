@@ -8,7 +8,7 @@
 (define- define-component pbnj.peanutbutter/define-component)
 (define- render pbnj.peanutbutter/render)
 
-(define-component :layout
+(define-component ::layout
   (lambda
     [&body]
     [:html {:lang "en"}
@@ -29,7 +29,7 @@
                      :integrity "sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
                      :crossorigin "anonymous"}]])]]]))
 
-(define-component :repl-in
+(define-component ::repl-in
   (lambda []
      [:div {:class "repl-in", :style {:font-family "Monaco, monospace"}}
       [:span {:class "repl-cursor"} (str (current-module-name) "> ")]
@@ -47,18 +47,22 @@
                        :font-family "Monaco, monospace"
                        :font-size "1em"}}]]))
 
-(define-component :repl-out
+(define-component ::repl-out
   (lambda [content]
      [:div {:class "repl-out", :style {:font-family "Monaco, monospace"}}
       [:span {:class "repl-content" :style "width: 100%"} content]]]))
 
-(define-component :display-out (always [:div {:class "display-out"}]))
+(define-component ::display-out (always [:div {:class "display-out"}]))
 
 (define-function replContent []
   (.. (js/jQuery ".repl-content") last val))
 
 (define-function appendOutput [content]
-  (. (js/jQuery "#repl") (append (html [[:repl-out (fmt-output content)] [:repl-in] [:display-out]]))))
+  (. (js/jQuery "#repl")
+     (append
+       (html [[::repl-out (fmt-output content)]
+              [::repl-in]
+              [::display-out]]))))
 
 (define-function setFocus []
   (.. (js/jQuery ".repl-content") last focus))
@@ -111,7 +115,7 @@
             sym (output-var)]
         (eval (list 'do
                     (list 'use (.- pbnj/MODULE_SCOPE "@@NAME@@"))
-                    (list 'define sym out)))
+                    (list 'define sym (list 'quote out))))
         [:success (inspect out)])
       (catch [e js/Error]
         [:error e]))))
@@ -121,15 +125,19 @@
     (do
       (.. (js/jQuery ".repl-content") last (addClass "has-error"))
       [:div {:class "alert alert-danger" :style {:margin-bottom 3}}
-        (.? (.- (second out) message)
-            (replace (new js/RegExp "\n" "g") "<br>"))])
+        (html-encode
+          (.? (.- (second out) message)
+              (replace (new js/RegExp "\n" "g") "<br>")))])
     [:div (output-var) " = " (html-encode (second out))]))
 
 (define-function display [&xs]
   (.. (js/jQuery ".display-out") last (append (apply html xs)))
   nil)
 
-(define-component :repl
+(define-function pprint [exp]
+  (display [(inspect exp) [:br]]))
+
+(define-component ::repl
   (lambda []
     [:div {:id "repl"}
      [:javascript
@@ -146,12 +154,12 @@
                   (=== event.keyIdentifier "Down")
                     (pbnj.wonderscript.repl.setContent
                       (pbnj.wonderscript.repl.scrollHistoryForward)))))]
-     [:repl-in]
-     [:display-out]]))
+     [::repl-in]
+     [::display-out]]))
 
 (define-function main []
   (module pbnj.user)
   (define display pbnj.wonderscript.repl/display)
-  (render [:layout [:repl]]))
+  (render [:pbnj.wonderscript.repl/layout [:pbnj.wonderscript.repl/repl]]))
 
 (main)

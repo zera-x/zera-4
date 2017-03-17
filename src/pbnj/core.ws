@@ -72,6 +72,107 @@
 (define * mult)
 (define / div)
 
+(define-macro comment [&forms] nil)
+
+(define-macro if
+  ([pred conse] (list 'cond pred conse))
+  ([pred conse alt] (list 'cond pred conse :else alt))) 
+
+(define-macro when [pred &acts]
+  (list 'cond pred (cons 'do acts)))
+
+(define-macro define-
+  ([nm] (list 'define :private nm))
+  ([nm value] (list 'define :private nm value))
+  ([meta nm value] (list 'define (assoc meta :private true) nm value)))
+
+(define-macro let [bindings &body]
+  (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
+  (cons 'do
+        (concat (map (pair bindings)
+                     (lambda [pair] (list 'define :private (pair 0) (pair 1))))
+                body)))
+
+(define-macro or
+  ([] nil)
+  ([a] a)
+  ([&forms]
+   (let [or* (first forms)]
+     (list 'if or* or* (cons 'or (rest forms))))))
+
+(define-macro and
+  ([] true)
+  ([a] a)
+  ([&forms]
+   (let [and* (first forms)]
+     (list 'if and* (cons 'and (rest forms)) and*))))
+
+(define-macro define-function
+  [name &forms]
+  (list 'define name
+        (cons 'lambda forms)))
+
+(define-macro define-function-
+  [name &forms]
+  (list 'define :private name (cons 'lambda forms)))
+
+(define-macro .?
+  ([obj method]
+   (list '.? obj method nil))
+  ([obj method alt]
+   (if (list? method)
+     (list 'if (list 'and obj (list '.- obj (first method))) (list '. obj method) alt)
+     (list 'if (list 'and obj (list '.- obj method)) (list '. obj method) alt))))
+
+(define-macro ..
+  ([x form] (list '. x form))
+  ([x form &more] (cons '.. (cons (list '. x form) more))))
+
+(define-macro ..?
+  ([x form] (list '.? x form))
+  ([x form &more] (cons '..? (cons (list '.? x form) more))))
+
+(define-macro defined?
+  [sym]
+  (let [ns (namespace sym)
+        nm (name sym)]
+    (list 'if
+          (list 'if ns
+                (list '.- (symbol ns) nm)
+                (list '.? '*scope* (list 'lookup nm)))
+          true
+          false)))
+
+;; ---------------------------- meta data ------------------------------ ;;
+
+(define-macro var
+  ([nm]
+   (let [ns (namespace nm)
+         sname (name nm)]
+    (if ns
+      (list 'var (symbol sname) (list '.- (symbol ns) "@@SCOPE@@"))
+      (list 'or
+            (list 'var nm '*scope*)
+            (list 'var nm (list '.- (current-module-name) "@@SCOPE@@"))
+            (list 'var nm (list '.- 'pbnj.core "@@SCOPE@@"))))))
+  ([nm scope]
+   (list '..?
+         scope
+         (list 'lookup (list 'str (list 'quote nm)))
+         (list 'getObject (list 'str (list 'quote nm))))))
+
+(define-function meta
+  [obj]
+  (. obj getMeta))
+
+(define-function with-meta
+  [obj meta]
+  (. obj (withMeta meta)))
+
+(define-function vary-meta
+  [obj f &args]
+  (. obj (varyMeta f args)))
+
 (define current-module
   (lambda [] pbnj/MODULE_SCOPE))
 
@@ -89,15 +190,19 @@
 (define-macro define-in-module-once [nm value]
   (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
 
-(define-macro test [nm &body]
-  (do
-    (define-in-module-once *tests* {})
-    (list 'set! '*tests*
-          (list 'assoc '*tests* (keyword (namespace nm) (name nm))
-                {:test/name (keyword (namespace nm) (name nm))
-                 :test/fn (cons 'lambda (cons [] (concat body [[(keyword (namespace nm) (name nm)) :passed]])))}))))
+;; ------------------------------------ testing -------------------------------------- ;;
 
-(define- format-test-results
+;(set! *environment* :production)
+
+(define-macro test [nm &body]
+  (when (and (defined? *environment*) (or (= *environment* :development) (= *environment* :test)))
+    (let [t (cons 'lambda (cons [] (concat body [[(keyword (namespace nm) (name nm)) :passed]])))]
+      (list 'if
+            (list 'defined? nm)
+            (list 'vary-meta (list 'var nm) 'assoc :test t)
+            (list 'define {:tag :test, :test t} nm :test)))))
+
+(define :private format-test-results
  (lambda [body]
   (println "body" body)
   (if (list? body)
@@ -109,16 +214,37 @@
         (list 'throw
               (list 'str
                     "FAILURE: "
-                    (list 'inspect
-                          (list 'if (list 'list? (list 'quote body))
-                            (list 'cons (list 'first (list 'quote body)) (list 'map (list 'rest (list 'quote body)) 'eval))
-                            (list 'quote body)))
+                    (inspect body)
                     " is false"))))
 
 (define-macro is-not [body]
   (list 'is (list 'not body)))
 
-(test literals
+(test .?
+  (let [d (new js/Date 2016 10 25)]
+    (is (= (.? d getMonth) 10))
+    (is (= (.? d missing-method) nil))
+    (.? d (setMonth 11))
+    (is (= (.? d (getMonth)) 11))))
+
+(test ..
+  (let [xs (array 1 2 3 4 5)]
+    (.. "1,2,3,4,5"
+        (split ",")
+        (map (lambda [x &rest] (* 1 x)))
+        (forEach (lambda [x i other] (is (= x (.- xs i))))))))
+
+(test ..?
+  (let [xs (array 1 2 3 4 5)]
+    (..? "1,2,3,4,5"
+         (split ",")
+         (map (lambda [x &rest] (* 1 x)))
+         (forEach (lambda [x i other]
+                       (println "x" x "xs" xs (str "xs[" i "]") (.- xs i))
+                       (is (= x (.- xs i)))))))
+  (is (= nil (..? "1,2,3,4,5" (split ",") (missing-method 1 2 3 4 5)))))
+
+(test read-string
   (let [n (generate-nat)]
     (is (= n (read-string (str n)))))
   (is (= -1 (read-string "-1")))
@@ -137,18 +263,9 @@
   (is (= 5000 (read-string "5_000")))
   (is (= 5 (read-string "5.000"))))
 
-(define-macro comment [&forms] nil)
-
 (test comment
   (is (= nil (comment)))
   (is (= nil (comment asdfasdf asfasdf sfasdfasd asfasdfasd))))
-
-(define-macro let [bindings &body]
-  (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
-  (cons 'do
-        (concat (map (pair bindings)
-                     (lambda [pair] (list 'define- (pair 0) (pair 1))))
-                body)))
 
 (test let
   (is (= [1 2]
@@ -157,10 +274,6 @@
            (is (= x 1))
            (is (= y 2))
            [x y]))))
-
-(define-macro if
-  ([pred conse] (list 'cond pred conse))
-  ([pred conse alt] (list 'cond pred conse :else alt))) 
 
 (test if
   (is (= 1 (if true 1)))
@@ -187,19 +300,9 @@
   (is (= 5 (unless false 1 2 3 4 5)))
   (is (= nil (unless true 1 2 3 4 5))))
 
-(define-macro when [pred &acts]
-  (list 'cond pred (cons 'do acts)))
-
 (test when
   (is (= 5 (when true 1 2 3 4 5)))
   (is (= nil (when false 1 2 3 4 5))))
-
-(define-macro or
-  ([] nil)
-  ([a] a)
-  ([&forms]
-   (let [or* (first forms)]
-     (list 'if or* or* (cons 'or (rest forms))))))
 
 (test or
   (is (or true))
@@ -209,13 +312,6 @@
   (is-not (or false))
   (is-not (or false false))
   (is-not (or false false false)))
-
-(define-macro and
-  ([] true)
-  ([a] a)
-  ([&forms]
-   (let [and* (first forms)]
-     (list 'if and* (cons 'and (rest forms)) and*))))
 
 (test and
   (is (and true))
@@ -228,11 +324,6 @@
   (is-not (and false true true))
   (is-not (and true true false)))
 
-(define-macro define-function
-  [name &forms]
-  (list 'define name
-        (cons 'lambda forms)))
-
 (test define-function
   (define-function ident [x] x)
   (define-function inc [x] (+ 1 x))
@@ -240,11 +331,6 @@
   (is (= :a (pbnj.core/ident :a)))
   (is (= 4 (inc 3)))
   (is (= 5 (pbnj.core/inc 4))))
-
-(define-macro define-function-
-  [name &forms]
-  (list 'define- name
-        (cons 'lambda forms)))
 
 (test define-function-
   (define-function- ident- [x] x)
@@ -307,8 +393,8 @@
         var (bindings 0)
         init (bindings 1)]
     (list 'do
-          (list 'define- act-nm (cons 'lambda (cons [var] body)))
-          (list 'define- block-nm
+          (list 'define :private act-nm (cons 'lambda (cons [var] body)))
+          (list 'define :private block-nm
                 (list 'lambda [var]
                       (list 'if (list '< var init)
                             (list 'do
@@ -328,8 +414,8 @@
         col (bindings 1)]
     (list 'do
           (list 'if-not (list 'collection? col) (list 'throw "bound value isn't a collection"))
-          (list 'define- act-nm (cons 'lambda (cons [var] body)))
-          (list 'define- block-nm
+          (list 'define :private act-nm (cons 'lambda (cons [var] body)))
+          (list 'define :private block-nm
                 (list 'lambda [col-nm]
                       (list 'unless (list 'empty? col-nm)
                             (list act-nm (list 'first col-nm))
@@ -462,47 +548,35 @@
   (is-not (= (gen-sym) (gen-sym)))
   (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
 
-(define-macro .?
-  ([obj method]
-   (list '.? obj method nil))
-  ([obj method alt]
-   (if (list? method)
-     (list 'if (list '.- obj (first method)) (list '. obj method) alt)
-     (list 'if (list '.- obj method) (list '. obj method) alt))))
-
-(test .?
-  (let [d (new js/Date 2016 10 25)]
-    (is (= (.? d getMonth) 10))
-    (is (= (.? d missing-method) nil))
-    (.? d (setMonth 11))
-    (is (= (.? d (getMonth)) 11))))
-
-(define-macro ..
-  ([x form] (list '. x form))
-  ([x form &more] (cons '.. (cons (list '. x form) more))))
-
-(test ..
-  (let [xs (array 1 2 3 4 5)]
-    (.. "1,2,3,4,5"
-        (split ",")
-        (map (lambda [x &rest] (* 1 x)))
-        (forEach (lambda [x i other] (is (= x (.- xs i))))))))
-
-(define-macro ..?
-  ([x form] (list '.? x form))
-  ([x form &more] (cons '..? (cons (list '.? x form) more))))
-
-(test ..?
-  (let [xs (array 1 2 3 4 5)]
-    (..? "1,2,3,4,5"
-         (split ",")
-         (map (lambda [x &rest] (* 1 x)))
-         (forEach (lambda [x i other]
-                       (println "x" x "xs" xs (str "xs[" i "]") (.- xs i))
-                       (is (= x (.- xs i)))))))
-  (is (= nil (..? "1,2,3,4,5" (split ",") (missing-method 1 2 3 4 5)))))
+(define-macro define-type
+  ([nm fields]
+   (println fields)
+   (let [assigns (mori/map (lambda [f] (list '.-set! 'this (name f) f)) fields)]
+     (list 'define nm
+           (list 'pbnj.jess/eval
+                 (list 'quote
+                       (list 'paren
+                             (cons 'function (cons nm (cons (apply vector fields) assigns)))))))))
+  ([nm fields &methods]
+   (cons 'do
+         (cons
+           (list 'define-type nm fields)
+           (cons
+             (list '.-set! nm 'prototype (list 'object))
+             (concat
+               (map methods
+                    (lambda [meth]
+                            (let [methnm (first meth)
+                                  args (first (rest meth))
+                                  body (rest (rest meth))]
+                              (list '.-set!
+                                    (symbol (str (current-module-name) "." nm) "prototype")
+                                    methnm
+                                    (cons 'lambda (cons args body))))))
+               [nm]))))))
 
 
+(comment
 (define-macro define-class [nm fields &methods]
   (let [env (pbnj/env)
         klass (symbol nm)
@@ -553,7 +627,23 @@
     (is (= "(3, 4)", (str p)))
     (is (= "(3, 4)", (. p toString)))))
 
-(comment
+(require "src/pbnj/types.ws")
+
+(define-function atom [x]
+  (new pbnj.types/Atom x))
+
+(define-function deref [x]
+  (.? x deref))
+
+(define-function reset! [x value]
+  (.? x (reset value)))
+
+(define-function swap! [x f]
+  (.? x (swap f)))
+
+(define-function add-watch [x f]
+  (.? x (addWatch f)))
+
 (define-macro define-method
   [nm value args &body]
   )

@@ -15,7 +15,6 @@ goog.scope(function() {
   var isSelfEvaluating = ws.isSelfEvaluating = function(exp) {
     return _.isNull(exp) ||
            _.isUndefined(exp) ||
-           _.isKeyword(exp) ||
            _.isBoolean(exp) ||
            _.isString(exp) ||
            _.isNumber(exp) ||
@@ -24,6 +23,17 @@ goog.scope(function() {
   };
 
   var evalSelfEvaluating = _.identity;
+
+  var evalKeyword = function(exp, env) {
+    var sexp = _.str(exp);
+    if (sexp.startsWith('::')) {
+      var modname = env.lookup('*module-name*')
+                        ? env.lookup('*module-name*').get('*module-name*')
+                        : pbnj.MODULE_SCOPE["@@NAME@@"];
+      return _.keyword(_.str(modname), sexp.replace(/^::/, ''));
+    }
+    return exp;
+  };
 
   var isCollectionLiteral = ws.isCollectionLiteral = function(exp) {
     return _.isMap(exp) || _.isVector(exp) || _.isSet(exp);
@@ -117,50 +127,55 @@ goog.scope(function() {
 
   var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('define'));
 
-  // TODO: add meta data, (see Clojure's Vars)
   var evalDefinition = function(exp, env) {
     var rest  = _.rest(exp);
-    var ident = _.first(rest);
-    var name  = _.name(ident);
-    var ns    = _.namespace(ident);
-
-    // define value in module scope
-    var mod = ns == null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns));
-    if (!mod) throw new Error(_.str("module ", ns ," is undefined"));
-    if (!mod["@@SCOPE@@"]) {
-      mod["@@SCOPE@@"] = globalEnv.extend();
+    var first = _.first(rest);
+    if (_.isSymbol(first)) {
+      var meta   = _.hashMap();
+      var ident  = first;
+      var preVal = _.second(rest);
     }
-    mod["@@SCOPE@@"].define(name); // so definition can refer to itself
-    var value = ws.eval(_.second(rest), env);
+    else if (_.isMap(first)) {
+      var meta   = first;
+      var ident  = _.first(_.rest(rest));
+      var preVal = _.second(_.rest(rest));
+    }
+    else if (_.isKeyword(first)) {
+      var meta   = _.hashMap(first, true);
+      var ident  = _.first(_.rest(rest));
+      var preVal = _.second(_.rest(rest));
+    }
+    else {
+      throw new Error('define: first element should be a symbol, keyword, or map');
+    }
+
+    var name = _.name(ident);
+    var ns   = _.namespace(ident);
+    
+    env.define(name); // do definition can refer to itself
+
+    var value = preVal == null ? null : ws.eval(preVal, env);
+    var isPrivate = _.get(meta, _.keyword('private'), false);
+
+    if (isPrivate) {
+      env.define(name, value, _.assoc(meta, _.keyword('private'), true));
+    }
+    else {
+      // define value in module scope
+      var mod = ns == null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns));
+      if (!mod) throw new Error(_.str("module ", ns ," is undefined"));
+      if (!mod["@@SCOPE@@"]) {
+        mod["@@SCOPE@@"] = globalEnv.extend();
+      }
+      meta = _.assoc(meta, _.keyword('module'), mod["@@NAME@@"]);
+      mod["@@SCOPE@@"].define(name, value, meta);
+      mod[name] = value;
+    }
     if (_.isFunction(value)) {
       value.$lang$ws$ident = _.str(ident);
     }
-    mod["@@SCOPE@@"].define(name, value);
-    mod[name] = value;
-    env.define(name, value);
     return value;
   };
-
-  var isLocalDefinition = ws.isLocalDefinition = makeTagPredicate(_.symbol('define-'));
-
-  // TODO: add meta data, (see Clojure's Vars)
-  var evalLocalDefinition = function(exp, env) {
-    var rest  = _.rest(exp);
-    var ident = _.first(rest);
-    var name  = _.name(ident);
-    var ns    = _.namespace(ident);
-
-    if (ns) throw new Error("local definition names should not have namespaces");
-
-    env.define(name); // so definition can refer to itself
-    var value = ws.eval(_.second(rest), env);
-    if (_.isFunction(value)) {
-      value.$lang$ws$ident = ident;
-    }
-    env.define(name, value);
-    return value;
-  };
-
 
   var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
 
@@ -209,19 +224,6 @@ goog.scope(function() {
     return func.apply(obj, args ? _.intoArray(args) : []);
   };
 
-  ws.applyMethod = function(obj, method, args) {
-    if (arguments.length !== 2 && arguments.length !== 3) {
-      throw new Error(_.str('wrong number of arguments expected: 2 or 3 arguments, got: ', arguments.length));
-    }
-
-    if (!_.isFunction(method)) {
-      console.log(obj, method, args);
-      throw new Error("method should be a function");
-    }
-
-    return method.apply(obj, args ? _.intoArray(args) : []);
-  };
-
   // (lambda [x] x)
   // (lambda ([x] x)
   //         ([x y] [x y]))
@@ -266,10 +268,10 @@ goog.scope(function() {
 
       var args = arguments;
       if (argCount <= 0 && args.length < Math.abs(argCount)) {
-        throw new Error(_.str('"', ident, '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length));
+        throw new Error(_.str('"', ws.inspect(lambda), '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length));
       }
       else if (argCount > 0 && argCount !== args.length) {
-        throw new Error(_.str('"', ident, '" wrong number of arguments expected: ', argCount, ' got: ', args.length));
+        throw new Error(_.str('"', ws.inspect(lambda), '" wrong number of arguments expected: ', argCount, ' got: ', args.length));
       }
       var argc = args.length;
       var body = bodies[argc];
@@ -301,6 +303,7 @@ goog.scope(function() {
       return ret;
     };
 
+    lambda.$lang$ws$tag = _.keyword('lambda');
     lambda.$lang$ws$id = id;
     lambda.$lang$ws$arity = argCount;
     lambda.$lang$ws$code = exp;
@@ -361,8 +364,7 @@ goog.scope(function() {
       return ws.apply(func, args);
     }
     else {
-      console.log(ws.inspect(exp));
-      throw new Error(_.str("'", func, "' is not a function"));
+      throw new Error(_.str("'", ws.inspect(exp), "' is not a function"));
     }
   };
 
@@ -427,14 +429,6 @@ goog.scope(function() {
     return exp;
   };
 
-  var isVariableIntrospection = ws.isVariableIntrospection = makeTagPredicate(_.symbol('defined?'));
-
-  var evalVariableIntrospection = function(exp, env) {
-    var name = _.second(exp);
-    var mod = lookupVariable(name, env);
-    return mod === null ? false : true;
-  };
-
   var isAssignment = ws.isAssignment = makeTagPredicate(_.symbol('set!'));
 
   var evalAssignment = function(exp, env) {
@@ -444,11 +438,11 @@ goog.scope(function() {
     var value = ws.eval(_.second(_.rest(exp)), env);
     var ns = _.namespace(name);
     var sname = _.str(name);
-    if (ns == null) {
+    /*if (ns == null) {
       if (pbnj.MODULE_SCOPE[sname] != null) {
         pbnj.MODULE_SCOPE[sname] = value;
       }
-    }
+    }*/
     if (_.isEnv(scope)) {
       scope.set(sname, value);
     }
@@ -487,6 +481,21 @@ goog.scope(function() {
     }
   };
 
+  var isPropertyAssignment = ws.isPropertyAssignment = makeTagPredicate(_.symbol('.-set!'));
+
+  var evalPropertyAssignment = function(exp, env) {
+    var obj = ws.eval(_.second(exp), env);
+    if (obj == null) throw new Error("nil is not an object");
+    var prop = _.second(_.rest(exp));
+    var value = ws.eval(_.second(_.rest(_.rest(exp))), env);
+    if (_.isSymbol(prop)) {
+      return obj[_.str(prop)] = value;
+    }
+    else {
+      return obj[ws.eval(prop, env)] = value;
+    }
+  };
+
   var isClassInstantiation = ws.isClassInstantiation = makeTagPredicate(_.symbol('new'));
 
   var evalClassInstantiation = ws.evalClassInstantiation = function(exp, env) {
@@ -520,7 +529,9 @@ goog.scope(function() {
     var name = _.second(exp); 
     var mod = defineModule(name);
     if (mod) {
-      mod["@@SCOPE@@"] = env.extend().setIdent(_.str(name));
+      var scope = env.extend().setIdent(_.str(name));
+      scope.define('*module-name*', name);
+      mod["@@SCOPE@@"] = scope;
       mod["@@NAME@@"] = name;
       mod.$lang$ws$type = 'module';
       pbnj.MODULE_SCOPE = mod;
@@ -561,6 +572,7 @@ goog.scope(function() {
     var name = _.second(exp);
     if (_.isSymbol(name)) {
       pbnj.MODULE_SCOPE = getModule(name);
+      env.define('*module-name*', name);
     }
     else {
       throw new Error("module name should be a symbol");
@@ -605,6 +617,7 @@ goog.scope(function() {
   var evalMethodApplication = function(exp, env) {
     var args = _.rest(exp);
     var obj = ws.eval(_.first(args), env);
+    if (obj == null) throw new Error('nil is not an object');
     var method = _.second(args);
     if (_.isList(method)) {
       var mname = _.first(method);
@@ -694,6 +707,7 @@ goog.scope(function() {
   pbnj.core["@@MACROS@@"] = {};
 
   var globalEnv = pbnj.core['@@SCOPE@@'] = pbnj.env().setSource('src/pbnj/wonderscript.js');
+  globalEnv.define('*module-name*', _.symbol('pbnj.core'));
   importModule(pbnj.core);
   ws.globalEnv = globalEnv;
   
@@ -708,35 +722,11 @@ goog.scope(function() {
   globalEnv.define('>=', function(a, b) { return a >= b; });
   globalEnv.define('mod', function(a, b) { return a % b; });
   globalEnv.define('array', function() { return Array.prototype.slice.call(arguments); });
+  globalEnv.define('object', function() { return {} });
   globalEnv.define('println', console.log.bind(console));
   globalEnv.define('macroexpand', macroexpand);
   globalEnv.define('arity', arity);
   
-  ws.inspectObject = function inspectObject(obj) {
-    var buff = [];
-  
-    for (var property in obj) {
-      if (obj.hasOwnProperty(property)) {
-        var value = obj[property];
-        if (typeof value == 'string') {
-          value = _.str("'", value, "'");
-        }
-        else if (typeof value == 'object') {
-          if (value instanceof Array) {
-            value = _.str("[", value, "]");
-          }
-          else {
-            var ood = inspectObject(value);
-            value = _.str("{", ood, "}");
-          }
-        }
-        buff.push(_.str(property, ": ", value));
-      }
-    }
-  
-    return _.str('{', buff.join(', '), '}');
-  };
-
   ws.inspect = function(exp) {
     if (exp == null) {
       return 'nil';
@@ -750,8 +740,12 @@ goog.scope(function() {
     else if (isQuoted(exp)) {
       return _.str("'", ws.inspect(_.second(exp)));
     }
-    else if (exp.$lang$ws$code) {
-      return ws.inspect(exp.$lang$ws$code);
+    else if (_.isArray(exp)) {
+      var buffer = [];
+      for (var i = 0; i < exp.length; i++) {
+        buffer.push(ws.inspect(exp[i]));
+      }
+      return _.str("(array ", buffer.join(' '), ")");
     }
     else {
       return _.str(exp);
@@ -764,12 +758,56 @@ goog.scope(function() {
   }
   globalEnv.define('pprint', ws.pprint);
 
+  ws.eval_ = function(exp, env) {
+    var env = env || globalEnv;
+    var exp = macroexpand(exp);
+    
+    var value = null;
+    if (isSelfEvaluating(exp)) {
+      value = evalSelfEvaluating(exp);
+    }
+    else if (_.isKeyword(exp)) {
+      value = evalKeyword(exp, env);
+    }
+    else if (isCollectionLiteral(exp)) {
+      value = evalCollectionLiteral(exp, env);
+    }
+    else if (isVariable(exp)) {
+      value = evalVariable(exp, env);
+    }
+    else if (isQuoted(exp)) {
+      value = evalQuote(exp);
+    }
+    else if (isDefinition(exp)) {
+      value = evalDefinition(exp, env);
+    }
+    else if (isCond(exp)) {
+      value = evalCond(exp, env);
+    }
+    else if (isLambda(exp)) {
+      value = evalLambda(exp, env);
+    }
+    else if (isBlock(exp)) {
+      value = evalBlock(exp, env);
+    }
+    else if (isApplication(exp)) {
+      value = evalApplication(exp, env);
+    }
+    else {
+      throw new Error(_.str("invalid expression: '", exp, "'"));
+    }
+    return value;
+  };
+
   ws.eval = function(exp, env) {
     var env = env || globalEnv;
     var exp = macroexpand(exp);
 
     if (isSelfEvaluating(exp)) {
       return evalSelfEvaluating(exp);
+    }
+    else if (_.isKeyword(exp)) {
+      return evalKeyword(exp, env);
     }
     else if (isCollectionLiteral(exp)) {
       return evalCollectionLiteral(exp, env);
@@ -782,9 +820,6 @@ goog.scope(function() {
     }
     else if (isDefinition(exp)) {
       return evalDefinition(exp, env);
-    }
-    else if (isLocalDefinition(exp)) {
-      return evalLocalDefinition(exp, env);
     }
     else if (isCond(exp)) {
       return evalCond(exp, env);
@@ -801,9 +836,6 @@ goog.scope(function() {
     else if (isAssignment(exp)) {
       return evalAssignment(exp, env);
     }
-    else if (isVariableIntrospection(exp)) {
-      return evalVariableIntrospection(exp, env);
-    }
     else if (isMacro(exp)) {
       return evalMacro(exp, env);
     }
@@ -812,6 +844,9 @@ goog.scope(function() {
     }
     else if (isPropertyAccessor(exp)) {
       return evalPropertyAccessor(exp, env);
+    }
+    else if (isPropertyAssignment(exp)) {
+      return evalPropertyAssignment(exp, env);
     }
     else if (isMethodApplication(exp)) {
       return evalMethodApplication(exp, env);
@@ -837,7 +872,6 @@ goog.scope(function() {
   };
   globalEnv.define('eval', ws.eval);
   globalEnv.define('apply', ws.apply);
-  globalEnv.define('apply-method', ws.applyMethod);
 
   var wsError = function(e, trace) {
     var wsStack = ''; //_.str(ws.pprint(exp), ' @ ', stream.source(), ':', stream.line(), ':', stream.column(), '\n');
@@ -855,20 +889,19 @@ goog.scope(function() {
     var env = (env || globalEnv).extend().setSource(stream.source()).setLocation(stream.line(), stream.column());
     try {
       var value = null;
-      var line = stream.line();
-      var column = stream.column();
       while (!stream.eof()) {
         var exp = stream.peek();
         value = ws.eval(exp, env);
         if (_.isFunction(value) || isBlock(exp) || isTryBlock(exp)) {
-          env.setLocation(line, column);
+          env.setLocation(stream.line(), stream.column());
         }
         else if (value && value["@@SCOPE@@"]) {
-          env = value["@@SCOPE@@"].setLocation(line, column);
+          env = value["@@SCOPE@@"].setLocation(stream.line(), stream.column());
+        }
+        else {
+          env.setLocation(stream.line(), stream.column());
         }
         stream.next();
-        line = stream.line();
-        column = stream.column();
       }
       return value;
     }
@@ -924,13 +957,13 @@ goog.scope(function() {
   globalEnv.define('compile-file', ws.compileFile);
 
   if (module != void 0 && module.exports) {
-    ws.readFile(_.str(__dirname, "/core.ws"));
+    //ws.readFile(_.str(__dirname, "/../src/pbnj/core.ws"));
   }
   else {
     ws.readFile("src/pbnj/core.ws");
   }
 
-  globalEnv.define('*environment*', 'development');
+  globalEnv.define('*environment*', _.keyword('development'));
   // TODO: detect browser?
   globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'browser');
 });

@@ -1,3 +1,5 @@
+.PHONY: clean deps
+
 default: dist/pbnj.js
 
 dist/pbnj.js:
@@ -6,5 +8,3 @@ dist/pbnj.js:
 clean:
 	rm dist/pbnj.js
 	rm dist/pbnj.js.map
-
-rebuild: clean dist/pbnj.js

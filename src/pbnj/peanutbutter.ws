@@ -64,12 +64,20 @@
 (define-function render-expression-list [exprs]
   (reduce (mori/map html exprs) str))
 
+(define-function component-index [nm]
+  (. (str nm) (replace (new js/RegExp "^:") "")))
+
 (define-function define-component [nm fn]
-  (set! *components*
-        (assoc *components*
-               (if (keyword? nm) (name nm) (str nm))
-               fn))
+  (set! *components* (assoc *components* (component-index nm) fn))
   fn)
+
+(define-macro component
+  ([nm x]
+   (list 'pbnj.peanutbutter/define-component nm (list 'lambda [] x)))
+  ([nm args &body]
+   (list 'pbnj.peanutbutter/define-component nm (list 'lambda (cons args body)))))
+
+(define-function components [] *components*)
 
 (define-function definition? [exp]
   (and (list? exp) (= (first exp) 'define)))
@@ -81,17 +89,17 @@
    (unless (vector? args) (throw "argument list should be a vector"))
    (define-component nm (eval (cons 'lambda (cons args body))))))
 
+(define-function have-component? [nm]
+  (has-key? *components* (component-index nm)))
+
+(define-function get-component [nm]
+  (get *components* (component-index nm)))
+
 (define-function component? [exp]
-  (if (tag? exp)
-    (let [nm (first exp)
-          nmstr (if (keyword? nm) (name nm) (str nm))]
-      (has-key? *components* nmstr))))
+  (and (tag? exp) (have-component? (first exp))))
 
 (define-function render-component [exp]
-  (let [component
-         (*components*
-           (let [nm (first exp)]
-             (if (keyword? nm) (name nm) (str nm))))]
+  (let [component (get-component (first exp))]
     (html (apply component (rest exp)))))
 
 (define-function atom? [exp]

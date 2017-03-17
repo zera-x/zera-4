@@ -257,8 +257,13 @@ goog.scope(function() {
 
     function readKeyword() {
       input.next();
+      var head = '';
+      if (input.peek() === ':') {
+        head = input.peek();
+        input.next();
+      }
       var kw = readWhile(isSymbol);
-      return dispatch.keyword(kw);
+      return dispatch.keyword(_.str(head, kw));
     }
 
     function readCollection(tag, end) {
