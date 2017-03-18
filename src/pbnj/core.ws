@@ -132,6 +132,10 @@
   ([x form] (list '.? x form))
   ([x form &more] (cons '..? (cons (list '.? x form) more))))
 
+(define-macro ..-
+  ([x form] (list '.- x form))
+  ([x form &more] (cons '..- (cons (list '.- x form) more))))
+
 (define-macro defined?
   [sym]
   (let [ns (namespace sym)
@@ -531,8 +535,8 @@
   ([value left right]
    (if (nil? value) (left) (right value))))
 
-(require "src/pbnj/jess.ws")
-(require "src/pbnj/wonderscript/compiler.ws")
+(require "jess.ws")
+(require "wonderscript/compiler.ws")
 
 (define *sym-count* 0)
 (define-function gen-sym 
@@ -627,7 +631,7 @@
     (is (= "(3, 4)", (str p)))
     (is (= "(3, 4)", (. p toString)))))
 
-(require "src/pbnj/types.ws")
+(require "types.ws")
 
 (define-function atom [x]
   (new pbnj.types/Atom x))

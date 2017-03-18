@@ -6,3 +6,11 @@ vendor/
 .nrepl-history
 node_modules/
 dist/pbnj.*.js
+src/pbnj/core.js
+src/pbnj/core.js.map
+src/pbnj/env.js
+src/pbnj/env.js.map
+src/pbnj/reader.js
+src/pbnj/reader.js.map
+src/pbnj/wonderscript.js
+src/pbnj/wonderscript.js.map

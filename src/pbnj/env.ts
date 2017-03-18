@@ -1,11 +1,8 @@
-/*goog.provide('pbnj.env');
-
-goog.require('pbnj.core');*/
-
 namespace pbnj.core {
+
   var _;
-  if (module != void 0 && module.exports) {
-    _ = require('./pbnj.core.js');
+  if (typeof exports !== 'undefined') {
+    _ = require('./core.js');
   }
   else {
     _ = pbnj.core;
@@ -231,7 +228,7 @@ namespace pbnj.core {
     return val instanceof Env;
   };
 
-  if (module != void 0 && module.exports) {
+  if (typeof exports !== 'undefined') {
     module.exports.env = pbnj.env;
     module.exports.isEnv = pbnj.core.isEnv;
     module.exports.variable = pbnj.variable;

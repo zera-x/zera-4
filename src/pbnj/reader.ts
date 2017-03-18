@@ -5,8 +5,8 @@ goog.require('pbnj.core');*/
 namespace pbnj.reader {
 
   var _, pair;
-  if (module != void 0 && module.exports) {
-    _ = require('./pbnj.core.js');
+  if (typeof exports !== 'undefined') {
+    _ = require('./core.js');
     pair = _.pair;
   }
   else {
@@ -351,7 +351,7 @@ namespace pbnj.reader {
   }
 
   var readFile = null;
-  if (module != void 0 && module.exports) {
+  if (typeof exports !== 'undefined') {
     var fs = require('fs');
     /**
      * @param {string} str
@@ -428,11 +428,11 @@ namespace pbnj.reader {
     readString: readString,
     readJS: readJS,
     readJSON: readJSON,
-    readFile: module != void 0 && module.exports ? readFileNode : readFileBrowser,
+    readFile: typeof exports !== 'undefined' ? readFileNode : readFileBrowser,
     TYPE_DISPATCH: TYPE_DISPATCH
   };
 
-  if (module != void 0 && module.exports) {
+  if (typeof exports !== 'undefined') {
     module.exports = pbnj.reader;
   }
 }

@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(require "src/pbnj/jelly.ws")
+(require "jelly.ws")
 
 (module pbnj.peanutbutter)
 

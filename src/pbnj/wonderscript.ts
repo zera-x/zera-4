@@ -2,22 +2,22 @@ namespace pbnj.wonderscript {
   var ws = wonderscript;
 
   var _, ROOT_OBJECT;
-  if (module != void 0 && module.exports) {
-    mori = require('./mori.js');
-    _    = require('./pbnj.core.js');
-    var pbnjEnv = require('./pbnj.env.js');
+  if (typeof exports !== 'undefined') {
+    mori = require('mori');
+    _    = require('./core.js');
+    var pbnjEnv = require('./env.js');
     var pbnj = pbnj || {};
     pbnj.env = pbnjEnv.env;
     pbnj.core = _;
     pbnj.core.isEnv = pbnjEnv.isEnv;
-    pbnj.reader = require('./pbnj.reader.js');
+    pbnj.reader = require('./reader.js');
     ROOT_OBJECT = global;
   }
   else {
-    _ = pbnj.core;
     ROOT_OBJECT = window;
+    _ = ROOT_OBJECT.pbnj.core;
   }
-  ROOT_OBJECT.pbnj = {};
+  ROOT_OBJECT.pbnj = ROOT_OBJECT.pbnj || {};
   ROOT_OBJECT.pbnj.wonderscript = ws;
   ROOT_OBJECT.pbnj.core = _;
   ROOT_OBJECT.pbnj.reader = pbnj.reader;
@@ -390,10 +390,6 @@ namespace pbnj.wonderscript {
 
   var isCond = ws.isCond = makeTagPredicate(_.symbol('cond'));
 
-  var isFalsy = ws.isFalsy = function(val) {
-    return val === false || _.isNull(val) || _.isUndefined(val);
-  };
-
   var evalCond = function(exp, env) {
     var rest = _.rest(exp);
     if (_.count(rest) % 2 !== 0) throw new Error(_.str('cond requires an even number of elements ', ws.inspect(exp)));
@@ -401,7 +397,7 @@ namespace pbnj.wonderscript {
     for (var i = 0; i < _.count(pairs); i++) {
       var pred = _.nth(_.nth(pairs, i), 0);
       var cons = _.nth(_.nth(pairs, i), 1);
-      if (_.equals(pred, _.keyword('else')) || !isFalsy(ws.eval(pred, env))) {
+      if (_.equals(pred, _.keyword('else')) || !_.isFalse(ws.eval(pred, env))) {
         return ws.eval(cons, env);
       }
     }
@@ -589,12 +585,20 @@ namespace pbnj.wonderscript {
   var evalModuleRequire = function(exp, env) {
     var name = _.second(exp);
     var mod = ws.MODULE_SCOPE;
+    var dir = typeof exports !== 'undefined' ? env.lookup('*dir*').get('*dir*') : '/';
+
     if (_.isString(name)) {
-      ws.readFile(name, env.extend().setIdent('require'));
+      var full = dir ? [dir, name].join('/') : name;
+      try {
+        ws.readFile(full, env.extend().setIdent('require'));
+      }
+      catch (e) {
+        throw new Error(_.str("Reading file: \"", full, "\": ", e.message ? e.message : e));
+      }
     }
     else if (_.isSymbol(name)) {
       var path = _.str("src/", _.str(name).split('.').join('/'), ".ws");
-      ws.readFile(path, env.extend().setIdent('require'));
+      ws.readFile(dir ? [dir, path].join('/') : path, env.extend().setIdent('require'));
       var mod = findModule(name);
       if (mod == null) {
         throw new Error(_.str('module ', name, ' does not exist'));
@@ -986,8 +990,13 @@ namespace pbnj.wonderscript {
   globalEnv.define('compile-string', ws.compileString);
 
   ws.readFile = function(file, env) {
+    var env = env || globalEnv;
+    scope = env.extend().setIdent('read-file');
+    scope.define('*file*', file);
+    var path = file.split('/');
+    scope.define('*dir*', path.slice(0, path.length - 1).join('/'));
     var stream = pbnj.reader.readFile(file);
-    return ws.readStream(stream, env);
+    return ws.readStream(stream, scope);
   };
   globalEnv.define('read-file', ws.readFile);
 
@@ -999,9 +1008,9 @@ namespace pbnj.wonderscript {
 
   globalEnv.define('*environment*', _.keyword('development'));
   // TODO: detect browser?
-  globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'browser');
+  globalEnv.define('*platform*', typeof exports !== 'undefined' ? 'nodejs' : 'browser');
 
-  if (module != void 0 && module.exports) {
+  if (typeof exports !== 'undefined') {
     module.exports = ws;
     var mod = defineModule(_.symbol('js.node'));
     [

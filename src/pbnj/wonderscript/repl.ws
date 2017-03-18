@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(require "src/pbnj/peanutbutter.ws")
+(require "../peanutbutter.ws")
 
 (module pbnj.wonderscript.repl)
 
@@ -114,7 +114,7 @@
       (let [out (pbnj.wonderscript/readString in)
             sym (output-var)]
         (eval (list 'do
-                    (list 'use (.- pbnj/MODULE_SCOPE "@@NAME@@"))
+                    (list 'use (.- pbnj.wonderscript/MODULE_SCOPE "@@NAME@@"))
                     (list 'define sym (list 'quote out))))
         [:success (inspect out)])
       (catch [e js/Error]
@@ -162,4 +162,4 @@
   (define display pbnj.wonderscript.repl/display)
   (render [:pbnj.wonderscript.repl/layout [:pbnj.wonderscript.repl/repl]]))
 
-(main)
+;(main)

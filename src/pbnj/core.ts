@@ -3,9 +3,12 @@ namespace pbnj.core {
   var _ = pbnj.core;
 
   var mori;
-  if (module != void 0 && module.exports) {
+  if (typeof exports !== 'undefined') {
     module.exports = pbnj.core;
-    mori = require('./mori.js');
+    mori = require('mori');
+  }
+  else {
+    mori = window.mori;
   }
 
   // merge mori's API
@@ -324,13 +327,88 @@ namespace pbnj.core {
    * @param {Function} fn
    * @returns {{}}
    */
-  _.mapObject = function(obj, fn) {
+  _.mapObject = _['map-object'] = function(obj, fn) {
+    if (obj == null) return {};
     var keys = _.keys(obj);
     var results = {};
     for (var i = 0; i < keys.length; ++i) {
       results[keys[i]] = fn(obj[keys[i]], keys[i], obj);
     }
     return results;
+  };
+
+  _['object-keys'] = function(obj) {
+    if (obj == null) {
+      return _.list();
+    }
+    else {
+      return _.list.apply(null, Object.keys(obj));
+    }
+  };
+
+  _['object-values'] = function(obj) {
+    if (obj == null) {
+      return _.list();
+    }
+    else {
+      return _.list.apply(null, Object.values(obj));
+    }
+  };
+
+  _.objectToMap = _['object->map'] = function(obj) {
+    if (obj == null) {
+      return _.hashMap();
+    }
+    var keys = Object.keys(obj);
+    var buffer = [];
+    for (var i = 0; i < keys.length; i++) {
+      buffer.push(_.keyword(keys[i]));
+      buffer.push(obj[keys[i]]);
+    }
+    return _.hashMap.apply(null, buffer);
+  };
+
+  _.objectToVector = _['object->vector'] = function(obj) {
+    if (obj == null) {
+      return _.vector();
+    }
+    var keys = Object.keys(obj);
+    var buffer = [];
+    for (var i = 0; i < keys.length; i++) {
+      buffer.push(_.vector(_.keyword(keys[i]), obj[keys[i]]));
+    }
+    return _.vector.apply(null, buffer);
+  };
+
+  _.objectToList = _['object->list'] = function(obj, filter) {
+    if (obj == null) {
+      return _.list();
+    }
+    var keys = Object.keys(obj);
+    var buffer = [];
+    for (var i = 0; i < keys.length; i++) {
+      var k = _.keyword(keys[i]);
+      if (filter && _.isFalse(filter.call(null, k))) {
+        continue;
+      }
+      var pair = _.vector(k, obj[keys[i]]);
+      buffer.push(pair);
+    }
+    return _.list.apply(null, buffer);
+  };
+
+  _.arrayToList = _['array->list'] = function(a) {
+    if (a == null) {
+      return _.list();
+    }
+    return _.list.apply(null, a);
+  };
+
+  _.arrayToVector = _['array->vector'] = function(a) {
+    if (a == null) {
+      return _.vector();
+    }
+    return _.vector.apply(null, a);
   };
 
   /**
@@ -482,6 +560,10 @@ namespace pbnj.core {
    * @returns {boolean}
    */
   _.exists = function(val) { return val != null };
+
+  _.isFalse = _['false?'] = function(val) {
+    return val === false || _.isNull(val) || _.isUndefined(val);
+  };
 
   _.cons = function(v, col) {
     return mori.cons(v, col);
