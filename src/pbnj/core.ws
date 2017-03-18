@@ -174,16 +174,16 @@
   (. obj (varyMeta f args)))
 
 (define current-module
-  (lambda [] pbnj/MODULE_SCOPE))
+  (lambda [] pbnj.wonderscript/MODULE_SCOPE))
 
 (define current-module-name
-  (lambda [] (.- pbnj/MODULE_SCOPE (symbol "@@NAME@@"))))
+  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@NAME@@"))))
 
 (define-macro define-once [nm value]
   (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))
 
 (define-macro defined-in-module?
-  ([nm] (list '.- 'pbnj/MODULE_SCOPE nm))
+  ([nm] (list '.- 'pbnj.wonderscript/MODULE_SCOPE nm))
   ([mod nm]
    (list '.- mod nm)))
 
@@ -364,7 +364,7 @@
 (define-function prove [tname]
   (let [ns (namespace tname)
         nm (name tname)
-        mod (if ns (eval (symbol ns)) pbnj/MODULE_SCOPE)
+        mod (if ns (eval (symbol ns)) pbnj.wonderscript/MODULE_SCOPE)
         tmap (tests mod)]
     (let [t (get tmap (keyword nm))]
       (unless t

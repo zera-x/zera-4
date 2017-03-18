@@ -289,6 +289,8 @@
   (let [code (compile exp)]
   (js/eval code)))
 
+(define-function compile-stream [stream])
+
 (define-function compile-string [input source]
   (compile-stream (pbnj.reader/readString input source)))
 
@@ -364,4 +366,4 @@
 
 (test application)
 
-(pbnj.jess/readFile "src/pbnj/core.jess")
+;(pbnj.jess/readFile "src/pbnj/core.jess")

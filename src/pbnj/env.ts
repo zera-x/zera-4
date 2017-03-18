@@ -3,9 +3,16 @@
 goog.require('pbnj.core');*/
 
 namespace pbnj.core {
-  var _ = pbnj.core;
+  var _;
+  if (module != void 0 && module.exports) {
+    _ = require('./pbnj.core.js');
+  }
+  else {
+    _ = pbnj.core;
+  }
 
-  function Variable(value, meta) {
+  function Variable(name, value, meta) {
+    this.$name = name;
     this.$value = value;
     this.$meta = meta;
   }
@@ -25,6 +32,10 @@ namespace pbnj.core {
     return this.$value;
   };
 
+  Var.getName = function() {
+    return this.$value;
+  };
+
   Var.withMeta = function(meta) {
     this.$meta = meta;
     return this;
@@ -36,7 +47,7 @@ namespace pbnj.core {
   };
 
   Var.toString = function() {
-    return _.str('#<Variable meta: ', this.$meta, ' value: ', this.$value, '>');
+    return _.str('#<Variable name: ', this.$name, ' meta: ', this.$meta, ' value: ', this.$value, '>');
   };
 
   var id = 0;
@@ -178,7 +189,7 @@ namespace pbnj.core {
     if (scope = this.lookup('*source*')) {
       m = _.assoc(m, _.keyword('source'), scope.get('*source*'));
     }
-    this.vars[sname] = new WSObject(value, _.merge(m, meta));
+    this.vars[sname] = new Variable(_.symbol(sname), value, _.merge(m, meta));
     return value;
   };
 
@@ -208,21 +219,21 @@ namespace pbnj.core {
     return trace;
   };
 
-  /**
-   * @export
-   * @nocollapse
-   */
-  pbnj.core.Env = Env;
-
   pbnj.env = function(parent) {
-    return new pbnj.core.Env(parent);
+    return new Env(parent);
+  };
+
+  pbnj.variable = function(name, value, meta) {
+    return new Variable(name, value, meta);
   };
 
   pbnj.core.isEnv = function(val) {
-    return val instanceof pbnj.core.Env;
+    return val instanceof Env;
   };
 
   if (module != void 0 && module.exports) {
     module.exports.env = pbnj.env;
+    module.exports.isEnv = pbnj.core.isEnv;
+    module.exports.variable = pbnj.variable;
   }
 }

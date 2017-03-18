@@ -1,23 +1,59 @@
-require("../vendor/closure-library/closure/goog/bootstrap/nodejs.js");
-require("../vendor/closure-library/closure/goog/pbnj_deps.js");
+#!/usr/bin/env node
 
-const fs   = require('fs');
-const mori = require("../dist/mori.js");
-
-goog.require('pbnj.core');
-goog.require('pbnj.wonderscript');
-
-const str        = pbnj.core.str;
-const inspect    = pbnj.wonderscript.inspect;
-const readString = pbnj.wonderscript.readString;
+const fs = require('fs');
+const readline = require('readline');
+const _  = require('../dist/pbnj.core.js');
+const ws = require('../dist/pbnj.wonderscript.js');
 
 function currentModuleName() {
-  return pbnj.MODULE_SCOPE["@@NAME@@"];
+  return ws.MODULE_SCOPE["@@NAME@@"];
 }
 
-var input;
-while (input !== 'exit') {
-  console.log(str(currentModuleName(), '> '));
-  input = fs.readFileSync('/dev/stdin').toString();
-  console.log(inspect(readString(input)));
+function loadCoreLib() {
+  ws.readFile(__dirname + "/../src/pbnj/core.ws");
+}
+  
+if (process.argv.length === 3) {
+  try {
+    loadCoreLib();
+    ws.readFile(process.argv[2]);
+    process.exitCode = 0;
+  }
+  catch (e) {
+    console.error(e);
+    process.exitCode = 1;
+  }
+}
+else {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    terminal: true
+  });
+  
+  loadCoreLib();
+  ws.readString('(module pbnj.user)');
+  rl.setPrompt(_.str(currentModuleName(), "> "));
+  rl.prompt();
+  
+  var stack = _.list();
+  rl.on('line', function(line) {
+    try {
+      var input = line.trim();
+      if (input === 'exit') {
+        process.exit(0);
+      }
+      else {
+        var res = ws.readString(input);
+        console.log(ws.inspect(res));
+        rl.setPrompt(_.str(currentModuleName(), "> "));
+        stack = _.conj(stack, res);
+      }
+    }
+    catch (e) {
+      console.error(e);
+    }
+    rl.prompt();
+  });
+  process.exitCode = 0;
 }

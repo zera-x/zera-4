@@ -1,16 +1,27 @@
-goog.provide('pbnj.wonderscript');
+namespace pbnj.wonderscript {
+  var ws = wonderscript;
 
-goog.require('pbnj.core');
-goog.require('pbnj.env');
-goog.require('pbnj.reader');
-
-goog.scope(function() {
-  var ws = pbnj.wonderscript;
-  var _ = pbnj.core;
-
+  var _, ROOT_OBJECT;
   if (module != void 0 && module.exports) {
-    module.exports.wonderscript = pbnj.wonderscript;
+    mori = require('./mori.js');
+    _    = require('./pbnj.core.js');
+    var pbnjEnv = require('./pbnj.env.js');
+    var pbnj = pbnj || {};
+    pbnj.env = pbnjEnv.env;
+    pbnj.core = _;
+    pbnj.core.isEnv = pbnjEnv.isEnv;
+    pbnj.reader = require('./pbnj.reader.js');
+    ROOT_OBJECT = global;
   }
+  else {
+    _ = pbnj.core;
+    ROOT_OBJECT = window;
+  }
+  ROOT_OBJECT.pbnj = {};
+  ROOT_OBJECT.pbnj.wonderscript = ws;
+  ROOT_OBJECT.pbnj.core = _;
+  ROOT_OBJECT.pbnj.reader = pbnj.reader;
+  ROOT_OBJECT.pbnj.env = pbnj.env;
 
   var isSelfEvaluating = ws.isSelfEvaluating = function(exp) {
     return _.isNull(exp) ||
@@ -29,7 +40,7 @@ goog.scope(function() {
     if (sexp.startsWith('::')) {
       var modname = env.lookup('*module-name*')
                         ? env.lookup('*module-name*').get('*module-name*')
-                        : pbnj.MODULE_SCOPE["@@NAME@@"];
+                        : ws.MODULE_SCOPE["@@NAME@@"];
       return _.keyword(_.str(modname), sexp.replace(/^::/, ''));
     }
     return exp;
@@ -84,24 +95,29 @@ goog.scope(function() {
         // find local scope
         scope = env.lookup(name);
         if (scope === null) {
-          if (pbnj.MODULE_SCOPE[name] == null) {
+          if (ws.MODULE_SCOPE[name] == null) {
             if (pbnj.core[name] == null) {
               return null;
             }
             return pbnj.core;
           }
-          return pbnj.MODULE_SCOPE;
+          return ws.MODULE_SCOPE;
         }
         else {
           return scope;
         }
       }
       else {
-        var mod = findModule(_.symbol(ns));
-        if (mod == null) {
-          return lookupVariable(_.symbol(ns));
+        if (ns === 'js') {
+          return ROOT_OBJECT;
         }
-        return mod;
+        else {
+          var mod = findModule(_.symbol(ns));
+          if (mod == null) {
+            return lookupVariable(_.symbol(ns));
+          }
+          return mod;
+        }
       }
     }
     throw new Error("variable should be a symbol");
@@ -122,9 +138,11 @@ goog.scope(function() {
 
   var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('define'));
 
-  var defineVariable = function(env, name, value, meta) {
-    var meta = meta || hashMap();
+  var defineVariable = function(env, ident, value, meta) {
+    var meta = meta || _.hashMap();
     var isPrivate = _.get(meta, _.keyword('private'), false);
+    var name = _.name(ident);
+    var ns   = _.namespace(ident);
     if (isPrivate) {
       env.define(name, value, _.assoc(meta, _.keyword('private'), true));
     }
@@ -171,7 +189,7 @@ goog.scope(function() {
     env.define(name); // do definition can refer to itself
 
     var value = preVal == null ? null : ws.eval(preVal, env);
-    defineVariable(env, name, value, meta);
+    defineVariable(env, ident, value, meta);
 
     if (_.isFunction(value)) {
       value.$lang$ws$ident = _.str(ident);
@@ -399,7 +417,7 @@ goog.scope(function() {
     var body = _.rest(_.rest(rest));
     var lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
     var ns = _.namespace(name);
-    var mod = ns ? getModule(_.symbol(ns)) : pbnj.MODULE_SCOPE;
+    var mod = ns ? getModule(_.symbol(ns)) : ws.MODULE_SCOPE;
     mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
     var fn = evalLambda(lambda, env);
     fn.$lang$ws$ident = name; // give it an ident for stacktrace
@@ -411,7 +429,8 @@ goog.scope(function() {
     var name = _.first(exp);
     if (_.isList(exp) && _.isSymbol(name)) {
       var ns = _.namespace(name);
-      var mod = (ns == null ? pbnj.MODULE_SCOPE : findModule(_.symbol(ns)))
+      if (ns === 'js') return exp;
+      var mod = (ns == null ? ws.MODULE_SCOPE : findModule(_.symbol(ns)))
       if (mod == null) {
         var scope = lookupVariable(_.symbol(ns))
         if (scope === null) return exp;
@@ -472,7 +491,7 @@ goog.scope(function() {
 
   var evalPropertyAccessor = function(exp, env) {
     var obj = ws.eval(_.second(exp), env);
-    if (obj == null) throw new Error("nil is not an object");
+    if (obj == null) throw new Error(_.str("nil is not an object from: ", ws.inspect(_.second(exp))));
     var prop = _.second(_.rest(exp));
     if (_.isSymbol(prop)) {
       return obj[_.str(prop)];
@@ -529,7 +548,7 @@ goog.scope(function() {
       mod["@@NAME@@"] = name;
       mod.$lang$ws$type = 'module';
       pbnj.MODULE_SCOPE = mod;
-      globalEnv.define(name, mod);
+      globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
     }
     else {
       throw new Error(_.str('There was an error defining module "', name, '"'));
@@ -545,11 +564,31 @@ goog.scope(function() {
     return defineModule(name);
   };
 
+  var isModuleDefinition = ws.isModuleDefinition = makeTagPredicate(_.symbol('module'));
+
+  var evalModuleDefinition = function(exp, env) {
+    var name = _.second(exp); 
+    var mod = defineModule(name);
+    if (mod) {
+      var scope = env.extend().setIdent(_.str(name));
+      scope.define('*module-name*', name);
+      mod["@@SCOPE@@"] = scope;
+      mod["@@NAME@@"] = name;
+      mod.$lang$ws$type = 'module';
+      ws.MODULE_SCOPE = mod;
+      globalEnv.define(name, mod);
+    }
+    else {
+      throw new Error(_.str('There was an error defining module "', name, '"'));
+    }
+    return mod;
+  };
+
   var isModuleRequire = ws.isModuleRequire = makeTagPredicate(_.symbol('require'));
 
   var evalModuleRequire = function(exp, env) {
     var name = _.second(exp);
-    var mod = pbnj.MODULE_SCOPE;
+    var mod = ws.MODULE_SCOPE;
     if (_.isString(name)) {
       ws.readFile(name, env.extend().setIdent('require'));
     }
@@ -564,7 +603,7 @@ goog.scope(function() {
     else {
       throw new Error("module name should be a symbol or string");
     }
-    pbnj.MODULE_SCOPE = mod;
+    ws.MODULE_SCOPE = mod;
     return true;
   };
 
@@ -573,7 +612,7 @@ goog.scope(function() {
   var evalModuleSet = function(exp, env) {
     var name = _.second(exp);
     if (_.isSymbol(name)) {
-      pbnj.MODULE_SCOPE = getModule(name);
+      ws.MODULE_SCOPE = getModule(name);
       env.define('*module-name*', name);
     }
     else {
@@ -619,7 +658,7 @@ goog.scope(function() {
   var evalMethodApplication = function(exp, env) {
     var args = _.rest(exp);
     var obj = ws.eval(_.first(args), env);
-    if (obj == null) throw new Error('nil is not an object');
+    if (obj == null) throw new Error(_.str('nil is not an object from: ', ws.inspect(exp)));
     var method = _.second(args);
     if (_.isList(method)) {
       var mname = _.first(method);
@@ -704,7 +743,7 @@ goog.scope(function() {
     return value;
   };
 
-  pbnj.MODULE_SCOPE = pbnj.core; // default scope
+  ws.MODULE_SCOPE = pbnj.core; // default scope
   pbnj.core["@@NAME@@"] = _.symbol('pbnj.core');
   pbnj.core["@@MACROS@@"] = {};
 
@@ -958,14 +997,35 @@ goog.scope(function() {
   };
   globalEnv.define('compile-file', ws.compileFile);
 
+  globalEnv.define('*environment*', _.keyword('development'));
+  // TODO: detect browser?
+  globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'browser');
+
   if (module != void 0 && module.exports) {
-    //ws.readFile(_.str(__dirname, "/../src/pbnj/core.ws"));
+    module.exports = ws;
+    var mod = defineModule(_.symbol('js.node'));
+    [
+      'Buffer',
+      '__dirname',
+      '__filename',
+      'clearImmediate',
+      'clearInterval',
+      'clearTimeout',
+      'console',
+      'exports',
+      'global',
+      'module',
+      'process',
+      'require',
+      'setImmediate',
+      'setInterval',
+      'setTimeout'
+    ].forEach(function(name) {
+      defineVariable(globalEnv, _.symbol('js.node', name), eval(name));
+    });
   }
   else {
     ws.readFile("src/pbnj/core.ws");
   }
 
-  globalEnv.define('*environment*', _.keyword('development'));
-  // TODO: detect browser?
-  globalEnv.define('*platform*', module !== void 0 && module.exports ? 'nodejs' : 'browser');
-});
+} // namespace pbnj.wonderscript

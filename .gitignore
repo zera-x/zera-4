@@ -3,3 +3,6 @@ dist/pbnj.js.map
 *.sw*
 .DS_Store
 vendor/
+.nrepl-history
+node_modules/
+dist/pbnj.*.js
