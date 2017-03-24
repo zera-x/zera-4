@@ -399,7 +399,7 @@ namespace pbnj.reader {
           return exp;
         }
         else if (exp.startsWith(':')) {
-          return _.keyword(exp);
+          return _.keyword(exp.slice(1));
         } 
         else {
           return _.symbol(exp);

@@ -15,7 +15,6 @@ function loadCoreLib() {
   
 if (process.argv.length === 3) {
   try {
-    loadCoreLib();
     ws.readString('(module pbnj.user)');
     ws.readFile([process.cwd(), process.argv[2]].join('/'));
     process.exitCode = 0;
@@ -32,7 +31,6 @@ else {
     terminal: true
   });
   
-  loadCoreLib();
   ws.readString('(module pbnj.user)');
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();

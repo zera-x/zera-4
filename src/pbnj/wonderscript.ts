@@ -983,6 +983,13 @@ namespace pbnj.wonderscript {
   };
   globalEnv.define('read-string', ws.readString);
 
+  ws.evalJS = function(exp) {
+    //console.log(str);
+    var data = pbnj.reader.readJS(exp);
+    return ws.eval(data);
+  };
+  globalEnv.define('eval-js', ws.evalJS);
+
   ws.compileString = function(str, input) {
     var stream = pbnj.reader.readString(str, input);
     return ws.compileStream(stream);
@@ -1033,8 +1040,6 @@ namespace pbnj.wonderscript {
       defineVariable(globalEnv, _.symbol('js.node', name), eval(name));
     });
   }
-  else {
-    ws.readFile("src/pbnj/core.ws");
-  }
+  ws.readFile("src/pbnj/core.ws");
 
 } // namespace pbnj.wonderscript

@@ -22,7 +22,8 @@
    [:li
     [:a {:href "http://wol.jw.org" :target "__wol"} "Watchtower Online Library"]]])
 
-;(-
+; TODO: add blocks and WonderScript expression escapes
+;(|
 ;  (define quotes [["This is a quote" "Me"]]))
 ;
 ;(= (nth quotes 0))
