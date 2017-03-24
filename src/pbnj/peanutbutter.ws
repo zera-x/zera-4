@@ -84,10 +84,12 @@
 
 (define-function eval-definition
   ([nm value]
-   (define-component nm (always value)))
+   (define-component nm (always value))
+   nil)
   ([nm args &body]
    (unless (vector? args) (throw "argument list should be a vector"))
-   (define-component nm (eval (cons 'lambda (cons args body))))))
+   (define-component nm (eval (cons 'lambda (cons args body))))
+   nil))
 
 (define-function have-component? [nm]
   (has-key? *components* (component-index nm)))
@@ -122,6 +124,8 @@
           (do
             (println exp)
             (throw "invalid expression"))))
+
+(define compile html)
 
 (define-function render-to [elem expr])
 

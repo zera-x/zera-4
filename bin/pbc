@@ -1,2 +1,20 @@
 #!/usr/bin/env node
 // vim: set ft=javascript
+
+const pb = require("../src/pbnj/peanutbutter.js");
+
+if (process.argv.length === 3) {
+  try {
+    var out = pb.compileFile([process.cwd(), process.argv[2]].join('/'));
+    console.log(out);
+    process.exitCode = 0;
+  }
+  catch (e) {
+    console.error(e);
+    process.exitCode = 1;
+  }
+}
+else {
+  console.error("Usage: " + process.argv[1] + " FILE");
+  process.exitCode = 1;
+}
