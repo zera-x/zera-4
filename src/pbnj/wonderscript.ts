@@ -33,6 +33,8 @@ namespace pbnj.wonderscript {
            _.isRegExp(exp);
   };
 
+  var makeTagPredicate = _.makeTagPredicate;
+
   var evalSelfEvaluating = _.identity;
 
   var evalKeyword = function(exp, env) {
@@ -72,12 +74,6 @@ namespace pbnj.wonderscript {
     else {
       throw new Error(str('invalid form: ', exp));
     }
-  };
-
-  var makeTagPredicate = function(tag) {
-    return function(exp) {
-      return _.isList(exp) && _.isSymbol(_.first(exp)) && _.equals(_.first(exp), tag);
-    };
   };
 
   var isQuoted = ws.isQuoted = makeTagPredicate(_.symbol('quote'));
@@ -348,6 +344,50 @@ namespace pbnj.wonderscript {
       value = ws.eval(exp, scope);
     });
     return value;
+  };
+
+  var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
+  var isRecursionPoint = ws.isRecursionPoint = makeTagPredicate(_.symbol('again'));
+
+  var evalLoop = function(exp, env) {
+    evalLoop.values = [];
+    var bindings = _.second(exp);
+    var body = _.rest(_.rest(exp));
+    if (!_.isVector(bindings)) throw new Error('bindings should be a vector');
+    var scope = env.extend().setIdent('loop');
+    var names = [];
+    for (var i = 0; i < _.count(bindings); i += 2) {
+      var nm  = _.nth(bindings, i);
+      scope.define(nm);
+      var val = ws.eval(_.nth(bindings, i + 1), scope);
+      names.push(nm);
+      evalLoop.values.push(val);
+    }
+    var notonce = true;
+    var recur = false;
+    while (notonce || recur) {
+      var exprs = body;
+      if (recur) recur = false;
+      for (var i = 0; i < names.length; i++) {
+        scope.define(names[i], evalLoop.values[i]);
+      }
+      var value = null, exp = null;
+      while (exp = _.first(exprs)) {
+        value = ws.eval(exp, scope);
+        if (_.equals(value, _.keyword('again'))) {
+          recur = true;
+        }
+        exprs = _.rest(exprs);
+      }
+      notonce = false;
+    }
+    return value;
+  };
+
+  var evalRecursionPoint = function(exp, env) {
+    var args = _.rest(exp);
+    evalLoop.values = _.intoArray(_.map(args, function(x) { return ws.eval(x, env); }));
+    return _.keyword('again');
   };
 
   var isInvocable = function(exp) {
@@ -803,47 +843,6 @@ namespace pbnj.wonderscript {
   }
   globalEnv.define('pprint', ws.pprint);
 
-  ws.eval_ = function(exp, env) {
-    var env = env || globalEnv;
-    var exp = macroexpand(exp);
-    
-    var value = null;
-    if (isSelfEvaluating(exp)) {
-      value = evalSelfEvaluating(exp);
-    }
-    else if (_.isKeyword(exp)) {
-      value = evalKeyword(exp, env);
-    }
-    else if (isCollectionLiteral(exp)) {
-      value = evalCollectionLiteral(exp, env);
-    }
-    else if (isVariable(exp)) {
-      value = evalVariable(exp, env);
-    }
-    else if (isQuoted(exp)) {
-      value = evalQuote(exp);
-    }
-    else if (isDefinition(exp)) {
-      value = evalDefinition(exp, env);
-    }
-    else if (isCond(exp)) {
-      value = evalCond(exp, env);
-    }
-    else if (isLambda(exp)) {
-      value = evalLambda(exp, env);
-    }
-    else if (isBlock(exp)) {
-      value = evalBlock(exp, env);
-    }
-    else if (isApplication(exp)) {
-      value = evalApplication(exp, env);
-    }
-    else {
-      throw new Error(_.str("invalid expression: '", exp, "'"));
-    }
-    return value;
-  };
-
   ws.eval = function(exp, env) {
     var env = env || globalEnv;
     var exp = macroexpand(exp);
@@ -877,6 +876,12 @@ namespace pbnj.wonderscript {
     }
     else if (isTryBlock(exp)) {
       return evalTryBlock(exp, env);
+    }
+    else if (isLoop(exp)) {
+      return evalLoop(exp, env);
+    }
+    else if (isRecursionPoint(exp)) {
+      return evalRecursionPoint(exp, env);
     }
     else if (isAssignment(exp)) {
       return evalAssignment(exp, env);

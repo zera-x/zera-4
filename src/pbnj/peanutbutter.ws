@@ -132,6 +132,21 @@
 (define-function render [expr]
   (. js/document (write (html expr))))
 
+(define-function compile-stream
+  [stream]
+  (let [buffer (array)]
+    (until (. stream eof)
+      (. buffer (push (compile (. stream next)))))
+    (. buffer (join \newline))))
+
+(define-function compile-string
+  [input source]
+  (compile-stream (pbnj.reader/readString input source)))
+
+(define-function compile-file
+  [file]
+  (compile-stream (pbnj.reader/readFile file)))
+
 (define-component :javascript
   (lambda
     [code]

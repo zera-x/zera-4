@@ -78,8 +78,15 @@
   ([pred conse] (list 'cond pred conse))
   ([pred conse alt] (list 'cond pred conse :else alt))) 
 
+(define-macro if*
+  ([pred conse] `(cond ~pred ~conse))
+  ([pred conse alt] `(cond ~pred ~conse :else ~alt))) 
+
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
+
+(define-macro when* [pred &acts]
+  `(cond pred (do ~@acts)))
 
 (define-macro define-
   ([nm] (list 'define :private nm))
@@ -109,8 +116,7 @@
 
 (define-macro define-function
   [name &forms]
-  (list 'define name
-        (cons 'lambda forms)))
+  (list 'define name (cons 'lambda forms)))
 
 (define-macro define-function-
   [name &forms]
@@ -167,6 +173,7 @@
 
 (define-function meta
   [obj]
+  (println obj)
   (. obj getMeta))
 
 (define-function with-meta
@@ -388,44 +395,56 @@
 (define-function prove-module [module]
   (into [] (map (map (collect-tests module) :test/name) prove)))
 
+(define *sym-count* 0)
+(define-function gen-sym 
+  ([] (gen-sym "sym"))
+  ([prefix]
+   (let [sym (symbol (str prefix "-" *sym-count*))]
+     (set! *sym-count* (+ 1 *sym-count*))
+     sym)))
+
+(test gen-sym
+  (is (symbol? (gen-sym)))
+  (is (symbol? (gen-sym "prefix")))
+  (is-not (= (gen-sym) (gen-sym)))
+  (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
+
 (define-macro do-times
   [bindings &body]
   (if-not (and (vector? bindings) (= (count bindings) 2))
     (throw "bindings should be a vector with two elements"))
-  (let [block-nm (gen-sym "do-times")
-        act-nm (gen-sym "do-times-act")
-        var (bindings 0)
+  (let [var (bindings 0)
         init (bindings 1)]
-    (list 'do
-          (list 'define :private act-nm (cons 'lambda (cons [var] body)))
-          (list 'define :private block-nm
-                (list 'lambda [var]
-                      (list 'if (list '< var init)
-                            (list 'do
-                                  (list act-nm var)
-                                  (list block-nm (list '+ 1 var))))))
-          (list block-nm 0)
+    (list 'loop [var 0]
+          (cons 'when
+                (cons (list '< var init)
+                      (concat body [(list 'again (list '+ var 1))])))
           init)))
 
 (define-macro do-each
   [bindings &body]
   (if-not (and (vector? bindings) (= (count bindings) 2))
     (throw "bindings should be a vector with two elements"))
-  (let [block-nm (gen-sym "do-each")
-        act-nm (gen-sym "do-each-act")
-        col-nm (gen-sym "col")
-        var (bindings 0)
-        col (bindings 1)]
-    (list 'do
-          (list 'if-not (list 'collection? col) (list 'throw "bound value isn't a collection"))
-          (list 'define :private act-nm (cons 'lambda (cons [var] body)))
-          (list 'define :private block-nm
-                (list 'lambda [col-nm]
-                      (list 'unless (list 'empty? col-nm)
-                            (list act-nm (list 'first col-nm))
-                            (list block-nm (list 'rest col-nm)))))
-          (list block-nm col)
-          col)))
+  (let [var (bindings 0)
+        col (bindings 1)
+        col-nm (gen-sym "$col$")]
+    (list 'loop [var (list 'first col) col-nm (list 'rest col)]
+          (cons 'when
+                (cons var
+                      (concat body [(list 'again (list 'first col-nm) (list 'rest col-nm))])))
+          (list 'quote col))))
+
+(define-macro while
+  [pred &body]
+  (let [val-nm (gen-sym "$value$")]
+    (list 'loop []
+         (cons 'when (cons pred (concat body [(list 'again)])))))) 
+
+(define-macro until
+  [pred &body]
+  (let [val-nm (gen-sym "$value$")]
+    (list 'loop []
+         (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))) 
 
 (define-function fraction [n]
   (- n (. js/Math floor n)))
@@ -537,20 +556,6 @@
 
 (require "jess.ws")
 (require "wonderscript/compiler.ws")
-
-(define *sym-count* 0)
-(define-function gen-sym 
-  ([] (gen-sym "sym"))
-  ([prefix]
-   (let [sym (symbol (str prefix "-" *sym-count*))]
-     (set! *sym-count* (+ 1 *sym-count*))
-     sym)))
-
-(test gen-sym
-  (is (symbol? (gen-sym)))
-  (is (symbol? (gen-sym "prefix")))
-  (is-not (= (gen-sym) (gen-sym)))
-  (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
 
 (define-macro define-type
   ([nm fields]

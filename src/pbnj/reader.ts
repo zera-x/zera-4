@@ -1,7 +1,3 @@
-/*goog.provide('pbnj.reader');
-
-goog.require('pbnj.core');*/
-
 namespace pbnj.reader {
 
   var _, pair;
@@ -88,9 +84,13 @@ namespace pbnj.reader {
     //'}': 'set',
   };
 
+  var isUnquoted = _.makeTagPredicate(_.symbol('unquote'));
+  var isUnquoteSpliced = _.makeTagPredicate(_.symbol('unquote-splicing'));
+
   var TYPE_DISPATCH = {
     mori: {
       string: function (rep) { return rep },
+      char: function (rep) { return rep },
       symbol: function (rep) { return mori.symbol.apply(mori, rep === '/' ? [rep] : rep.split('/')) },
       boolean: function (rep) { return rep === 'true' ? true : false; },
       nil: function (rep) { return null },
@@ -100,10 +100,15 @@ namespace pbnj.reader {
       set: function (rep) { return mori.set(rep) },
       map: function (rep) { return mori.hashMap.apply(mori, rep) },
       keyword: function (rep) { return mori.keyword.apply(mori, rep === '/' ? [rep] : rep.split('/')) },
-      quote: function (form) { return mori.list(mori.symbol('quote'), form) }
+      quote: function (form) { return mori.list(mori.symbol('quote'), form) },
+      syntaxquote: function (form) { return mori.list(mori.symbol('syntax-quote'), form) },
+      unquote: function (form) { return mori.list(mori.symbol('unquote'), form) },
+      unquotesplicing: function (form) { return mori.list(mori.symbol('unquote-splicing'), form) },
+      deref: function (form) { return mori.list(mori.symbol('deref'), form) }
     },
     js: {
       string: function (rep) { return rep },
+      char: function (rep) { return rep },
       symbol: function (rep) { return Symbol(rep) },
       boolean: function (rep) { return rep === 'true' ? true : false; },
       nil: function (rep) { return null },
@@ -113,7 +118,11 @@ namespace pbnj.reader {
       set: buildSet,
       map: buildMap,
       keyword: function (rep) { return rep },
-      quote: function (form) { return ['quote', form] }
+      quote: function (form) { return ['quote', form] },
+      syntaxquote: function (form) { return ['syntax-quote', form] },
+      unquote: function (form) { return ['unquote', form] },
+      unquotesplicing: function (form) { return ['unquote-splicing', form] },
+      deref: function (form) { return ['deref', form] }
     }
   };
 
@@ -171,12 +180,12 @@ namespace pbnj.reader {
       return /[a-zA-Z0-9_\.\/\-\!\?\*\$\=\<\>\&\+\~\|\%]/.test(ch);
     }
 
-    function isKeywordStart(ch) {
-      return ch === ':';
+    function isChar(ch) {
+      return typeof ch === 'string';
     }
 
-    function isQuoteStart(ch) {
-      return ch === "'";
+    function isKeywordStart(ch) {
+      return ch === ':';
     }
 
     function isCollStart(ch) {
@@ -269,6 +278,43 @@ namespace pbnj.reader {
       return dispatch.keyword(_.str(head, kw));
     }
 
+    function readChar() {
+      input.next();
+      var head = '';
+      if (input.peek() === '\\') {
+        head = input.peek();
+        input.next();
+      }
+      var ch = readWhile(isChar);
+      if (ch.length !== 1) {
+        if (ch === 'newline') {
+          ch = "\n";
+        }
+        else if (ch === 'space') {
+          ch = " ";
+        }
+        else if (ch === 'tab') {
+          ch = "\t";
+        }
+        else if (ch === 'return') {
+          ch = "\r";
+        }
+        else if (ch === 'formfeed') {
+          ch = "\f";
+        }
+        else if (ch === 'backspace') {
+          ch = "\b";
+        }
+        else if (ch.startsWith('u')) {
+          ch = _.str('\\', ch);
+        }
+        else {
+          throw new Error('invalid character');
+        }
+      }
+      return dispatch.char(_.str(head, ch));
+    }
+
     function readCollection(tag, end) {
       var buffer = [];
       if (tag === 'set') input.next();
@@ -289,6 +335,55 @@ namespace pbnj.reader {
       return dispatch.quote(readNext());
     }
 
+    function expandList(col, env) {
+      return col;
+    }
+
+    function readUnquoted() {
+      input.next();
+      if (input.peek() === '@') {
+        input.next();
+        return _.list(_.symbol('unquote-splicing'), readNext());
+      }
+      return _.list(_.symbol('unquote'), readNext());
+    }
+
+    function readSyntaxQuote(exp, env) {
+      var form = _.second(exp);
+      if (_.isList(form)) {
+        return _.reverse(
+          _.into(
+            _.list(),
+            _.map(expandList(form), function(x) {
+              if (isUnquoteSpliced(x)) {
+                throw new Error('splice not in list');
+              }
+              else if (isUnquoted(x)) {
+                return _.second(x);
+              }
+              else if (_.isList(x)) {
+                return readSyntaxQuote(x, env);
+              }
+              else {
+                return x;
+              }
+        })));
+      }
+      else {
+        return form;
+      }
+    }
+
+    function readSyntaxQuotedForm() {
+      input.next();
+      return readSyntaxQuote(readNext());
+    }
+
+    function readDerefForm() {
+      input.next();
+      return dispatch.deref(readNext());
+    }
+
     function readNext() {
       readWhile(isWhitespace);
       if (input.eof()) return null;
@@ -304,6 +399,9 @@ namespace pbnj.reader {
       else if (isDigit(ch) || (ch === '-' || ch === '+') && isDigit(input.peekAhead())) {
         return readNumber(ch === '-' || ch === '+');
       }
+      else if (ch === '~') {
+        return readUnquoted();
+      }
       else if (isSymbol(ch)) {
         return readSymbol();
       }
@@ -312,6 +410,15 @@ namespace pbnj.reader {
       }
       else if (ch === "'") {
         return readQuotedForm();
+      }
+      else if (ch === "`") {
+        return readSyntaxQuotedForm();
+      }
+      else if (ch === "@") {
+        return readDerefForm();
+      }
+      else if (ch === '\\') {
+        return readChar();
       }
       else if (isCollStart(ch)) {
         return readCollection(COLLECTION_START[ch], COLLECTION_END[ch]);
@@ -385,7 +492,6 @@ namespace pbnj.reader {
       return readString(res, file);
     };
   }
-
 
   var readJS = function(exp) {
     if (exp === null || exp === void 0) return null;

@@ -64,6 +64,12 @@ namespace pbnj.core {
 
   _['->string'] = function(obj) { return obj.toString() };
 
+  _.makeTagPredicate = function(tag) {
+    return function(exp) {
+      return _.isList(exp) && _.isSymbol(_.first(exp)) && _.equals(_.first(exp), tag);
+    };
+  };
+
   // Arithmetic
   
   _.add = function(a, b) {
