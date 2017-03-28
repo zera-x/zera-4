@@ -436,15 +436,13 @@
 
 (define-macro while
   [pred &body]
-  (let [val-nm (gen-sym "$value$")]
-    (list 'loop []
-         (cons 'when (cons pred (concat body [(list 'again)])))))) 
+  (list 'loop []
+         (cons 'when (cons pred (concat body [(list 'again)])))))
 
 (define-macro until
   [pred &body]
-  (let [val-nm (gen-sym "$value$")]
-    (list 'loop []
-         (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))) 
+  (list 'loop []
+        (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))
 
 (define-function fraction [n]
   (- n (. js/Math floor n)))
