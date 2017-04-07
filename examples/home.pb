@@ -23,4 +23,4 @@
    [:li
     [:a {:href "http://wol.jw.org" :target "__wol"} "Watchtower Online Library"]]])
 
-(layout [:php (print "Hello")])
+(layout [:php= $_GET])

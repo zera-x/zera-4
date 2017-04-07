@@ -43,7 +43,7 @@
     (str "isset(" value ")")))
 
 (define-function emit-escape [exp]
-  (str "<?php " (apply compile (rest exp)) " ?>"))
+  (str "<?php " (str (join (map (rest exp) compile) ";") ";") " ?>"))
 
 (define-function emit-cast [t exp]
   (str "(" t ")" (compile exp)))
@@ -251,7 +251,7 @@
                     (definition? exp) (emit-definition exp)
                     (= tag 'function) (emit-function exp)
                     (= tag 'return) (apply emit-return (rest exp))
-                    (has? '#{break continue throw global} tag) (emit-statement exp)
+                    (has? '#{break continue throw global echo} tag) (emit-statement exp)
                     (or (= tag 'case) (= tag 'default)) (emit-colon-statment exp)
                     (has? '#{catch while switch} tag) (emit-control-flow exp)
                     (= tag 'for) (emit-for-loop exp)

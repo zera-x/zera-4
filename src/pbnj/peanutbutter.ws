@@ -179,6 +179,11 @@
     [code]
     (pbnj.phay/compile (list '<?php code))))
 
+(define-component :php=
+  (lambda
+    [code]
+    (pbnj.phay/compile (list '<?php (list 'echo code)))))
+
 (test html
   (is (= "<br />" (html [:br])))
   (is (= "<br />" (html '(br))))
