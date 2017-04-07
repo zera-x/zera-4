@@ -429,7 +429,7 @@ namespace pbnj.wonderscript {
   };
 
   var evalLambda = function(exp, env) {
-    return new Lambda(exp, env);
+    return new Lambda(exp, env).toFunction();
   };
 
   var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
