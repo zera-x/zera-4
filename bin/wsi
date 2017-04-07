@@ -41,11 +41,12 @@ else {
     try {
       var input = line.trim();
       if (input === 'exit') {
+        console.log("Bye for now!");
         process.exit(0);
       }
       else {
         var res = ws.readString(input);
-        console.log(ws.inspect(res));
+        console.log(_.str("=> ", ws.inspect(res)));
         rl.setPrompt(_.str(currentModuleName(), "> "));
         stack = _.conj(stack, res);
       }

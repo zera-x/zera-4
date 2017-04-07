@@ -23,10 +23,4 @@
    [:li
     [:a {:href "http://wol.jw.org" :target "__wol"} "Watchtower Online Library"]]])
 
-(do
-  (define- quotes [["This is a quote" "Me"]]))
-
-(do
-  ((quotes 0) 0))
-
 (layout [:php (print "Hello")])

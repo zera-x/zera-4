@@ -2,6 +2,7 @@
 (require "jelly.ws")
 (require "jess.ws")
 (require "phay.ws")
+(require "wonderscript/compiler.ws")
 (module pbnj.peanutbutter)
 
 (define render-declaration pbnj.jelly/render-declaration)
@@ -40,7 +41,7 @@
         kattr (if (symbol? attr) (keyword (name attr)) (keyword attr))
         v (pair 1)
         value (cond (and (= kattr :style) (map? v)) (render-declaration v)
-                    (EVENTS kattr) (. (pbnj.jess/compile v) (replace (new js/RegExp "\"" "g") "\\\""))
+                    (EVENTS kattr) (. (pbnj.wonderscript/compile v) (replace (new js/RegExp "\"" "g") "\\\""))
                     :else
                       (str v))]
     (str (name attr) "=\"" value "\"")))
@@ -117,19 +118,18 @@
 (define-function block? [exp]
   (and (list? exp) (= (first exp) 'do)))
 
-(define-function eval-expression-escape [exp]
-  (eval exp))
+(define *top-scope* (pbnj/env))
+(define-function eval-block [&body]
+  (let [ret nil]
+    (do-each [x body]
+      (set! ret (eval x *top-scope*)))
+    ret))
 
-(define-function eval-effect-escape [&body]
-  (map body eval)
-  nil)
-
-(define *top-scope* *scope*)
 (define-function html
   [exp]
   (cond (nil? exp) (render-nil)
         (atom? exp) (render-atom exp)
-        (block? exp) (eval exp *top-scope*)
+        (block? exp) (apply eval-block (rest exp))
         (definition? exp) (apply eval-definition (rest exp))
         (component? exp) (render-component exp)
         (tag? exp) (render-tag exp)

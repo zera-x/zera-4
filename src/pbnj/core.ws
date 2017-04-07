@@ -146,9 +146,12 @@
           true
           false)))
 
+(define-protocol IDeref
+  (deref [self] (.- self value)))
+
 (define-type Atom
   [value]
-  (deref [self] (.- self value))
+  IDeref
   (addWatch
     [self k f]
     (.-set! self watches
@@ -467,7 +470,7 @@
         col (bindings 1)
         init (gen-sym "$init")
         col-nm (gen-sym "$col")]
-    (list 'let [init (list 'quote (eval col))]
+    (list 'let [init col]
     (list 'loop [var (list 'first init) col-nm (list 'rest init)]
           (cons 'when
                 (cons var
@@ -591,6 +594,9 @@
    (if (nil? value) (left) nil))
   ([value left right]
    (if (nil? value) (left) (right value))))
+
+(if (= *platform* "nodejs")
+  (define-function print [&vals] (. process/stdout (write (apply str vals)))))
 
 (comment
 (require "jess.ws")

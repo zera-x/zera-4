@@ -1,7 +1,8 @@
 ; vim: ft=clojure
+(require "../jess.ws")
 (module pbnj.wonderscript)
 
-(define *js-root-object* 'window)
+(define *js-root-object* (if (= *platform* "nodejs") 'global 'window))
 
 (define property-accessor? isPropertyAccessor)
 (define property-assignment? isPropertyAssignment)
@@ -113,6 +114,8 @@
 
 (define lambda? (tag-predicate 'lambda))
 
+; TODO: add capture arguments
+; TODO: add recursion points, define-type, and define-protocol
 (define-function lambda-body [body env]
   (reduce
     (reverse body)
@@ -203,5 +206,3 @@
             (do
               (println exp)
               (throw (str "ws->jess: invalid form: '" exp "'"))))))
-
-(define pbnj.wonderscript/wsToJess ws->jess)

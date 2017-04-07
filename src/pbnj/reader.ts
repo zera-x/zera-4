@@ -177,7 +177,7 @@ namespace pbnj.reader {
     }
 
     function isSymbol(ch) {
-      return /[a-zA-Z0-9_\.\/\-\!\?\*\$\=\<\>\&\+\~\|\%]/.test(ch);
+      return /[a-zA-Z0-9\_\.\/\-\!\?\*\$\=\<\>\&\+\~\|\%]/.test(ch);
     }
 
     function isChar(ch) {
@@ -396,7 +396,7 @@ namespace pbnj.reader {
       else if (ch === '"') {
         return readString();
       }
-      else if (isDigit(ch) || (ch === '-' || ch === '+') && isDigit(input.peekAhead())) {
+      else if (/[0-9]/.test(ch) || (ch === '-' || ch === '+') && isDigit(input.peekAhead())) {
         return readNumber(ch === '-' || ch === '+');
       }
       else if (isSymbol(ch)) {
