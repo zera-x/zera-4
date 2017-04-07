@@ -16,6 +16,8 @@ namespace pbnj.reader {
   // also look to the Clojure reader spec for ideas
   // see: http://clojure.org/reference/reader 
 
+  // TODO: add support for dispatching for #(), #{}, #inst, #"", etc.
+
   function inputStream(input, sourceName) {
     var pos = 0, line = 1, col = 0;
     return {

@@ -1207,7 +1207,8 @@ namespace pbnj.wonderscript {
 
   globalEnv.define('*environment*', _.keyword('development'));
   // TODO: detect browser?
-  globalEnv.define('*platform*', typeof exports !== 'undefined' ? 'nodejs' : 'browser');
+  globalEnv.define('*platform*', typeof exports !== 'undefined' ? _.keyword('nodejs') : _.keyword('browser'));
+  globalEnv.define('*target-language*', _.keyword('javascript'));
 
   if (typeof exports !== 'undefined') {
     module.exports = ws;

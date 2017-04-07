@@ -29,6 +29,8 @@ namespace pbnj.core {
     return this.$value;
   };
 
+  Var.deref = Var.getValue;
+
   Var.getName = function() {
     return this.$value;
   };

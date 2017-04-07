@@ -595,7 +595,7 @@
   ([value left right]
    (if (nil? value) (left) (right value))))
 
-(if (= *platform* "nodejs")
+(if (= *platform* :nodejs)
   (define-function print [&vals] (. process/stdout (write (apply str vals)))))
 
 (comment
