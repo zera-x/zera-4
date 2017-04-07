@@ -197,9 +197,10 @@ namespace pbnj.wonderscript {
 
   // (distance [self other] ...)
   var evalMethod = function(exp, env) {
-    var lambda, name;
+    var lambda, name, expr;
     name = _.first(exp);
-    lambda = ws.eval(_.cons(_.symbol('lambda'), _.rest(exp)), env);
+    expr = _.cons(_.symbol('lambda'), _.rest(exp));
+    lambda = ws.eval(expr, env);
     return [name, function() {
       return lambda.apply(null, [].concat([this], Array.prototype.slice.call(arguments)));
     }];
