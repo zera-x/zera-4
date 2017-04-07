@@ -181,7 +181,7 @@ namespace pbnj.reader {
     }
 
     function isChar(ch) {
-      return typeof ch === 'string';
+      return isSymbol(ch);
     }
 
     function isKeywordStart(ch) {
@@ -309,7 +309,7 @@ namespace pbnj.reader {
           ch = _.str('\\', ch);
         }
         else {
-          throw new Error('invalid character');
+          throw new Error(_.str('invalid character: "', ch, '"'));
         }
       }
       return dispatch.char(_.str(head, ch));
@@ -399,9 +399,6 @@ namespace pbnj.reader {
       else if (isDigit(ch) || (ch === '-' || ch === '+') && isDigit(input.peekAhead())) {
         return readNumber(ch === '-' || ch === '+');
       }
-      else if (ch === '~') {
-        return readUnquoted();
-      }
       else if (isSymbol(ch)) {
         return readSymbol();
       }
@@ -411,9 +408,12 @@ namespace pbnj.reader {
       else if (ch === "'") {
         return readQuotedForm();
       }
+      /*else if (ch === '~') {
+        return readUnquoted();
+      }
       else if (ch === "`") {
         return readSyntaxQuotedForm();
-      }
+      }*/
       else if (ch === "@") {
         return readDerefForm();
       }

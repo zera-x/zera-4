@@ -176,7 +176,7 @@ namespace pbnj.wonderscript {
       var preVal = _.second(_.rest(rest));
     }
     else {
-      throw new Error('define: first element should be a symbol, keyword, or map');
+      throw new Error(_.str('define: first element should be a symbol, keyword, or map from: ', ws.inspect(exp)));
     }
 
     var name = _.name(ident);
@@ -193,144 +193,406 @@ namespace pbnj.wonderscript {
     return value;
   };
 
-  var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
+  var isProtocol = ws.isProtocol = makeTagPredicate(_.symbol('define-protocol'));
+
+  // (distance [self other] ...)
+  var evalMethod = function(exp, env) {
+    var lambda, name;
+    name = _.first(exp);
+    lambda = ws.eval(_.cons(_.symbol('lambda'), _.rest(exp)), env);
+    return [name, function() {
+      return lambda.apply(null, [].concat([this], Array.prototype.slice.call(arguments)));
+    }];
+  };
+
+  // (define-protocol IPoint
+  //  (distance [self] ...))
+  // (define-type Point [x y] IPoint)
+  var evalProtocol = function(exp, env) {
+    var rest, name, specs, mixin, methods;
+    rest = _.rest(exp);
+    name = _.first(rest);
+    specs = _.rest(rest);
+
+    if (!_.isSymbol(name)) throw new Error('name should be a symbol');
+    
+    methods = _.intoArray(_.map(specs, function(spec) { return evalMethod(spec, env) }));
+
+    mixin = function(obj) {
+      for (var i = 0; i < methods.length; i++) {
+        obj[methods[i][0]] = methods[i][1];
+      }
+    };
+
+    defineVariable(env, name, mixin, _.hashMap(_.keyword('protocol'), true));
+
+    return name;
+  };
+
+  var isType = ws.isType = makeTagPredicate(_.symbol('define-type'));
+
+  // (define-type Point [x y])
+  var evalType = function(exp, env) {
+    var rest, name, fields, specs, argc, names, ctr, mixin, method, i;
+    rest = _.rest(exp);
+    name = _.first(rest);
+    fields = _.second(rest);
+    specs = _.intoArray(_.rest(_.rest(rest)));
+
+    if (!_.isSymbol(name)) throw new Error('name should be a symbol');
+    if (!_.isVector(fields)) throw new Error('field list should be a vector of symbols');
+
+    argc  = _.count(fields);
+    names = _.intoArray(fields);
+    ctr = function() {
+      if (arguments.length !== argc) {
+        throw new Error(_.str('expected ', argc, ' arguments, got: ', arguments.length));
+      }
+      for (i = 0; i < names.length; i++) {
+        this[names[i]] = arguments[i];
+      }
+    };
+
+    // TODO: add checks to make sure that specs list is in the following format (PROTOCOL METHODS?, PROTOCOL METHODS?, ...)
+    if (specs.length !== 0) {
+      ctr.prototype = {};
+      for (i = 0; i < specs.length; i++) {
+        if (_.isSymbol(specs[i])) {
+          mixin = ws.eval(specs[i]);
+          mixin.call(null, ctr.prototype);
+        }
+        else if (_.isList(specs[i])) {
+          method = evalMethod(specs[i], env);
+          ctr.prototype[method[0]] = method[1];
+        }
+        else {
+          throw new Error('spec should be either a protocol name or a method definition');
+        }
+      }
+    }
+
+    defineVariable(env, name, ctr, _.hashMap(_.keyword('type'), true));
+
+    return name;
+  };
 
   var arity = function(fn) {
     return fn.$lang$ws$arity || fn.length;
-  };
-
-  var invocableToFn = function(invocable, args) {
-    var func = null;
-    if (_.isKeyword(invocable) && _.isMap(_.first(args))) {
-      func = function(map) { return _.get(map, invocable); };
-    }
-    else if (_.isKeyword(invocable) && _.isSet(_.first(args))) {
-      func = function(set) { return _.hasKey(set, invocable); };
-    }
-    else if (_.isAssociative(invocable)) {
-      func = function(key) { return _.get(invocable, key); };
-    }
-    else if (_.isSet(invocable)) {
-      func = function(elem) { return _.hasKey(invocable, elem); };
-    }
-    else {
-      throw new Error(_.str("'", invocable, "' is not invocable"));
-    }
-    return func;
   };
 
   var funcIdent = function(func) {
     return func.$lang$ws$ident || func.name || 'anonymous';
   };
 
-  ws.apply = function(func_, args, obj) {
-    var obj = obj ? obj : null;
-    if (isInvocable(func_)) {
-      var func = invocableToFn(func_, args);
-    }
-    else {
-      var func = func_;
+  ws.apply = function(func, args) {
+    if (arguments.length !== 1 && arguments.length !== 2) {
+      throw new Error(_.str('wrong number of arguments expected: 1 or 2 arguments, got: ', arguments.length));
     }
 
-    if (arguments.length !== 1 && arguments.length !== 2 && arguments.length !== 3) {
-      throw new Error(_.str('wrong number of arguments expected: 1, 2 or 3 arguments, got: ', arguments.length));
+    if (!isInvocable(func)) {
+      throw new Error(_.str("'", func, "' is not a invocable"));
     }
-    if (!_.isFunction(func)) throw new Error(_.str("'", func_, "' is not a function"));
 
-    return func.apply(obj, args ? _.intoArray(args) : []);
+    return func.apply(null, args ? _.intoArray(args) : []);
   };
 
-  // (lambda [x] x)
-  // (lambda ([x] x)
-  //         ([x y] [x y]))
+  var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
+
   var lambdaID = 0;
-  var evalLambda = function(exp, env) {
+  function Lambda(exp, env) {
+    if (arguments.length !== 2) {
+      throw new Error(_.str('2 arguments expected got: ', arguments.length));
+    }
+    var id = _.str('lambda-', lambdaID++);
     var rest = _.rest(exp);
     var names = _.first(rest);
     var argCount = 0, bodies = {};
     if (_.isVector(names)) {
       argCount = _.count(names);
-
-      _.each(names, function(name) {
-        var sname = _.str(name);
+      for (var i = 0; i < argCount; i++) {
+        var sname = _.str(_.nth(names, i));
         if (sname[0] === '&') {
           argCount = (argCount - 1) * -1;
         }
-      });
-
+      }
       bodies[argCount] = {arity: argCount, args: names, code: _.rest(rest)};
       var body = bodies[argCount].body;
     }
     else if (_.isList(names)) {
-      _.each(rest, function(fn) {
+      var fn, exprs = rest;
+      while (fn = _.first(exprs)) {
         var args = _.first(fn);
         var body = _.rest(fn);
         var argCount = _.reduce(args, function(sum, arg) { return (_.str(arg)[0] === '&' ? (sum + 1) * -1 : sum + 1) }, 0);
         bodies[argCount] = {arity: argCount, args: args, code: body};
-      });
+        exprs = _.rest(exprs);
+      }
       argCount = _.first(_.sort(_.map(_.pluck(bodies, 'arity'), Math.abs))) * -1;
     }
     else {
-      throw new Error('malformed expression: the second element of a lambda expression should be an argument vector or the beginning of a list of lambda bodies');
+      throw new Error('the second element of a lambda expression should be an argument vector or the beginning of a list of lambda bodies');
     }
+    this.bodies = function() {
+      return bodies;
+    };
+    this.id = function() {
+      return id;
+    };
+    this.arity = function() {
+      return argCount;
+    };
+    this.length = argCount;
+    this.scope = env.extend().setIdent(id).initStash();
+    this.scope.define('*recursion-point*', this);
+    this.toString = function() {
+      return ws.inspect(exp);
+    };
+  }
 
-    var id = _.str('lambda-', lambdaID++);
+  Lambda.prototype.bind = function(values) {
+    var bodies = this.bodies();
+    var scope = this.scope.extend();
 
-    var lambda = function() {
-      var scope = env.extend();
-
-      var ident = lambda.$lang$ws$ident || id;
-      scope.setIdent(ident);
-
-      var args = arguments;
-      if (argCount <= 0 && args.length < Math.abs(argCount)) {
-        throw new Error(_.str('"', ws.inspect(lambda), '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length));
+    var args = values;
+    var argCount = this.arity();
+    if (argCount <= 0 && args.length < Math.abs(argCount)) {
+      throw new Error(_.str('"', this, '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length));
+    }
+    else if (argCount > 0 && argCount !== args.length) {
+      throw new Error(_.str('"', this, '" wrong number of arguments expected: ', argCount, ' got: ', args.length));
+    }
+    var argc = args.length;
+    var body = bodies[argc];
+    if (body == null) {
+      for (var i = (argc * -1); i <= 0; i++) {
+        body = bodies[i];
+        if (body != null) break;
       }
-      else if (argCount > 0 && argCount !== args.length) {
-        throw new Error(_.str('"', ws.inspect(lambda), '" wrong number of arguments expected: ', argCount, ' got: ', args.length));
+      if (body == null) throw new Error(_.str("wrong number of arguments for: ", this, ' got: ', args.length));
+    }
+    var i = 0;
+    var bodyArgs = body.args;
+    var name;
+    while (name = _.first(bodyArgs)) {
+      var sname = _.str(name);
+      if (sname[0] === '&') {
+        var list = _.list.apply(null, [].slice.call(args, i))
+        scope.define(sname.slice(1), list);
       }
-      var argc = args.length;
-      var body = bodies[argc];
-      if (body == null) {
-        for (var i = (argc * -1); i <= 0; i++) {
-          body = bodies[i];
-          if (body != null) break;
-        }
-        if (body == null) throw new Error(_.str("wrong number of arguments for: ", ws.inspect(lambda), ' got: ', args.length));
+      else {
+        scope.define(sname, i < args.length ? args[i] : false);
       }
+      i++;
+      bodyArgs = _.rest(bodyArgs);
+    }
+    this.scope = scope;
+    this.body = body;
+    return this;
+  };
 
-      var i = 0;
-      _.each(body.args, function(name) {
-        var sname = _.str(name);
-        if (sname[0] === '&') {
-          var list = _.list.apply(null, [].slice.call(args, i))
-          scope.define(sname.replace(/^&/, ''), list);
+  Lambda.prototype.exec = function() {
+    var body = this.body;
+    if (!body) throw new Error('the lambda must be bound to arguments first');
+    var exprs = body.code, exp, ret;
+    while (_.count(exprs) !== 0) {
+      try {
+        exp = _.first(exprs);
+        ret = ws.eval(exp, this.scope);
+        exprs = _.rest(exprs);
+      }
+      catch (e) {
+        if (e instanceof RecursionPoint) {
+          this.bind(e.args).exec();
         }
         else {
-          scope.define(sname, i < args.length ? args[i] : false);
+          throw e;
         }
-        i++;
-      });
+      }
+    }
+    return ret;
+  };
 
-      var ret = null;
-      _.each(body.code, function(exp) {
-        ret = ws.eval(exp, scope);
-      });
-      return ret;
-    };
+  Lambda.prototype.apply = function(obj, args) {
+    return this.bind(args).exec();
+  };
 
-    lambda.$lang$ws$tag = _.keyword('lambda');
-    lambda.$lang$ws$id = id;
-    lambda.$lang$ws$arity = argCount;
-    lambda.$lang$ws$code = exp;
-    lambda.toString = function() {
-      return _.str('#<Lambda id: ', lambda.$lang$ws$id,
-                   ' ident: ', ws.inspect(lambda.$lang$ws$ident),
-                   ' arity: ', lambda.$lang$ws$arity,
-                   ' code: ', ws.inspect(this.$lang$ws$code));
+  Lambda.prototype.call = function() {
+    return this.bind(_.toArray(arguments).slice(1)).exec();
+  };
+
+  Lambda.prototype.toFunction = function() {
+    var that = this;
+    return function() {
+      return that.bind(arguments).exec();
     };
-    //console.log(lambda);
-    return lambda;
+  };
+
+  var evalLambda = function(exp, env) {
+    return new Lambda(exp, env);
+  };
+
+  var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
+  var isRecursionPoint = ws.isRecursionPoint = makeTagPredicate(_.symbol('again'));
+
+  function Loop(bindings, body, env) {
+    if (arguments.length !== 3) {
+      throw new Error(_.str('3 arguments expected got: ', arguments.length));
+    }
+    this.bindings = function() {
+      return bindings;
+    };
+    this.body = function() {
+      return body;
+    };
+    this.scope = env.extend().setIdent('loop').initStash();
+    this.scope.define('*recursion-point*', this);
+    var names = [];
+    for (var i = 0; i < _.count(bindings); i += 2) {
+      var name = _.nth(bindings, i);
+      names.push(name);
+      if (env) {
+        this.scope.define(name);
+        this.scope.define(name, ws.eval(_.nth(bindings, i + 1), this.scope));
+      }
+    }
+    this.names = function() {
+      return names;
+    };
+  }
+
+  Loop.prototype.bind = function(values) {
+    var names = this.names();
+    var scope = this.scope.extend();
+    if (names.length !== values.length) {
+      throw new Error('values should match bindings arity');
+    }
+    for (var i = 0; i < names.length; i++) {
+      scope.define(names[i]);
+      scope.define(names[i], values[i]);
+    }
+    this.scope = scope;
+    return this;
+  };
+
+  Loop.prototype.exec = function(env) {
+    var exp, ret, exprs = this.body();
+    while (_.count(exprs) !== 0) {
+      try {
+        exp = _.first(exprs);
+        ret = ws.eval(exp, env ? env : this.scope);
+        exprs = _.rest(exprs);
+      }
+      catch (e) {
+        if (e instanceof RecursionPoint) {
+          this.bind(e.args).exec();
+        }
+        else {
+          throw e;
+        }
+      }
+    }
+    return ret;
+  };
+
+  var evalLoop = function(exp, env) {
+    var bindings = _.second(exp);
+    var body = _.rest(_.rest(exp));
+    if (!_.isVector(bindings)) throw new Error('bindings should be a vector');
+    return new Loop(bindings, body, env).exec();
+  };
+
+  function RecursionPoint(args) {
+    this.args = args;
+  }
+
+  // TODO: add tail position check
+  var evalRecursionPoint = function(exp, env) {
+    var args = _.intoArray(_.map(_.rest(exp), function(x) { return ws.eval(x, env); }));
+    throw new RecursionPoint(args);
+    //return recur.bind(args).exec();
+  };
+
+  var isInvocable = function(exp) {
+    //return _.isKeyword(exp) || _.isAssociative(exp) || _.isSet(exp);
+    return _.isObject(exp) && _.isFunction(exp.apply);
+  };
+
+  var isApplication = ws.isApplication = function(exp) {
+    return _.isList(exp);
+  };
+
+  var evalApplication = function(exp, env) {
+    var func, args, op;
+
+    args = _.map(_.rest(exp), function(exp) { return ws.eval(exp, env); });
+
+    // Primitive operators are inlined for performance
+    op = _.first(exp);
+    if (_.equals(op, _.symbol('+')) || _.equals(op, _.symbol('-')) || _.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
+      return eval(_.reduce(args, function(s, x) { return _.str(s, op, x) }));
+    }
+    else if (_.equals(op, _.symbol('add1'))) {
+      if (_.count(args) !== 1) {
+        throw new Error(_.str('expected 1 argument, got: ', _.count(args)));
+      }
+      else {
+        return eval(_.str('1+', _.first(args)));
+      }
+    }
+    else if (_.equals(op, _.symbol('sub1'))) {
+      if (_.count(args) !== 1) {
+        throw new Error(_.str('expected 1 argument, got: ', _.count(args)));
+      }
+      else {
+        return eval(_.str(_.first(args), '-1'));
+      }
+    }
+    else if (_.equals(op, _.symbol('mod'))) {
+      return eval(_.reduce(args, function(s, x) { return _.str(s, '%', x) }));
+    }
+    else if (_.equals(op, _.symbol('bit-or'))) {
+      return eval(_.reduce(args, function(s, x) { return _.str(s, '|', x) }));
+    }
+    else if (_.equals(op, _.symbol('bit-and'))) {
+      return eval(_.reduce(args, function(s, x) { return _.str(s, '&', x) }));
+    }
+    else if (_.equals(op, _.symbol('bit-xor'))) {
+      return eval(_.reduce(args, function(s, x) { return _.str(s, '^', x) }));
+    }
+    else if (_.equals(op, _.symbol('bit-not'))) {
+      if (_.count(args) !== 1) {
+        throw new Error(_.str('expected 1 argument, got: ', _.count(args)));
+      }
+      else {
+        return eval(_.str('~', _.first(args)));
+      }
+    }
+    else if (_.equals(op, _.symbol('bit-shift-left'))) {
+      if (_.count(args) !== 2) {
+        throw new Error(_.str('expected 2 argument, got: ', _.count(args)));
+      }
+      else {
+        return eval(_.str(_.first(args), '<<', _.second(args)));
+      }
+    }
+    else if (_.equals(op, _.symbol('bit-shift-right'))) {
+      if (_.count(args) !== 2) {
+        throw new Error(_.str('expected 2 argument, got: ', _.count(args)));
+      }
+      else {
+        return eval(_.str(_.first(args), '>>', _.second(args)));
+      }
+    }
+    
+    func = ws.eval(op, env);
+
+    if (_.isFunction(func) || isInvocable(func)) {
+      return ws.apply(func, args);
+    }
+    else {
+      console.log(func);
+      throw new Error(_.str("'", ws.inspect(exp), "' is not a function"));
+    }
   };
 
   var isBlock = ws.isBlock = makeTagPredicate(_.symbol('do'));
@@ -344,88 +606,6 @@ namespace pbnj.wonderscript {
       value = ws.eval(exp, scope);
     });
     return value;
-  };
-
-  var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
-  var isRecursionPoint = ws.isRecursionPoint = makeTagPredicate(_.symbol('again'));
-
-  var evalLoop = function(exp, env) {
-    evalLoop.values = [];
-    var bindings = _.second(exp);
-    var body = _.rest(_.rest(exp));
-    if (!_.isVector(bindings)) throw new Error('bindings should be a vector');
-    var scope = env.extend().setIdent('loop');
-    var names = [];
-    for (var i = 0; i < _.count(bindings); i += 2) {
-      var nm  = _.nth(bindings, i);
-      scope.define(nm);
-      var val = ws.eval(_.nth(bindings, i + 1), scope);
-      names.push(nm);
-      evalLoop.values.push(val);
-    }
-    var notonce = true;
-    var recur = false;
-    while (notonce || recur) {
-      var exprs = body;
-      if (recur) recur = false;
-      for (var i = 0; i < names.length; i++) {
-        scope.define(names[i], evalLoop.values[i]);
-      }
-      var value = null, exp = null;
-      while (exp = _.first(exprs)) {
-        value = ws.eval(exp, scope);
-        if (_.equals(value, _.keyword('again'))) {
-          recur = true;
-        }
-        exprs = _.rest(exprs);
-      }
-      notonce = false;
-    }
-    return value;
-  };
-
-  var evalRecursionPoint = function(exp, env) {
-    var args = _.rest(exp);
-    evalLoop.values = _.intoArray(_.map(args, function(x) { return ws.eval(x, env); }));
-    return _.keyword('again');
-  };
-
-  var isInvocable = function(exp) {
-    return _.isKeyword(exp) || _.isAssociative(exp) || _.isSet(exp);
-  };
-
-  var isApplication = ws.isApplication = function(exp) {
-    return _.isList(exp);
-  };
-
-  var evalApplication = function(exp, env) {
-    var func = _.first(exp);
-    if (_.str(func) === 'reduce') {
-      var args = _.map(_.rest(exp), function(exp) {
-        var ret = ws.eval(exp, env);
-        return ret;
-      });
-    }
-    else {
-      var args = _.map(_.rest(exp), function(exp) { return ws.eval(exp, env); });
-    }
-
-    if (isVariable(func)) {
-      func = evalVariable(func, env); 
-    }
-    else if (isLambda(func)) {
-      func = evalLambda(func, env);
-    }
-    else {
-      func = ws.eval(func, env);
-    }
-
-    if (_.isFunction(func) || isInvocable(func)) {
-      return ws.apply(func, args);
-    }
-    else {
-      throw new Error(_.str("'", ws.inspect(exp), "' is not a function"));
-    }
   };
 
   var isCond = ws.isCond = makeTagPredicate(_.symbol('cond'));
@@ -885,6 +1065,12 @@ namespace pbnj.wonderscript {
     }
     else if (isAssignment(exp)) {
       return evalAssignment(exp, env);
+    }
+    else if (isProtocol(exp)) {
+      return evalProtocol(exp, env);
+    }
+    else if (isType(exp)) {
+      return evalType(exp, env);
     }
     else if (isMacro(exp)) {
       return evalMacro(exp, env);

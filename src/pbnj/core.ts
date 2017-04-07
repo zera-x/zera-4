@@ -11,6 +11,8 @@ namespace pbnj.core {
     mori = window.mori;
   }
 
+  _.DEBUG = false;
+
   // merge mori's API
   var extend = function(target, source, pred) {
     for (var key in source) {

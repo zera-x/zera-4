@@ -16,7 +16,6 @@ function loadCoreLib() {
 if (process.argv.length === 3) {
   try {
     ws.readString('(module pbnj.user)');
-    ws.globalEnv.define('*dir*', __dirname);
     ws.readFile([process.cwd(), process.argv[2]].join('/'));
     process.exitCode = 0;
   }
@@ -33,7 +32,7 @@ else {
   });
   
   ws.readString('(module pbnj.user)');
-  ws.globalEnv.define('*dir*', __dirname);
+  ws.globalEnv.define('*dir*', process.cwd());
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
   

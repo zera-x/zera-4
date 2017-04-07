@@ -1,3 +1,4 @@
+; vim: ft=clojure
 (define layout [&body]
     [:html {:lang "en"}
      [:head
@@ -10,7 +11,7 @@
               :integrity "sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
               :crossorigin "anonymous"}]]
      [:body
-      [:div {:class "container-fluid"}
+      [:div {:class "container-fluid", :style {:margin-top "10px"}}
         (concat body
           [[:script {:src "https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"}]
            [:script {:src "https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"
@@ -22,10 +23,10 @@
    [:li
     [:a {:href "http://wol.jw.org" :target "__wol"} "Watchtower Online Library"]]])
 
-; TODO: add blocks and WonderScript expression escapes
-;(|
-;  (define quotes [["This is a quote" "Me"]]))
-;
-;(= (nth quotes 0))
+(do
+  (define- quotes [["This is a quote" "Me"]]))
 
-(layout)
+(do
+  ((quotes 0) 0))
+
+(layout [:php (print "Hello")])

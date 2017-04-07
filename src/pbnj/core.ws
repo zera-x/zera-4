@@ -78,15 +78,8 @@
   ([pred conse] (list 'cond pred conse))
   ([pred conse alt] (list 'cond pred conse :else alt))) 
 
-(define-macro if*
-  ([pred conse] `(cond ~pred ~conse))
-  ([pred conse alt] `(cond ~pred ~conse :else ~alt))) 
-
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
-
-(define-macro when* [pred &acts]
-  `(cond pred (do ~@acts)))
 
 (define-macro define-
   ([nm] (list 'define :private nm))
@@ -152,6 +145,51 @@
                 (list '.? '*scope* (list 'lookup nm)))
           true
           false)))
+
+(define-type Atom
+  [value]
+  (deref [self] (.- self value))
+  (addWatch
+    [self k f]
+    (.-set! self watches
+            (if (.- self watches)
+              (conj (.- self watches) [k f])
+              (list [k f]))))
+  (processWatches
+    [self newVal]
+    (when (.- self watches)
+      (map (.- self watches)
+           (lambda [x]
+              (let [k (x 0)
+                    f (x 1)]
+                (f k self (.- self value) newVal)
+                x)))))
+  (reset
+    [self val]
+    (. self (processWatches val))
+    (.-set! self value val)
+    self)
+  (swap
+    [self f]
+    (let [newVal (f (.- self value))]
+      (. self (processWatches newVal))
+      (.-set! self value newVal)
+      self)))
+
+(define-function atom [x]
+  (new Atom x))
+
+(define-function deref [x]
+  (.? x deref))
+
+(define-function reset! [x value]
+  (.? x (reset value)))
+
+(define-function swap! [x f]
+  (.? x (swap f)))
+
+(define-function add-watch [x f]
+  (.? x (addWatch f)))
 
 ;; ---------------------------- meta data ------------------------------ ;;
 
@@ -368,7 +406,7 @@
 (define-function join
   [col delim]
   (let [joiner (lambda [s x] (str s delim x))]
-    (reduce col joiner)))
+    (mori/reduce joiner col)))
 
 (define-function tests [mod] (.- mod *tests*))
 
@@ -395,12 +433,12 @@
 (define-function prove-module [module]
   (into [] (map (map (collect-tests module) :test/name) prove)))
 
-(define *sym-count* 0)
+(define *sym-count* (atom 0))
 (define-function gen-sym 
   ([] (gen-sym "sym"))
   ([prefix]
-   (let [sym (symbol (str prefix "-" *sym-count*))]
-     (set! *sym-count* (+ 1 *sym-count*))
+   (let [sym (symbol (str prefix "-" @*sym-count*))]
+     (swap! *sym-count* add1)
      sym)))
 
 (test gen-sym
@@ -427,12 +465,14 @@
     (throw "bindings should be a vector with two elements"))
   (let [var (bindings 0)
         col (bindings 1)
-        col-nm (gen-sym "$col$")]
-    (list 'loop [var (list 'first col) col-nm (list 'rest col)]
+        init (gen-sym "$init")
+        col-nm (gen-sym "$col")]
+    (list 'let [init (list 'quote (eval col))]
+    (list 'loop [var (list 'first init) col-nm (list 'rest init)]
           (cons 'when
                 (cons var
                       (concat body [(list 'again (list 'first col-nm) (list 'rest col-nm))])))
-          (list 'quote col))))
+          init))))
 
 (define-macro while
   [pred &body]
@@ -552,6 +592,7 @@
   ([value left right]
    (if (nil? value) (left) (right value))))
 
+(comment
 (require "jess.ws")
 (require "wonderscript/compiler.ws")
 
@@ -583,7 +624,6 @@
                [nm]))))))
 
 
-(comment
 (define-macro define-class [nm fields &methods]
   (let [env (pbnj/env)
         klass (symbol nm)
@@ -635,21 +675,6 @@
     (is (= "(3, 4)", (. p toString)))))
 
 (require "types.ws")
-
-(define-function atom [x]
-  (new pbnj.types/Atom x))
-
-(define-function deref [x]
-  (.? x deref))
-
-(define-function reset! [x value]
-  (.? x (reset value)))
-
-(define-function swap! [x f]
-  (.? x (swap f)))
-
-(define-function add-watch [x f]
-  (.? x (addWatch f)))
 
 (define-macro define-method
   [nm value args &body]

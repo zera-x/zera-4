@@ -23,22 +23,6 @@ namespace pbnj.peanutbutter {
 
   var pb = ROOT_OBJECT.pbnj.peanutbutter;
 
-  export function readFile(file) {
-    return readStream(pbnj.reader.readFile(file));
-  }
-
-  export function readString(input, source) {
-    return readStream(pbnj.reader.readString(input, source));
-  }
-
-  export function readStream(stream) {
-    var value = null;
-    while (!stream.eof()) {
-      value = eval(jess.compile(stream.next()));
-    }
-    return value;
-  }
-
   export function compileFile(file) {
     return compileStream(pbnj.reader.readFile(file));
   }
@@ -50,7 +34,7 @@ namespace pbnj.peanutbutter {
   export function compileStream(stream) {
     var buffer = [];
     while (!stream.eof()) {
-      buffer.push(pb.compile(stream.next()));
+      buffer.push(pb.compile.call(null, stream.next()));
     }
     return buffer.join('\n');
   }

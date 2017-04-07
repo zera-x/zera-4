@@ -1,11 +1,13 @@
 ; vim: ft=clojure
 (require "jelly.ws")
-
+(require "jess.ws")
+(require "phay.ws")
 (module pbnj.peanutbutter)
 
 (define render-declaration pbnj.jelly/render-declaration)
+(define join pbnj.core/join)
 
-(define *components* {})
+(define *components* (atom {}))
 
 (define-function nil? [exp]
   (or (pbnj.core/nil? exp) (and (collection? exp) (empty? exp))))
@@ -38,7 +40,7 @@
         kattr (if (symbol? attr) (keyword (name attr)) (keyword attr))
         v (pair 1)
         value (cond (and (= kattr :style) (map? v)) (render-declaration v)
-                    (EVENTS kattr) (pbnj.jess/compile v)
+                    (EVENTS kattr) (. (pbnj.jess/compile v) (replace (new js/RegExp "\"" "g") "\\\""))
                     :else
                       (str v))]
     (str (name attr) "=\"" value "\"")))
@@ -68,8 +70,7 @@
   (. (str nm) (replace (new js/RegExp "^:") "")))
 
 (define-function define-component [nm fn]
-  (set! *components* (assoc *components* (component-index nm) fn))
-  fn)
+  (swap! *components* (lambda [comps] (assoc comps (component-index nm) fn))) nil)
 
 (define-macro component
   ([nm x]
@@ -84,18 +85,16 @@
 
 (define-function eval-definition
   ([nm value]
-   (define-component nm (always value))
-   nil)
+   (define-component nm (always value)))
   ([nm args &body]
    (unless (vector? args) (throw "argument list should be a vector"))
-   (define-component nm (eval (cons 'lambda (cons args body))))
-   nil))
+   (define-component nm (eval (cons 'lambda (cons args body))))))
 
 (define-function have-component? [nm]
-  (has-key? *components* (component-index nm)))
+  (has-key? (deref *components*) (component-index nm)))
 
 (define-function get-component [nm]
-  (get *components* (component-index nm)))
+  (get (deref *components*) (component-index nm)))
 
 (define-function component? [exp]
   (and (tag? exp) (have-component? (first exp))))
@@ -112,10 +111,25 @@
 (define-function html-encode [s]
   (reduce (map (into [] (. s (split ""))) (lambda [c] (str "&#" (. c charCodeAt) ";"))) str))
 
+(define-function expression-escape? [exp]
+  (and (list? exp) (= (first exp) '=)))
+
+(define-function block? [exp]
+  (and (list? exp) (= (first exp) 'do)))
+
+(define-function eval-expression-escape [exp]
+  (eval exp))
+
+(define-function eval-effect-escape [&body]
+  (map body eval)
+  nil)
+
+(define *top-scope* *scope*)
 (define-function html
   [exp]
   (cond (nil? exp) (render-nil)
         (atom? exp) (render-atom exp)
+        (block? exp) (eval exp *top-scope*)
         (definition? exp) (apply eval-definition (rest exp))
         (component? exp) (render-component exp)
         (tag? exp) (render-tag exp)
@@ -159,6 +173,11 @@
   (lambda
     [code]
     [:script {:type "text/javascript"} (pbnj.wonderscript/compile code)]))
+
+(define-component :php
+  (lambda
+    [code]
+    (pbnj.phay/compile (list '<?php code))))
 
 (test html
   (is (= "<br />" (html [:br])))

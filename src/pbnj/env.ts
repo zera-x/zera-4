@@ -206,6 +206,53 @@ namespace pbnj.core {
     return this;
   };
 
+  env.getIdent = function() {
+    try {
+      return this.lookup('*scope-name*').get('*scope-name*');
+    }
+    catch (e) {
+      return null;
+    }
+  };
+
+  env.stash = function() {
+    var scope = this.lookup('*stash*');
+    if (scope) {
+      return scope.get('*stash*');
+    }
+    return null;
+  };
+
+  env.initStash = function() {
+    var stash = new Env();
+    this.define('*stash*', stash);
+    return this;
+  };
+
+  env.setStashValue = function(key, value) {
+    var stash = this.stash();
+    if (stash) {
+      stash.define(key, value);
+    }
+    else {
+      throw new Error("could not find stash");
+    }
+    return this;
+  };
+
+  env.getStashValue = function(key) {
+    var stash = this.stash();
+    if (stash) {
+      try {
+        return stash.get(key);
+      }
+      catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
   env.stacktrace = function() {
     var trace = [];
     var scope = this;

@@ -1,6 +1,7 @@
 ; vim: ft=clojure
-(module pbnj.jess)
+(module pbnj.phay)
 
+; compile PHP code
 (define join pbnj.core/join)
 
 (define-function emit-nil [exp] "null")
@@ -10,9 +11,9 @@
 (define-function emit-symbol [exp]
   (let [nm (name exp)
         ns (namespace exp)]
-    (if (nil? ns) nm (str ns "." nm))))
+    (if (nil? ns) nm (str "\\" (.. ns (split ".") (join "\\")) "\\" nm))))
 
-(define-function emit-string [exp] (str "\"" exp "\""))
+(define-function emit-string [exp] (str "'" exp "'"))
 
 (define-function emit-expression [exp] (str "(" (compile (second exp)) ")"))
 
@@ -29,7 +30,7 @@
                     (= :else (exp 0))
                       (str memo "else{" (compile (exp 1)) "}")
                     :else
-                      (str memo "else if(" (compile (exp 0)) "){" (compile (exp 1)) "}"))) nil)))
+                      (str memo "elseif(" (compile (exp 0)) "){" (compile (exp 1)) "}"))) nil)))
 
 (define-function emit-if [exp]
   (let [pred (second exp)
@@ -39,20 +40,17 @@
 
 (define-function emit-existential [exp]
   (let [value (compile (second exp))]
-    (str "((typeof " value "!==\"undefined\")&&(" value "!==null))")))
+    (str "isset(" value ")")))
 
-(define-function emit-instanceof [exp]
-  (str "(" (compile (second exp)) " instanceof " (compile (first (rest (rest exp)))) ")"))
+(define-function emit-escape [exp]
+  (str "<?php " (apply compile (rest exp)) " ?>"))
 
-(define-function emit-typeof [exp]
-  (str "(typeof " (compile (second exp)) ")"))
-
-(define-function emit-label [exp]
-  (str (name (second exp)) ":"))
+(define-function emit-cast [t exp]
+  (str "(" t ")" (compile exp)))
 
 (define-function definition? [exp]
   (let [tag (first exp)]
-    (or (= tag 'var) (= tag 'let) (= tag 'const))))
+    (or (= tag 'var) (= tag 'public) (= tag 'const) (= tag 'private) (= tag 'protected))))
 
 (define-function emit-definition [exp]
   (let [size (count exp)]
@@ -150,9 +148,9 @@
 (define-function emit-class-init [exp]
   (let [size (count exp)]
     (cond (= size 2)
-            (str "(new " (compile (second exp)) "())")
+            (str "new " (compile (second exp)) "()")
           (> size 2)
-            (str "(new " (compile (second exp)) "(" (join (map (rest (rest exp)) compile) ",") "))"))))
+            (str "new " (compile (second exp)) "(" (join (map (rest (rest exp)) compile) ",") ")"))))
 
 (define-function emit-property-assignment [exp]
   (let [size (count exp)
@@ -167,8 +165,8 @@
             (throw "property assignment should be a list of 4 elements"))))
 
 (define-function emit-assignment [obj value]
-  (str "(" (compile obj) "="
-       (if (symbol? value) value (compile value)) ")"))
+  (str (compile obj) "="
+       (if (symbol? value) value (compile value))))
 
 (define-function emit-unary-operator [exp]
   (let [size (count exp)]
@@ -199,21 +197,21 @@
   ([fn &args]
    (str (compile fn) "(" (join (map args compile) ",") ")")))
 
-(define-function emit-object [exp]
-  (str "({"
+(define-function emit-assoc-array [exp]
+  (str "["
        (reduce exp
                (lambda [s pair]
                        (str (if (nil? s) "" (str s ","))
                             (compile (first pair))
-                            ":"
-                            (compile (second pair)))) nil) "})"))
+                            "=>"
+                            (compile (second pair)))) nil) "]"))
 
 (define-function emit-array [exp]
   (if (empty? exp)
-    "([])"
-    (str "([" (join (map exp compile) ",") "])")))
+    "[]"
+    (str "[" (reduce (map exp compile) (lambda [s x] (str s ", " x))) "]")))
 
-(define *jess-macros* {})
+(define *macros* (atom {}))
 
 (define-function eval-macro-definition [exp]
   (let [size (count exp)]
@@ -222,12 +220,12 @@
                   args (first (rest (rest exp)))
                   body (rest (rest (rest exp)))
                   fn (pbnj.wonderscript/eval (cons 'lambda (cons args body)))]
-              (set! *jess-macros* (assoc *jess-macros* name fn))
+              (swap! *macros* (lambda [ms] (assoc ms name fn)))
               nil) ) ))
 
 (define-function macroexpand [exp]
   (let [tag (first exp)
-        xfr (get *jess-macros* tag)]
+        xfr (get (deref *macros*) tag)]
     (if xfr
       (macroexpand (apply xfr (rest exp)))
       exp)))
@@ -240,28 +238,22 @@
           (symbol? exp) (emit-symbol exp)
           (keyword? exp) (emit-symbol exp)
           (string? exp) (emit-string exp)
-          (map? exp) (emit-object exp)
+          (map? exp) (emit-assoc-array exp)
           (vector? exp) (emit-array exp)
           (list? exp)
             (let [tag (first exp)]
               (cond (or (= tag 'if-else) (= tag 'cond)) (emit-if-else exp)
                     (= tag 'if) (emit-if exp)
                     (= tag '?) (emit-existential exp)
-                    (= tag 'instance?) (emit-instanceof exp)
-                    (= tag 'typeof) (emit-typeof exp)
-                    (= tag 'label) (emit-label exp)
+                    (or (= tag '<?php) (= tag '<?)) (emit-escape exp)
+                    (= tag 'cast) (apply emit-cast (rest exp))
                     (= tag 'do) (emit-block (rest exp))
                     (definition? exp) (emit-definition exp)
-                    (or (= tag 'function) (= tag 'function*))
-                      (emit-function exp)
-                    (= tag 'return)
-                      (apply emit-return (rest exp))
-                    (has? '#{break continue throw delete} tag)
-                      (emit-statement exp)
-                    (or (= tag 'case) (= tag 'default))
-                      (emit-colon-statment exp)
-                    (has? '#{catch while switch} tag)
-                      (emit-control-flow exp)
+                    (= tag 'function) (emit-function exp)
+                    (= tag 'return) (apply emit-return (rest exp))
+                    (has? '#{break continue throw global} tag) (emit-statement exp)
+                    (or (= tag 'case) (= tag 'default)) (emit-colon-statment exp)
+                    (has? '#{catch while switch} tag) (emit-control-flow exp)
                     (= tag 'for) (emit-for-loop exp)
                     (= tag 'try) (emit-named-block exp)
                     (= tag '.-) (emit-object-resolution exp)
@@ -270,9 +262,8 @@
                     (= tag '.-set!) (emit-property-assignment exp)
                     (= tag 'set!) (apply emit-assignment (rest exp))
                     (or (= tag '!) (= tag 'not)) (emit-negation exp)
-                    (has? '#{++ -- ~} tag) (emit-unary-operator exp)
-                    (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
-                      (emit-binary-operator exp)
+                    (or (= tag '++) (= tag '--) (= tag '&)) (emit-unary-operator exp)
+                    (has? '#{|| && | & << >> % < > <= >= + - / * == != === !== and or} tag) (emit-binary-operator exp)
                     (or (= tag '%) (= tag 'mod)) (emit-binary-operator (cons '% (rest exp)))
                     (= tag 'quote) (emit-quote exp)
                     (= tag 'macro) (eval-macro-definition exp)
@@ -282,90 +273,7 @@
                     (= tag 'comment) ""
                     :else 
                       (do
-                        (apply emit-function-application exp) ))
+                        (apply emit-function-application exp))))
           :else
             (do
-              (throw (str "invalid form: '" exp "'"))) ))))
-
-(define-function eval [exp]
-  (let [code (compile exp)]
-  (js/eval code)))
-
-(define-function compile-stream [stream])
-
-(define-function compile-string [input source]
-  (compile-stream (pbnj.reader/readString input source)))
-
-(test literals
-  (is (= (compile nil) "null"))
-  (is (= (compile 1) "1"))
-  (is (= (compile 3435) "3435"))
-  (is (= (compile 3.14159) "3.14159"))
-  (is (= (compile -3.14159) "-3.14159"))
-  (is (= (compile true) "true"))
-  (is (= (compile false) "false"))
-  (is (= (compile 'symbol) "symbol"))
-  (is (= (compile 'namespaced/symbol) "namespaced.symbol"))
-  (is (= (compile :keyword) "keyword"))
-  (is (= (compile :namespaced/keyword) "namespaced.keyword"))
-  (is (= (compile "test") "\"test\""))
-  (is (= (compile (hash-map)) "({})"))
-  (is (= (compile (hash-map :a 1 :b 2)) "({a:1,b:2})"))
-  (is (= (compile (vector)) "([])"))
-  (is (= (compile (vector 1 2 3 4 5)) "([1,2,3,4,5])")))
-
-(test if-else
-  (is (= (compile '(if-else true 1)) "if(true){1}"))
-  (is (= (compile '(if-else true 1 false 2)) "if(true){1}else if(false){2}"))
-  (is (= (compile '(if-else true 1 false 2 :else 3)) "if(true){1}else if(false){2}else{3}")))
-
-(test if
-  (is (= (compile '(if true 1)) "(true)?(1):(null)"))
-  (is (= (compile '(if true 1 2)) "(true)?(1):(2)"))
-  (is (= (eval '(if true 1)) 1))
-  (is (= (eval '(if true 1 2)) 1))
-  (is (= (eval '(if false 1 2)) 2))
-  (is (= (eval '(if false 1)) nil)))
-
-(test ?
-  (is-not (eval '(? nil)))
-  (is (eval '(? true)))
-  (is (eval '(? false)))
-  (is (eval '(? {})))
-  (is (eval '(? [])))
-  (is (eval '(? "")))
-  (is (eval '(? 0))))
-
-(test instance?
-  (is (eval '(instance? (new Date) Date)))
-  (is-not (eval '(instance? Math Date))))
-
-(test typeof
-  (is (= "number" (eval '(typeof 1))))
-  (is (= "string" (eval '(typeof "aasfwewrqfwdf"))))
-  (is (= "object" (eval '(typeof nil))))
-  (is (= "boolean" (eval '(typeof true))))
-  (is (= "object" (eval '(typeof {}))))
-  (is (= "object" (eval '(typeof [])))))
-
-(test do
-  (is (= "1;2;3;4;" (compile '(do 1 2 3 4)))))
-
-(test var
-  (is (= "var x;" (compile '(var x))))
-  (is (= "var x=1;" (compile '(var x 1)))))
-
-(test let
-  (is (= "let x;" (compile '(let x))))
-  (is (= "let x=1;" (compile '(let x 1)))))
-
-(test const
-  (is (= "const x;" (compile '(const x))))
-  (is (= "const x=1;" (compile '(const x 1)))))
-
-(test function
-  (is (= 1, ((eval '(paren (function [x] (return x)))) 1))))
-
-(test application)
-
-;(pbnj.jess/readFile "src/pbnj/core.jess")
+              (throw (str "invalid form: '" exp "'"))))))
