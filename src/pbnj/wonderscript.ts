@@ -1138,7 +1138,11 @@ namespace pbnj.wonderscript {
   };
 
   function fmtStacktrace(trace) {
-    return mori.map(function(x) { return _.str(x[1], "@", x[0] || 'unknown', ":", x[2]) }, trace).join('\n');
+    var i, buffer = [];
+    for (i = 0; i < trace.length; i++) {
+      buffer.push([x[1], "@", x[0] || 'unknown', ":", x[2]].join(''));
+    }
+    return buffer.join('');
   }
 
   ws.readStream = function(stream, env) {

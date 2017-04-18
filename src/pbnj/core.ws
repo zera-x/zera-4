@@ -464,6 +464,28 @@
   (list 'loop []
         (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))
 
+(define-macro ->
+  [x &forms]
+  (loop [x* x, forms* forms]
+    (if (empty? forms*)
+      x*
+      (let [form (first forms*)
+            threaded (if (seq? form)
+                       (list (first form) x* (first (rest form)))
+                       (list form x*))]
+        (again threaded (rest forms*))))))
+
+(define-macro ->>
+  [x &forms]
+  (loop [x* x, forms* forms]
+    (if (empty? forms*)
+      x*
+      (let [form (first forms*)
+            threaded (if (seq? form)
+                       (list (first form) (first (rest form)) x*)
+                       (list form x*))]
+        (again threaded (rest forms*))))))
+
 (define-function fraction [n]
   (- n (. js/Math floor n)))
 
