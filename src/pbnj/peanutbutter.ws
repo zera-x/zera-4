@@ -183,6 +183,11 @@
     [code]
     (pbnj.phay/compile (list '<?php (list 'echo code)))))
 
+(define-component :css
+  (lambda
+    [&rules]
+    [:stype {:type "text/css"} (pbnj.jelly/css rules)))
+
 (test html
   (is (= "<br />" (html [:br])))
   (is (= "<br />" (html '(br))))

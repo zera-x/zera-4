@@ -17,10 +17,12 @@
 (define-function render-number [exp] (str exp "px"))
 
 (define-function rule? [exp]
-  (and (sequential? exp) (map? (last exp))))
+  (and (sequential? exp) (count exp) (map? (last exp))))
 
 (define-function render-selector [exp]
-  (reduce (lambda [s x] (str s " " x)) exp))
+  (->> exp
+       (map render-atom)
+       (reduce (lambda [s x] (str s " " x)))))
 
 (define-function render-declaration [exp]
   (reduce (lambda [s x] (str s ";" x))
@@ -30,7 +32,9 @@
 
 (define-function render-rule [exp]
   (str (render-selector (remove map? exp)) " { "
-       (render-declaration (first (filter map? exp))) " } "))
+       (render-declaration (first (filter map? exp))) " }"))
+
+(define rule-list? list?)
 
 (define-function css [exp]
   (cond (nil? exp) ""
@@ -38,5 +42,8 @@
         (atom? exp) (render-atom exp)
         (declaration? exp) (render-declaration exp)
         (rule? exp) (render-rule exp)
+        (rule-list? exp) (->> exp
+                              (map render-rule)
+                              (reduce (lambda [s x] (str s \newline x))))
         :else
           (throw "invalid form")))
