@@ -230,11 +230,13 @@
               nil) ) ))
 
 (define-function macroexpand [exp]
-  (let [tag (first exp)
-        xfr (get *jess-macros* tag)]
-    (if xfr
-      (macroexpand (apply xfr (rest exp)))
-      exp)))
+  (if (list? exp)
+    (let [tag (first exp)
+          xfr (get *jess-macros* tag)]
+      (if xfr
+        (macroexpand (apply xfr (rest exp)))
+        exp))
+    exp))
 
 (define-function compile [exp_]
   (let [exp (macroexpand exp_)]

@@ -38,12 +38,12 @@ namespace pbnj.wonderscript {
   var evalSelfEvaluating = _.identity;
 
   var evalKeyword = function(exp, env) {
-    var sexp = _.str(exp);
+    var sexp = '' + exp;
     if (sexp.startsWith('::')) {
       var modname = env.lookup('*module-name*')
                         ? env.lookup('*module-name*').get('*module-name*')
                         : ws.MODULE_SCOPE["@@NAME@@"];
-      return _.keyword(_.str(modname), sexp.replace(/^::/, ''));
+      return _.keyword('' + modname, sexp.replace(/^::/, ''));
     }
     return exp;
   };
@@ -72,7 +72,7 @@ namespace pbnj.wonderscript {
                 exp));
     }
     else {
-      throw new Error(str('invalid form: ', exp));
+      throw new Error(['invalid form: ', exp].join(''));
     }
   };
 
@@ -127,7 +127,7 @@ namespace pbnj.wonderscript {
   var evalVariable = function(exp, env) {
     var name = _.name(exp);
     var mod = lookupVariable(exp, env);
-    if (mod === null) throw new Error(_.str("Undefined variable: '", exp, "'"));
+    if (mod === null) throw new Error(["Undefined variable: '", exp, "'"].join(''));
     var val = getVariable(mod, name);
     return val;
   };
@@ -145,7 +145,7 @@ namespace pbnj.wonderscript {
     else {
       // define value in module scope
       var mod = ns == null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns));
-      if (!mod) throw new Error(_.str("module ", ns ," is undefined"));
+      if (!mod) throw new Error(["module ", ns ," is undefined"].join(''));
       if (!mod["@@SCOPE@@"]) {
         mod["@@SCOPE@@"] = globalEnv.extend();
       }
@@ -176,7 +176,7 @@ namespace pbnj.wonderscript {
       var preVal = _.second(_.rest(rest));
     }
     else {
-      throw new Error(_.str('define: first element should be a symbol, keyword, or map from: ', ws.inspect(exp)));
+      throw new Error(['define: first element should be a symbol, keyword, or map from: ', ws.inspect(exp)].join(''));
     }
 
     var name = _.name(ident);
@@ -188,7 +188,7 @@ namespace pbnj.wonderscript {
     defineVariable(env, ident, value, meta);
 
     if (_.isFunction(value)) {
-      value.$lang$ws$ident = _.str(ident);
+      value.$lang$ws$ident = ident;
     }
     return value;
   };
@@ -247,7 +247,7 @@ namespace pbnj.wonderscript {
     names = _.intoArray(fields);
     ctr = function() {
       if (arguments.length !== argc) {
-        throw new Error(_.str('expected ', argc, ' arguments, got: ', arguments.length));
+        throw new Error(['expected ', argc, ' arguments, got: ', arguments.length].join(''));
       }
       for (i = 0; i < names.length; i++) {
         this[names[i]] = arguments[i];
@@ -259,7 +259,8 @@ namespace pbnj.wonderscript {
       ctr.prototype = {};
       for (i = 0; i < specs.length; i++) {
         if (_.isSymbol(specs[i])) {
-          mixin = ws.eval(specs[i]);
+          mixin = ws.eval(specs[i], env);
+          // TODO: perform checks based on meta data
           mixin.call(null, ctr.prototype);
         }
         else if (_.isList(specs[i])) {
@@ -267,6 +268,7 @@ namespace pbnj.wonderscript {
           ctr.prototype[method[0]] = method[1];
         }
         else {
+          console.log(specs[i]);
           throw new Error('spec should be either a protocol name or a method definition');
         }
       }
@@ -287,11 +289,11 @@ namespace pbnj.wonderscript {
 
   ws.apply = function(func, args) {
     if (arguments.length !== 1 && arguments.length !== 2) {
-      throw new Error(_.str('wrong number of arguments expected: 1 or 2 arguments, got: ', arguments.length));
+      throw new Error(['wrong number of arguments expected: 1 or 2 arguments, got: ', arguments.length].join(''));
     }
 
     if (!isInvocable(func)) {
-      throw new Error(_.str("'", func, "' is not a invocable"));
+      throw new Error(["'", func, "' is not invocable"].join(''));
     }
 
     return func.apply(null, args ? _.intoArray(args) : []);
@@ -307,7 +309,7 @@ namespace pbnj.wonderscript {
       throw new Error(['2 arguments expected got: ', arguments.length].join(''));
     }
 
-    id = _.str('lambda-', lambdaID++);
+    id = ['lambda-', lambdaID++].join('');
     rest = _.rest(exp);
     names = _.first(rest);
     argCount = 0;
@@ -316,7 +318,7 @@ namespace pbnj.wonderscript {
     if (_.isVector(names)) {
       argCount = _.count(names);
       for (var i = 0; i < argCount; i++) {
-        var sname = _.str(_.nth(names, i));
+        var sname = '' + _.nth(names, i);
         if (sname[0] === '&') {
           argCount = (argCount - 1) * -1;
         }
@@ -375,10 +377,10 @@ namespace pbnj.wonderscript {
     var args = values;
     var argCount = this.arity();
     if (argCount <= 0 && args.length < Math.abs(argCount)) {
-      throw new Error(_.str('"', this, '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length));
+      throw new Error(['"', this, '" wrong number of arguments expected at least: ', Math.abs(argCount), ' got: ', args.length].join(''));
     }
     else if (argCount > 0 && argCount !== args.length) {
-      throw new Error(_.str('"', this, '" wrong number of arguments expected: ', argCount, ' got: ', args.length));
+      throw new Error(['"', this, '" wrong number of arguments expected: ', argCount, ' got: ', args.length].join(''));
     }
     var argc = args.length;
     var body = bodies[argc];
@@ -387,13 +389,13 @@ namespace pbnj.wonderscript {
         body = bodies[i];
         if (body != null) break;
       }
-      if (body == null) throw new Error(_.str("wrong number of arguments for: ", this, ' got: ', args.length));
+      if (body == null) throw new Error(["wrong number of arguments for: ", this, ' got: ', args.length].join(''));
     }
     var i = 0;
     var bodyArgs = body.args;
     var name;
     while (name = _.first(bodyArgs)) {
-      var sname = _.str(name);
+      var sname = '' + name;
       if (sname[0] === '&') {
         var list = _.list.apply(null, [].slice.call(args, i))
         scope.define(sname.slice(1), list);
@@ -455,7 +457,7 @@ namespace pbnj.wonderscript {
 
   function Loop(bindings, body, env) {
     if (arguments.length !== 3) {
-      throw new Error(_.str('3 arguments expected got: ', arguments.length));
+      throw new Error(['3 arguments expected got: ', arguments.length].join(''));
     }
     this.bindings = function() {
       return bindings;
@@ -553,6 +555,11 @@ namespace pbnj.wonderscript {
     if (_.equals(op, _.symbol('+')) || _.equals(op, _.symbol('-')) || _.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
       return eval(args.join(op.toString()));
     }
+    else if (_.equals(op, _.symbol('str'))) {
+      if (args.length === 0) return '';
+      else if (args.length === 1) return '' + args[0];
+      return args.join('');
+    }
     else if (_.equals(op, _.symbol('add1'))) {
       if (args.length !== 1) {
         throw new Error(['expected 1 argument, got: ', args.length].join(''));
@@ -622,7 +629,7 @@ namespace pbnj.wonderscript {
     }
     else {
       console.log(func);
-      throw new Error(_.str("'", ws.inspect(exp), "' is not a function"));
+      throw new Error(["'", ws.inspect(exp), "' is not a function"].join(''));
     }
   };
 
@@ -643,7 +650,7 @@ namespace pbnj.wonderscript {
 
   var evalCond = function(exp, env) {
     var rest = _.rest(exp);
-    if (_.count(rest) % 2 !== 0) throw new Error(_.str('cond requires an even number of elements ', ws.inspect(exp)));
+    if (_.count(rest) % 2 !== 0) throw new Error(['cond requires an even number of elements ', ws.inspect(exp)].join(''));
     var pairs = _.pair(rest);
     for (var i = 0; i < _.count(pairs); i++) {
       var pred = _.nth(_.nth(pairs, i), 0);
@@ -673,22 +680,23 @@ namespace pbnj.wonderscript {
   };
 
   var macroexpand = ws.macroexpand = function(exp) {
-    var name = _.first(exp);
-    if (_.isList(exp) && _.isSymbol(name)) {
-      var ns = _.namespace(name);
+    var ns, name, mod, scope, macros, m, macro;
+
+    if (_.isList(exp) && _.isSymbol(name = _.first(exp))) {
+      ns = _.namespace(name);
       if (ns === 'js') return exp;
-      var mod = (ns == null ? ws.MODULE_SCOPE : findModule(_.symbol(ns)))
+      mod = (ns == null ? ws.MODULE_SCOPE : findModule(_.symbol(ns)))
       if (mod == null) {
-        var scope = lookupVariable(_.symbol(ns))
+        scope = lookupVariable(_.symbol(ns))
         if (scope === null) return exp;
         mod = getVariable(scope, ns);
         if (mod == null) {
           return exp;
         }
       }
-      var macros = mod['@@MACROS@@'];
-      var m = (macros && macros[_.name(name)]);
-      var macro = m == null ? pbnj.core["@@MACROS@@"][name] : m;
+      macros = mod['@@MACROS@@'];
+      m = (macros && macros[_.name(name)]);
+      macro = m == null ? pbnj.core["@@MACROS@@"][name] : m;
       if (macro) {
         return macroexpand(macro.apply(macro, _.intoArray(_.rest(exp))));
       }
@@ -701,15 +709,10 @@ namespace pbnj.wonderscript {
   var evalAssignment = function(exp, env) {
     var name = _.second(exp);
     var scope = lookupVariable(name, env);
-    if (scope === null) throw new Error(_.str("Undefined variable '", name, "'"));
+    if (scope === null) throw new Error(["Undefined variable '", name, "'"].join(''));
     var value = ws.eval(_.second(_.rest(exp)), env);
     var ns = _.namespace(name);
-    var sname = _.str(name);
-    /*if (ns == null) {
-      if (pbnj.MODULE_SCOPE[sname] != null) {
-        pbnj.MODULE_SCOPE[sname] = value;
-      }
-    }*/
+    var sname = '' + name;
     if (_.isEnv(scope)) {
       scope.set(sname, value);
     }
@@ -738,10 +741,10 @@ namespace pbnj.wonderscript {
 
   var evalPropertyAccessor = function(exp, env) {
     var obj = ws.eval(_.second(exp), env);
-    if (obj == null) throw new Error(_.str("nil is not an object from: ", ws.inspect(_.second(exp))));
+    if (obj == null) throw new Error(["nil is not an object from: ", ws.inspect(_.second(exp))].join(''));
     var prop = _.second(_.rest(exp));
     if (_.isSymbol(prop)) {
-      return obj[_.str(prop)];
+      return obj[prop];
     }
     else {
       return obj[ws.eval(prop, env)];
@@ -756,7 +759,7 @@ namespace pbnj.wonderscript {
     var prop = _.second(_.rest(exp));
     var value = ws.eval(_.second(_.rest(_.rest(exp))), env);
     if (_.isSymbol(prop)) {
-      return obj[_.str(prop)] = value;
+      return obj[prop] = value;
     }
     else {
       return obj[ws.eval(prop, env)] = value;
@@ -775,7 +778,7 @@ namespace pbnj.wonderscript {
   var evalModuleName = function(name, root) {
     if (!_.isSymbol(name)) throw new Error('symbol expected');
     if (!root) throw new Error('root object is required');
-    var path = _.str(name).split('/')[0].split('.');
+    var path = ('' + name).split('/')[0].split('.');
     var mod = root;
     for (var i = 0; i < path.length; i++) {
       var name = path[i];
@@ -790,7 +793,7 @@ namespace pbnj.wonderscript {
   var defineModule = function(name) {
     var mod = evalModuleName(name, ROOT_OBJECT);
     if (mod) {
-      var scope = globalEnv.extend().setIdent(_.str(name));
+      var scope = globalEnv.extend().setIdent('' + name);
       scope.define('*module-name*', name);
       mod["@@SCOPE@@"] = scope;
       mod["@@NAME@@"] = name;
@@ -799,7 +802,7 @@ namespace pbnj.wonderscript {
       globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
     }
     else {
-      throw new Error(_.str('There was an error defining module "', name, '"'));
+      throw new Error(['There was an error defining module "', name, '"'].join(''));
     }
     return mod;
   };
@@ -818,7 +821,7 @@ namespace pbnj.wonderscript {
     var name = _.second(exp); 
     var mod = defineModule(name);
     if (mod) {
-      var scope = env.extend().setIdent(_.str(name));
+      var scope = env.extend().setIdent('' + name);
       scope.define('*module-name*', name);
       mod["@@SCOPE@@"] = scope;
       mod["@@NAME@@"] = name;
@@ -827,7 +830,7 @@ namespace pbnj.wonderscript {
       globalEnv.define(name, mod);
     }
     else {
-      throw new Error(_.str('There was an error defining module "', name, '"'));
+      throw new Error(['There was an error defining module "', name, '"'].join(''));
     }
     return mod;
   };
@@ -845,15 +848,15 @@ namespace pbnj.wonderscript {
         ws.readFile(full, env.extend().setIdent('require'));
       }
       catch (e) {
-        throw new Error(_.str("Reading file: \"", full, "\": ", e.message ? e.message : e));
+        throw new Error(["Reading file: \"", full, "\": ", e.message ? e.message : e].join(''));
       }
     }
     else if (_.isSymbol(name)) {
-      var path = _.str("src/", _.str(name).split('.').join('/'), ".ws");
+      var path = ["src/", ('' + name).split('.').join('/'), ".ws"].join('');
       ws.readFile(dir ? [dir, path].join('/') : path, env.extend().setIdent('require'));
       var mod = findModule(name);
       if (mod == null) {
-        throw new Error(_.str('module ', name, ' does not exist'));
+        throw new Error(['module ', name, ' does not exist'].join(''));
       }
     }
     else {
@@ -879,7 +882,7 @@ namespace pbnj.wonderscript {
 
   var findModule = ws.getModule = function(name) {
     if (!_.isSymbol(name)) throw new Error('symbol expected');
-    var path = _.str(name).split('/')[0].split('.');
+    var path = ('' + name).split('/')[0].split('.');
     var mod = ROOT_OBJECT;
     for (var i = 0; i < path.length; i++) {
       mod = mod[path[i]];
@@ -890,7 +893,7 @@ namespace pbnj.wonderscript {
 
   var getModule = ws.getModule = function(name) {
     if (!_.isSymbol(name)) throw new Error('symbol expected');
-    var path = _.str(name).split('/')[0].split('.');
+    var path = ('' + name).split('/')[0].split('.');
     var mod = ROOT_OBJECT;
     _.each(path, function(nm) {
       if (!_.isObject(mod[nm])) {
@@ -914,20 +917,20 @@ namespace pbnj.wonderscript {
   var evalMethodApplication = function(exp, env) {
     var args = _.rest(exp);
     var obj = ws.eval(_.first(args), env);
-    if (obj == null) throw new Error(_.str('nil is not an object from: ', ws.inspect(exp)));
+    if (obj == null) throw new Error(['nil is not an object from: ', ws.inspect(exp)].join(''));
     var method = _.second(args);
     if (_.isList(method)) {
       var mname = _.first(method);
-      var m = obj[_.str(mname)]
+      var m = obj[mname]
       if (m == null) {
-        throw new Error(_.str('method "', ws.inspect(mname), '" does not exist'));
+        throw new Error(['method "', ws.inspect(mname), '" does not exist'].join(''));
       }
       return m.apply(obj, _.intoArray(mori.map(function(x) { return ws.eval(x, env) }, _.rest(method))));
     }
     else {
-      var m = obj[_.str(method)]
+      var m = obj[method]
       if (m == null) {
-        throw new Error(_.str('method "', ws.inspect(method), '" does not exist'));
+        throw new Error(['method "', ws.inspect(method), '" does not exist'].join(''));
       }
       return m.apply(obj);
     }
@@ -952,7 +955,7 @@ namespace pbnj.wonderscript {
     var klass = ws.eval(_.second(binds), scope);
 
     if (e instanceof klass) {
-      scope.define(_.str(vari), e);
+      scope.define('' + vari, e);
       while (expr = _.first(body)) {
         value = ws.eval(expr, scope);
         body = _.rest(body);
@@ -1020,20 +1023,20 @@ namespace pbnj.wonderscript {
       return exp === true ? 'true' : 'false';
     }
     else if (_.isString(exp)) {
-      return _.str('"', exp, '"');
+      return ['"', exp, '"'].join('');
     }
     else if (isQuoted(exp)) {
-      return _.str("'", ws.inspect(_.second(exp)));
+      return ["'", ws.inspect(_.second(exp))].join('');
     }
     else if (_.isArray(exp)) {
       var buffer = [];
       for (var i = 0; i < exp.length; i++) {
         buffer.push(ws.inspect(exp[i]));
       }
-      return _.str("(array ", buffer.join(' '), ")");
+      return ["(array ", buffer.join(' '), ")"].join('');
     }
     else {
-      return _.str(exp);
+      return '' + exp;
     }
   };
   globalEnv.define('inspect', ws.inspect);
@@ -1123,7 +1126,7 @@ namespace pbnj.wonderscript {
       return evalApplication(exp, env);
     }
     else {
-      throw new Error(_.str("invalid expression: '", exp, "'"));
+      throw new Error(["invalid expression: '", exp, "'"].join(''));
     }
   };
   globalEnv.define('eval', ws.eval);
@@ -1134,7 +1137,7 @@ namespace pbnj.wonderscript {
     if (!_.isEmpty(trace)) {
       wsStack = fmtStacktrace(trace)
     }
-    return _.str(e.message ? e.message : e, ":\n", wsStack, e.stack ? _.str("\n", e.stack) : null);
+    return [e.message ? e.message : e, ":\n", wsStack, e.stack ? _.str("\n", e.stack) : null].join('');
   };
 
   function fmtStacktrace(trace) {
@@ -1143,7 +1146,7 @@ namespace pbnj.wonderscript {
       x = trace[i];
       buffer.push([x[1], "@", x[0] || 'unknown', ":", x[2]].join(''));
     }
-    return buffer.join('');
+    return buffer.join('\n');
   }
 
   ws.readStream = function(stream, env) {

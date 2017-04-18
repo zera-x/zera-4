@@ -313,23 +313,6 @@ namespace pbnj.core {
   _['->ws'] = mori.toClj;
   _['->js'] = mori.toJs;
 
-  _.first = function(obj) {
-    if (mori.isCollection(obj)) return mori.first(obj);
-    return _.isArrayLike(obj) ? obj[0] : _.values(obj)[0];
-  };
-
-  _.last = function(obj) {
-    if (mori.isCollection(obj)) return mori.last(obj);
-    var a = _.isArrayLike(obj) ? obj : _.values(obj);
-    return a[a.length - 1];
-  };
-
-  _.rest = function(obj) {
-    if (mori.isCollection(obj)) return mori.rest(obj);
-    var a = _.isArrayLike(obj) ? _.toArray(obj) : _.values(obj);
-    return a.slice(1);
-  };
-
   /**
    * @param {pbnj.ArrayLike} obj
    * @returns {number}
@@ -530,63 +513,6 @@ namespace pbnj.core {
   };
 
   /**
-   * Return new copy of object with the given key and it's
-   * associated value removed
-   *
-   * @param {Object} obj
-   * @param {string} key
-   * @returns {Object}
-   */
-  _.dissoc = function(obj, key) {
-    if (mori.isAssociative(obj)) {
-      return mori.dissoc(obj, key);
-    }
-    else {
-      var newObj = {}, k;
-      for (k in obj) if (k !== key) newObj[k] = obj[k];
-      return newObj;
-    }
-  };
-
-  /**
-   * Return a new copy of object with the given key and value added
-   *
-   * @param {Object} obj
-   * @param {string} key
-   * @param {*} val
-   * @returns {Object}
-   */
-  _.assoc = function(obj, key, val) {
-    if (mori.isAssociative(obj)) {
-      return mori.assoc(obj, key, val);
-    }
-    else {
-      var newObj = {}, k;
-      for (k in obj) newObj[k] = obj[k];
-      newObj[key] = val;
-      return newObj;
-    }
-  };
-
-  /**
-   * 
-   * @param {Object} o1
-   * @param {Object} o2
-   * @returns {Object}
-   */
-  _.merge = function (o1, o2) {
-    if (mori.isAssociative(o1) && mori.isAssociative(o2)) {
-      return mori.merge(o1, o2);
-    }
-    else {
-      var o = {}, k;
-      for (k in o1) o[k] = o1[k];
-      for (k in o2) o[k] = o2[k];
-      return o;
-    }
-  };
-
-  /**
    * @param {*} val
    * @returns {boolean}
    */
@@ -596,15 +522,6 @@ namespace pbnj.core {
     return val === false || _.isNull(val) || _.isUndefined(val);
   };
 
-  /**
-   * @param {...*}
-   * @returns {Array<*>}
-   */
-  _.cat = function(/* args */) {
-    var args = _.toArray(arguments);
-    return [].concat.apply(args[0], args.slice(1, args.length));
-  };
-  
   /**
    * @params {Array<*>}
    * @returns {Array<Array<*>>}
