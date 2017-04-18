@@ -217,7 +217,7 @@ namespace pbnj.wonderscript {
 
     if (!_.isSymbol(name)) throw new Error('name should be a symbol');
     
-    methods = _.intoArray(_.map(specs, function(spec) { return evalMethod(spec, env) }));
+    methods = _.intoArray(mori.map(function(spec) { return evalMethod(spec, env) }, specs));
 
     mixin = function(obj) {
       for (var i = 0; i < methods.length; i++) {
@@ -301,13 +301,18 @@ namespace pbnj.wonderscript {
 
   var lambdaID = 0;
   function Lambda(exp, env) {
+    var id, rest, names, argCount, bodies, i, fn, exprs, args, body, sum, keys, arities;
+
     if (arguments.length !== 2) {
-      throw new Error(_.str('2 arguments expected got: ', arguments.length));
+      throw new Error(['2 arguments expected got: ', arguments.length].join(''));
     }
-    var id = _.str('lambda-', lambdaID++);
-    var rest = _.rest(exp);
-    var names = _.first(rest);
-    var argCount = 0, bodies = {};
+
+    id = _.str('lambda-', lambdaID++);
+    rest = _.rest(exp);
+    names = _.first(rest);
+    argCount = 0;
+    bodies = {};
+
     if (_.isVector(names)) {
       argCount = _.count(names);
       for (var i = 0; i < argCount; i++) {
@@ -320,15 +325,28 @@ namespace pbnj.wonderscript {
       var body = bodies[argCount].body;
     }
     else if (_.isList(names)) {
-      var fn, exprs = rest;
+      exprs = rest;
       while (fn = _.first(exprs)) {
-        var args = _.first(fn);
-        var body = _.rest(fn);
-        var argCount = _.reduce(args, function(sum, arg) { return (_.str(arg)[0] === '&' ? (sum + 1) * -1 : sum + 1) }, 0);
-        bodies[argCount] = {arity: argCount, args: args, code: body};
+        args = _.intoArray(_.first(fn));
+        body = _.rest(fn);
+        sum = 0;
+        for (i = 0; i < args.length; i++) {
+          if (('' + args[i])[0] === '&') {
+            sum = (sum + 1) * -1
+          }
+          else {
+            sum++;
+          }
+        }
+        bodies[sum] = {arity: sum, args: args, code: body};
         exprs = _.rest(exprs);
       }
-      argCount = _.first(_.sort(_.map(_.pluck(bodies, 'arity'), Math.abs))) * -1;
+      keys = _.keys(bodies);
+      arities = [];
+      for (i = 0; i < keys.length; i++) {
+        arities.push(Math.abs(bodies[keys[i]].arity));
+      }
+      argCount = _.sort(arities)[0] * -1;
     }
     else {
       throw new Error('the second element of a lambda expression should be an argument vector or the beginning of a list of lambda bodies');
@@ -508,9 +526,8 @@ namespace pbnj.wonderscript {
 
   // TODO: add tail position check
   var evalRecursionPoint = function(exp, env) {
-    var args = _.intoArray(_.map(_.rest(exp), function(x) { return ws.eval(x, env); }));
+    var args = _.intoArray(mori.map(function(x) { return ws.eval(x, env); }, _.rest(exp)));
     throw new RecursionPoint(args);
-    //return recur.bind(args).exec();
   };
 
   var isInvocable = function(exp) {
@@ -523,65 +540,78 @@ namespace pbnj.wonderscript {
   };
 
   var evalApplication = function(exp, env) {
-    var func, args, op;
+    var func, args, rawargs, buffer, op, i;
 
-    args = _.map(_.rest(exp), function(exp) { return ws.eval(exp, env); });
+    args    = [];
+    rawargs = _.intoArray(_.rest(exp));
+    for (i = 0; i < rawargs.length; i++) {
+      args.push(ws.eval(rawargs[i], env));
+    }
 
     // Primitive operators are inlined for performance
     op = _.first(exp);
     if (_.equals(op, _.symbol('+')) || _.equals(op, _.symbol('-')) || _.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
-      return eval(_.reduce(args, function(s, x) { return _.str(s, op, x) }));
+      return eval(args.join(op.toString()));
     }
     else if (_.equals(op, _.symbol('add1'))) {
-      if (_.count(args) !== 1) {
-        throw new Error(_.str('expected 1 argument, got: ', _.count(args)));
+      if (args.length !== 1) {
+        throw new Error(['expected 1 argument, got: ', args.length].join(''));
       }
       else {
-        return eval(_.str('1+', _.first(args)));
+        return eval(['1+', args[0]].join(''));
       }
     }
     else if (_.equals(op, _.symbol('sub1'))) {
-      if (_.count(args) !== 1) {
-        throw new Error(_.str('expected 1 argument, got: ', _.count(args)));
+      if (args.length !== 1) {
+        throw new Error(['expected 1 argument, got: ', args.length].join(''));
       }
       else {
-        return eval(_.str(_.first(args), '-1'));
+        return eval([args[0], '-1'].join(''));
+      }
+    }
+    else if (_.equals(op, _.symbol('not'))) {
+      if (args.length !== 1) {
+        throw new Error(['expected 1 argument, got: ', _.coargs.length].join(''));
+      }
+      else {
+        if (args[0] == null) return true;
+        return eval(['!', args[0]].join(''));
       }
     }
     else if (_.equals(op, _.symbol('mod'))) {
-      return eval(_.reduce(args, function(s, x) { return _.str(s, '%', x) }));
+      return eval(args.join('%'));
     }
     else if (_.equals(op, _.symbol('bit-or'))) {
-      return eval(_.reduce(args, function(s, x) { return _.str(s, '|', x) }));
+      return eval(args.join('|'));
     }
     else if (_.equals(op, _.symbol('bit-and'))) {
-      return eval(_.reduce(args, function(s, x) { return _.str(s, '&', x) }));
+      return eval(args.join('&'));
     }
     else if (_.equals(op, _.symbol('bit-xor'))) {
-      return eval(_.reduce(args, function(s, x) { return _.str(s, '^', x) }));
+      return eval(args.join('^'));
     }
     else if (_.equals(op, _.symbol('bit-not'))) {
-      if (_.count(args) !== 1) {
-        throw new Error(_.str('expected 1 argument, got: ', _.count(args)));
+      if (args.length !== 1) {
+        throw new Error(['expected 1 argument, got: ', args.length].join(''));
       }
       else {
-        return eval(_.str('~', _.first(args)));
+        return eval(['~', args.length].join(''));
       }
     }
     else if (_.equals(op, _.symbol('bit-shift-left'))) {
-      if (_.count(args) !== 2) {
-        throw new Error(_.str('expected 2 argument, got: ', _.count(args)));
+      if (args.length !== 2) {
+        throw new Error(['expected 2 argument, got: ', args.length].join(''));
       }
       else {
-        return eval(_.str(_.first(args), '<<', _.second(args)));
+        return eval([args[0], '<<', args[1]].join(''));
       }
     }
     else if (_.equals(op, _.symbol('bit-shift-right'))) {
-      if (_.count(args) !== 2) {
-        throw new Error(_.str('expected 2 argument, got: ', _.count(args)));
+      if (args.length !== 2) {
+        throw new Error(['expected 2 argument, got: ', args.length].join(''));
       }
       else {
-        return eval(_.str(_.first(args), '>>', _.second(args)));
+        return eval([args[0], '>>', args[1]].join(''));
       }
     }
     
@@ -737,7 +767,8 @@ namespace pbnj.wonderscript {
 
   var evalClassInstantiation = ws.evalClassInstantiation = function(exp, env) {
     var ctr = ws.eval(_.second(exp), env);
-    var args = _.intoArray(_.map(_.rest(exp), function(arg) { return ws.eval(arg, env) }));
+    if (!_.isFunction(ctr)) throw new Error('class given is not a valid constructor');
+    var args = _.intoArray(mori.map(function(arg) { return ws.eval(arg, env) }, _.rest(exp)));
     return new (ctr.bind.apply(ctr, args));
   };
 
@@ -891,7 +922,7 @@ namespace pbnj.wonderscript {
       if (m == null) {
         throw new Error(_.str('method "', ws.inspect(mname), '" does not exist'));
       }
-      return m.apply(obj, _.intoArray(_.map(_.rest(method), function(x) { return ws.eval(x, env) })));
+      return m.apply(obj, _.intoArray(mori.map(function(x) { return ws.eval(x, env) }, _.rest(method))));
     }
     else {
       var m = obj[_.str(method)]
@@ -941,9 +972,9 @@ namespace pbnj.wonderscript {
 
   var evalTryBlock = function(exp, env) {
     var body = _.rest(exp), expr, value;
-    var catchBlock = _.filter(body, isCatchBlock);
-    var finallyBlock = _.first(_.filter(body, isFinallyBlock));
-    body = _.reject(body, function(exp) { return isFinallyBlock(exp) || isCatchBlock(exp) });
+    var catchBlock = mori.filter(isCatchBlock, body);
+    var finallyBlock = _.first(mori.filter(isFinallyBlock, body));
+    body = mori.remove(function(exp) { return isFinallyBlock(exp) || isCatchBlock(exp) }, body);
     var scope = env.extend().setIdent('try');
     if (!catchBlock && !finallyBlock) throw new Error("A try block should have a catch block or a finally block");
     if (catchBlock) {
@@ -978,18 +1009,6 @@ namespace pbnj.wonderscript {
   ws.globalEnv = globalEnv;
   
   globalEnv.define('*source*', null);
-  globalEnv.define('identical?', function(a, b) { return a === b; });
-  globalEnv.define('equiv?', function(a, b) { return a == b; });
-  globalEnv.define('not', function(x) { return !x; });
-  globalEnv.define('=', _.equals);
-  globalEnv.define('>', function(a, b) { return a > b; });
-  globalEnv.define('<', function(a, b) { return a < b; });
-  globalEnv.define('<=', function(a, b) { return a <= b; });
-  globalEnv.define('>=', function(a, b) { return a >= b; });
-  globalEnv.define('mod', function(a, b) { return a % b; });
-  globalEnv.define('array', function() { return Array.prototype.slice.call(arguments); });
-  globalEnv.define('object', function() { return {} });
-  globalEnv.define('println', console.log.bind(console));
   globalEnv.define('macroexpand', macroexpand);
   globalEnv.define('arity', arity);
   
@@ -1119,7 +1138,7 @@ namespace pbnj.wonderscript {
   };
 
   function fmtStacktrace(trace) {
-    return _.map(trace, function(x) { return _.str(x[1], "@", x[0] || 'unknown', ":", x[2]) }).join('\n');
+    return mori.map(function(x) { return _.str(x[1], "@", x[0] || 'unknown', ":", x[2]) }, trace).join('\n');
   }
 
   ws.readStream = function(stream, env) {

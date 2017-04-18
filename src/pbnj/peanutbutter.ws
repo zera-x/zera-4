@@ -47,7 +47,7 @@
     (str (name attr) "=\"" value "\"")))
 
 (define-function render-attrs [attrs]
-  (reduce (mori/map render-attr attrs) (lambda [s x] (str s " " x))))
+  (reduce (lambda [s x] (str s " " x)) (map render-attr attrs)))
 
 (define-function- render-attrs-tag [tag]
   (let [nm (render-tag-name (first tag))
@@ -65,7 +65,7 @@
 (define expression-list? sequential?)
 
 (define-function render-expression-list [exprs]
-  (reduce (mori/map html exprs) str))
+  (reduce str (map html exprs)))
 
 (define-function component-index [nm]
   (. (str nm) (replace (new js/RegExp "^:") "")))
@@ -110,7 +110,7 @@
 (define render-atom str)
 
 (define-function html-encode [s]
-  (reduce (map (into [] (. s (split ""))) (lambda [c] (str "&#" (. c charCodeAt) ";"))) str))
+  (reduce str (map (lambda [c] (str "&#" (. c charCodeAt) ";")) (into [] (. s (split ""))))))
 
 (define-function expression-escape? [exp]
   (and (list? exp) (= (first exp) '=)))
@@ -136,8 +136,7 @@
         (expression-list? exp) (render-expression-list exp)
         :else
           (do
-            (println exp)
-            (throw "invalid expression"))))
+            (throw (new js/Error (str "invalid expression: " exp))))))
 
 (define compile html)
 

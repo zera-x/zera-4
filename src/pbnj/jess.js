@@ -10,7 +10,6 @@ goog.scope(function() {
   var str = pbnj.core.str;
   var pair = pbnj.core.pair;
   var map = pbnj.core.map;
-  var pluck = pbnj.core.pluck;
   var assoc = pbnj.core.assoc;
   
   var pprint = function(form) {

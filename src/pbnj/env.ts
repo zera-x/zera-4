@@ -158,7 +158,7 @@ namespace pbnj.core {
       return _.keyword('js', 'Array');
     }
     else if (_.isObject(value)) {
-      var nm = value.constructor.name;
+      var nm = value.constructor && value.constructor.name;
       if (nm === 'Object' || nm === '' || nm == null) {
         return _.keyword('js', 'Object');
       }

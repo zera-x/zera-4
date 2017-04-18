@@ -20,26 +20,8 @@
 (define keyword? isKeyword)
 
 ; js types
-(define number? isNumber)
-(define string? isString)
-(define boolean? isBoolean)
-(define nil? isNull)
-(define undefined? isUndefined)
-(define date? isDate)
-(define error? isError)
-(define regexp? isRegExp)
-(define function? isFunction)
-(define object? isObject)
-(define arguments? isArguments)
-(define element? isElement)
 (define map-object mapObject)
 (define map-indexed mapIndexed)
-
-; arrays
-(define array? isArray)
-(define arraylike? isArrayLike)
-(define ->array toArray)
-(define into-array intoArray)
 
 (define odd? isOdd)
 (define even? isEven)
@@ -67,11 +49,6 @@
 (define ->ws toClj)
 (define ->js toJs)
 
-(define + add)
-(define - sub)
-(define * mult)
-(define / div)
-
 (define-macro comment [&forms] nil)
 
 (define-macro if
@@ -89,8 +66,8 @@
 (define-macro let [bindings &body]
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
   (cons 'do
-        (concat (map (pair bindings)
-                     (lambda [pair] (list 'define :private (pair 0) (pair 1))))
+        (concat (map (lambda [pair] (list 'define :private (pair 0) (pair 1)))
+                     (pair bindings))
                 body)))
 
 (define-macro or
@@ -161,12 +138,12 @@
   (processWatches
     [self newVal]
     (when (.- self watches)
-      (map (.- self watches)
-           (lambda [x]
+      (map (lambda [x]
               (let [k (x 0)
                     f (x 1)]
                 (f k self (.- self value) newVal)
-                x)))))
+                x))
+           (.- self watches))))
   (reset
     [self val]
     (. self (processWatches val))
@@ -258,7 +235,7 @@
  (lambda [body]
   (println "body" body)
   (if (list? body)
-    (inspect (cons (first body) (map (rest body) eval)))
+    (inspect (cons (first body) (map eval (rest body))))
     (inspect body))))
 
 (define-macro is [body]
@@ -409,7 +386,7 @@
 (define-function join
   [col delim]
   (let [joiner (lambda [s x] (str s delim x))]
-    (mori/reduce joiner col)))
+    (reduce joiner col)))
 
 (define-function tests [mod] (.- mod *tests*))
 
@@ -434,7 +411,7 @@
 (define-function collect-tests [module] (vals (eval (symbol (name module) "*tests*"))))
 
 (define-function prove-module [module]
-  (into [] (map (map (collect-tests module) :test/name) prove)))
+  (into [] (map prove (map :test/name (collect-tests module)))))
 
 (define *sym-count* (atom 0))
 (define-function gen-sym 
@@ -598,106 +575,4 @@
 (if (= *platform* :nodejs)
   (define-function print [&vals] (. process/stdout (write (apply str vals)))))
 
-(comment
-(require "jess.ws")
 (require "wonderscript/compiler.ws")
-
-(define-macro define-type
-  ([nm fields]
-   (println fields)
-   (let [assigns (mori/map (lambda [f] (list '.-set! 'this (name f) f)) fields)]
-     (list 'define nm
-           (list 'pbnj.jess/eval
-                 (list 'quote
-                       (list 'paren
-                             (cons 'function (cons nm (cons (apply vector fields) assigns)))))))))
-  ([nm fields &methods]
-   (cons 'do
-         (cons
-           (list 'define-type nm fields)
-           (cons
-             (list '.-set! nm 'prototype (list 'object))
-             (concat
-               (map methods
-                    (lambda [meth]
-                            (let [methnm (first meth)
-                                  args (first (rest meth))
-                                  body (rest (rest meth))]
-                              (list '.-set!
-                                    (symbol (str (current-module-name) "." nm) "prototype")
-                                    methnm
-                                    (cons 'lambda (cons args body))))))
-               [nm]))))))
-
-
-(define-macro define-class [nm fields &methods]
-  (let [env (pbnj/env)
-        klass (symbol nm)
-        assigns
-        (map-indexed
-          (lambda [i f]
-                  (list '.-set! 'this (name f) f)) fields)
-        ctr (cons 'function (cons nm (cons (apply vector fields) assigns)))
-        meths
-        (map methods
-             (lambda [meth]
-                     (let [n (str (first meth))
-                           args (first (rest meth))
-                           body (rest (rest meth))]
-                       (list '.-set! klass (vector "prototype" n)
-                             (list 'function
-                                   (into (vector) (rest args))
-                                   (list 'return
-                                         (list '.
-                                               (cons 'fn
-                                                     (cons
-                                                       (if (empty? args) [] [(first args)])
-                                                       (map body (lambda [exp] (pbnj.wonderscript/ws->jess exp env)))))
-                                               'apply
-                                               'this
-                                               (list '.
-                                                     '[this]
-                                                     'concat
-                                                     (list 'Array.prototype.slice.call 'arguments)))))))))
-        proto (cons (list '.-set! klass "prototype" (hash-map)) meths)
-        code (into (list) (reverse (concat (list 'do) (list ctr) proto (list klass))))]
-    ;(pprint code)
-    ;(pprint (pbnj.jess/compile code))
-    (list 'define nm (list 'pbnj.jess/eval (list 'quote code)))))
-
-(test define-class
-  (define-class Point
-    [x y]
-    (toString
-      [self]
-      (str "(" (.- self x) ", " (.- self y) ")"))
-    (distance
-      [p1 p2]
-      (Math/sqrt (+ (Math/pow (- (.- p2 x) (.- p1 x)) 2) (Math/pow (- (.- p2 y) (.- p1 y)) 2))))) 
-  (let [p (new Point 3 4)]
-    (is (= 3 (.- p x)))
-    (is (= 4 (.- p y)))
-    (is (= "(3, 4)", (str p)))
-    (is (= "(3, 4)", (. p toString)))))
-
-(require "types.ws")
-
-(define-macro define-method
-  [nm value args &body]
-  )
-
-(define-method distance Point [p1 p2]
-  (Math/sqrt (+ (Math/pow (- (point-x p2) (point-x p1)) 2) (Math/pow (- (point-y p2) (point-y p1)) 2)))) 
-
-(define-class pbnj.core/PersistentList [h t]
-  (first [] this.h)
-  (rest [] this.t)
-  (isEmpty [] (and (nil? this.h) (nil? this.t))))
-
-(define pbnj.core.PersistentList/EMPTY (new PersistentList nil nil))
-
-(define-function plist
-  [&elements]
-  (reduce elements
-          (lambda [e] ) ))
-)

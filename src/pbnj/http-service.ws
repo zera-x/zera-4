@@ -47,12 +47,12 @@
 (define-function build-request-map
   [req]
   (into {}
-        (map (object->list req request-keys)
-             (lambda [xs]
+        (map (lambda [xs]
                      (let [k (request-keys (xs 0))
                            xfr (request-xformers k)
                            v (xs 1)]
-                       [k (if xfr (xfr v) v)])))))
+                       [k (if xfr (xfr v) v)]))
+             (object->list req request-keys))))
 
 (define-macro define-service
   ([nm &body] (cons 'define-service (cons nm (cons nil body))))
@@ -65,15 +65,20 @@
                    (list 'define- '*http-express-app* (list '*http-express*))
                    (concat body ['*http-express-app*])))))))
 
+(define-function response [res val]
+  (if (and (object? val) (.- val then))
+    (. val (then (lambda [x] (. res (send x)))))
+    (. res (send val))))
+
 (define-function- build-http-verb
   [verb path bindings body]
   (list '. '*http-express-app*
         (list verb path
               (list 'lambda '[*request* *response* o]
-                    (list '. '*response*
-                          (list 'send
-                                (list (cons 'lambda (cons bindings body))
-                                      (list 'pbnj.http-service/build-request-map '*request*))))))))
+                    (list 'pbnj.http-service/response
+                          '*response*
+                          (list (cons 'lambda (cons bindings body))
+                                (list 'pbnj.http-service/build-request-map '*request*)))))))
 
 (define-function start
   ([svc port]

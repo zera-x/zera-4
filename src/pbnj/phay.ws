@@ -17,20 +17,22 @@
 
 (define-function emit-expression [exp] (str "(" (compile (second exp)) ")"))
 
-(define-function emit-block [exp] (str (join (map exp compile) ";") ";"))
+(define-function emit-block [exp] (str (join (map compile exp) ";") ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
     (unless (and (list? exp) (<= 3 size) (odd? size))
             (throw "malformed expression: an if-else should be a list with at least 3 elements"))
-    (reduce (pair (rest exp))
+    (reduce
       (lambda [memo exp]
               (cond (nil? memo)
                       (str "if(" (compile (exp 0)) "){" (compile (exp 1)) "}")
                     (= :else (exp 0))
                       (str memo "else{" (compile (exp 1)) "}")
                     :else
-                      (str memo "elseif(" (compile (exp 0)) "){" (compile (exp 1)) "}"))) nil)))
+                      (str memo "elseif(" (compile (exp 0)) "){" (compile (exp 1)) "}")))
+      nil
+      (pair (rest exp)))))
 
 (define-function emit-if [exp]
   (let [pred (second exp)
@@ -43,7 +45,7 @@
     (str "isset(" value ")")))
 
 (define-function emit-escape [exp]
-  (str "<?php " (str (join (map (rest exp) compile) ";") ";") " ?>"))
+  (str "<?php " (str (join (map compile (rest exp)) ";") ";") " ?>"))
 
 (define-function emit-cast [t exp]
   (str "(" t ")" (compile exp)))
@@ -63,7 +65,7 @@
 
 (define-function emit-argument-list [args]
   (if (empty? args) "()"
-      (str "(" (join (map args compile) ",") ")")))
+      (str "(" (join (map compile args) ",") ")")))
 
 (define-function emit-function [exp]
   (let [ident (second exp)]
@@ -120,7 +122,7 @@
   (let [size (count exp)
         terms (second exp)]
     (cond (>= size 3)
-            (str "for(" (join (map terms compile) ";")  "){" (emit-block (rest (rest exp))) "}")
+            (str "for(" (join (map compile terms) ";")  "){" (emit-block (rest (rest exp))) "}")
           :else
             (throw "a for loop should be a list of at least 3 elements"))))
 
@@ -150,7 +152,7 @@
     (cond (= size 2)
             (str "new " (compile (second exp)) "()")
           (> size 2)
-            (str "new " (compile (second exp)) "(" (join (map (rest (rest exp)) compile) ",") ")"))))
+            (str "new " (compile (second exp)) "(" (join (map compile (rest (rest exp))) ",") ")"))))
 
 (define-function emit-property-assignment [exp]
   (let [size (count exp)
@@ -178,7 +180,7 @@
 (define-function emit-binary-operator [exp]
   (let [size (count exp)]
     (cond (>= size 3)
-            (join (map (rest exp) compile) (str (first exp)))
+            (join (map compile (rest exp)) (str (first exp)))
           :else
             (throw "a binary operator should be a list of at least 3 elements"))))
 
@@ -195,21 +197,23 @@
   ([fn]
    (str (compile fn) "()"))
   ([fn &args]
-   (str (compile fn) "(" (join (map args compile) ",") ")")))
+   (str (compile fn) "(" (join (map compile args) ",") ")")))
 
 (define-function emit-assoc-array [exp]
   (str "["
-       (reduce exp
-               (lambda [s pair]
-                       (str (if (nil? s) "" (str s ","))
-                            (compile (first pair))
-                            "=>"
-                            (compile (second pair)))) nil) "]"))
+       (reduce
+        (lambda [s pair]
+                (str (if (nil? s) "" (str s ","))
+                    (compile (first pair))
+                    "=>"
+                    (compile (second pair)))) nil)
+       "]"
+       exp))
 
 (define-function emit-array [exp]
   (if (empty? exp)
     "[]"
-    (str "[" (reduce (map exp compile) (lambda [s x] (str s ", " x))) "]")))
+    (str "[" (reduce (lambda [s x] (str s ", " x))) "]" (map compile exp))))
 
 (define *macros* (atom {}))
 

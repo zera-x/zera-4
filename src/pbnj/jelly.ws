@@ -20,17 +20,17 @@
   (and (sequential? exp) (map? (last exp))))
 
 (define-function render-selector [exp]
-  (reduce exp (lambda [s x] (str s " " x))))
+  (reduce (lambda [s x] (str s " " x)) exp))
 
 (define-function render-declaration [exp]
-  (reduce (map exp (lambda [pair] (str (name (pair 0)) ": " (css (pair 1)))))
-          (lambda [s x] (str s ";" x))))
+  (reduce (lambda [s x] (str s ";" x))
+          (map (lambda [pair] (str (name (pair 0)) ": " (css (pair 1)))) exp)))
 
 (define declaration? map?)
 
 (define-function render-rule [exp]
-  (str (render-selector (reject exp map?)) " { "
-       (render-declaration (first (filter exp map?))) " } "))
+  (str (render-selector (remove map? exp)) " { "
+       (render-declaration (first (filter map? exp))) " } "))
 
 (define-function css [exp]
   (cond (nil? exp) ""

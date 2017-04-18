@@ -17,3 +17,4 @@ src/pbnj/wonderscript.js.map
 examples/home.html
 src/pbnj/peanutbutter.js
 src/pbnj/peanutbutter.js.map
+examples/*.js

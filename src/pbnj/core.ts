@@ -28,43 +28,7 @@ namespace pbnj.core {
     throw new Error('mori is required');
   }
 
-  function Syntax(type, value, input) {
-    this.type = type;
-    this.value = value;
-    this.line = input && input.line ? input.line() : 0;
-    this.column = input && input.line ? input.column() : 0;
-    if (_.isSymbol(input)) {
-      this.source = _.str(input);
-    }
-    else if (input && input.source) {
-      this.source = input.source();
-    }
-    else {
-      this.source = 'unknown';
-    }
-    Object.freeze(this);
-  };
-  
-  Syntax.prototype.toString = function() {
-    return _.str('(syntax ', this.value, ')');
-  };
-  
-  Object.freeze(Syntax.prototype);
-
-  _.makeSyntax = function(type, value, input) {
-    return new Syntax(type, value, input);
-  };
-
-  _['syntax-value'] = function(syn) { return syn.value };
-  _['syntax-type'] = function(syn) { return syn.type };
-  _['syntax-line'] = function(syn) { return syn.line };
-  _['syntax-column'] = function(syn) { return syn.column };
-
-  _.isSyntax = function(val) {
-    return val instanceof Syntax;
-  };
-
-  _['->string'] = function(obj) { return obj.toString() };
+  _['->string'] = function(obj) { return ''+obj };
 
   _.makeTagPredicate = function(tag) {
     return function(exp) {
@@ -74,7 +38,7 @@ namespace pbnj.core {
 
   // Arithmetic
   
-  _.add = function(a, b) {
+  _.add = _['+'] = function(a, b) {
     if (arguments.length === 0) return 0;
     else if (arguments.length === 1) return a;
     else {
@@ -86,7 +50,7 @@ namespace pbnj.core {
     }
   };
 
-  _.sub = function(a, b) {
+  _.sub = _['-'] = function(a, b) {
     if (arguments.length === 0) return 0;
     else if (arguments.length === 1) return -a;
     else {
@@ -98,7 +62,7 @@ namespace pbnj.core {
     }
   };
 
-  _.mult = function(a, b) {
+  _.mult = _['*'] = function(a, b) {
     if (arguments.length === 0) return 1;
     else if (arguments.length === 1) return a;
     else {
@@ -110,7 +74,7 @@ namespace pbnj.core {
     }
   };
 
-  _.div = function(a, b) {
+  _.div = _['/'] = function(a, b) {
     if (arguments.length === 0) return 1;
     else if (arguments.length === 1) return a;
     else {
@@ -126,7 +90,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isNumber = function(val) {
+  _.isNumber = _['number?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object Number]';
   };
 
@@ -134,7 +98,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isString = function(val) {
+  _.isString = _['string?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object String]';
   };
 
@@ -142,7 +106,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isBoolean = function(val) {
+  _.isBoolean = _['boolean?'] = function(val) {
     return val === true || val === false || Object.prototype.toString.call(val) === '[object Boolean]';
   };
 
@@ -150,7 +114,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isNull = function(val) {
+  _.isNull = _['nil?'] = function(val) {
     return val === null;
   };
 
@@ -158,7 +122,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isUndefined = function(val) {
+  _.isUndefined = _['undefined?'] = function(val) {
     return val === void 0;
   };
 
@@ -166,7 +130,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isDate = function(val) {
+  _.isDate = _['date?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object Date]';
   };
 
@@ -174,7 +138,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isError = function(val) {
+  _.isError = _['error?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object Error]';
   };
 
@@ -182,7 +146,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isRegExp = function(val) {
+  _.isRegExp = _['regexp?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object RegExp]';
   };
 
@@ -190,7 +154,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isFunction = function(val) {
+  _.isFunction = _['function?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object Function]';
   };
 
@@ -198,7 +162,7 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isArguments = function(val) {
+  _.isArguments = _['arguments?'] = function(val) {
     return Object.prototype.toString.call(val) === '[object Arguments]';
   };
 
@@ -206,9 +170,22 @@ namespace pbnj.core {
    * @param {*} val
    * @returns {boolean}
    */
-  _.isElement = function(obj) {
+  _.isElement = _['element?'] = function(obj) {
     return !!(obj && obj.nodeType === 1);
   };
+
+  _['='] = _.equals;
+  _['identical?'] = function(a, b) { return a === b };
+  _['equiv?'] = function(a, b) { return a == b };
+  _['not'] = function(x) { return !x };
+  _['>'] = function(a, b) { return a > b };
+  _['<'] = function(a, b) { return a < b };
+  _['<='] = function(a, b) { return a <= b };
+  _['>='] = function(a, b) { return a >= b };
+  _.mod = function(a, b) { return a % b };
+  _.array = function() { return Array.prototype.slice.call(arguments) };
+  _.object = function() { return {} };
+  _.println = console.log.bind(console);
 
   _.name = function(sym) { return sym.name };
   _.namespace = function(sym) { return sym.ba };
@@ -261,7 +238,7 @@ namespace pbnj.core {
    * @param {(pbnj.ArrayLike|null)} obj
    * @returns {Array<*>}
    */
-  _.toArray = function(obj) {
+  _.toArray = _['->array'] = function(obj) {
     if (!obj) return [];
     else if (_.isArray(obj)) return obj;
     else if (mori.isCollection(obj)) {
@@ -276,19 +253,21 @@ namespace pbnj.core {
    * @params {Object} obj
    * @returns {boolean}
    */
-  _.isArray = Array.isArray || function(obj) {
+  _.isArray = _['array?'] = (Array.isArray || function(obj) {
     return Object.prototype.toString.call(obj) === '[object Array]';
-  };
+  });
 
   var MAX_ARRAY_INDEX = Math.pow(2, 53) - 1;
   /**
    * @param {Object} obj
    * @returns {boolean}
    */
-  _.isArrayLike = function(obj) {
+  _.isArrayLike = _['arraylike?'] = function(obj) {
     var length = obj && obj.length;
     return typeof length === 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
   };
+
+  _['into-array'] = mori.intoArray;
 
   _.first = function(obj) {
     if (mori.isCollection(obj)) return mori.first(obj);
@@ -439,7 +418,7 @@ namespace pbnj.core {
    * @param {Object} obj
    * @returns {boolean}
    */
-  _.isObject = function(obj) {
+  _.isObject = _['object?'] = function(obj) {
     var type = typeof obj;
     return  type === 'function' || type === 'object' && !!obj;
   };
@@ -573,10 +552,6 @@ namespace pbnj.core {
     return val === false || _.isNull(val) || _.isUndefined(val);
   };
 
-  _.cons = function(v, col) {
-    return mori.cons(v, col);
-  };
-
   /**
    * @param {...*}
    * @returns {Array<*>}
@@ -661,39 +636,12 @@ namespace pbnj.core {
 
   /**
    * @param {pbnj.ArrayLike} a
-   * @param {Function} fn
-   * @returns {Array<*>}
-   */
-  _.map = function (obj, fn) {
-    if (mori.isCollection(obj)) {
-      return mori.map(fn, obj);
-    }
-    else {
-      var iteratee = optimizeCb(fn);
-      var results = [], i;
-      if (_.isArrayLike(obj)) {
-        for (i = 0; i < obj.length; ++i) {
-          results.push(iteratee(obj[i], i));
-        }
-      }
-      else {
-        var keys = _.keys(obj);
-        for (i = 0; i < keys.length; ++i) {
-          results.push(iteratee(obj[keys[i]], keys[i]));
-        }
-      }
-      return results;
-    }
-  };
-
-  /**
-   * @param {pbnj.ArrayLike} a
    * @param {string} prop
    * @param {?Object} context
    * @returns {Array<*>}
    */
-  _.pluck = function (a, prop, context) {
-    return _.map(a, function (val) { return _.get(val, prop) }, context);
+  _.pluck = function (a, prop) {
+    return _.map(function (val) { return val[prop] }, a);
   };
 
   /**
@@ -704,7 +652,7 @@ namespace pbnj.core {
    */
   _.invoke = function (a, prop) {
     var args = _.toArray(arguments).slice(2);
-    return _.map(a, function (val) { return val[prop].apply(val, args) });
+    return _.map(function (val) { return val[prop].apply(val, args) }, a);
   };
   
   /**
@@ -712,18 +660,18 @@ namespace pbnj.core {
    * @param {Function} fn
    * @returns {Array<*>}
    */
-  _.mapcat = function (a, fn) {
+  /*_.mapcat = function (a, fn) {
     if (mori.isCollection(a)) {
       return mori.mapcat(fn, a);
     }
     else {
-      var a = _.map(a, fn), newA = [], i;
+      var a = _.map(fn, a), newA = [], i;
       for (i = 0; i < a.length; ++i) {
         newA = newA.concat(a[i]);
       }
       return newA;
     }
-  };
+  };*/
 
   /**
    * @param {pbnj.ArrayLike} obj
@@ -731,7 +679,7 @@ namespace pbnj.core {
    * @param {?Object} context
    * @returns {Array<*>}
    */
-  _.filter = function (obj, fn) {
+  /*_.filter = function (obj, fn) {
     if (mori.isCollection(obj)) {
       return mori.filter(fn, obj);
     }
@@ -751,7 +699,7 @@ namespace pbnj.core {
       }
       return results;
     }
-  };
+  };*/
 
   /**
    * @param {pbnj.ArrayLike} obj
@@ -759,7 +707,7 @@ namespace pbnj.core {
    * @param {?Object} context
    * @returns {Array<*>}
    */
-  _.reject = _.remove = function (obj, fn) {
+  /*_.reject = _.remove = function (obj, fn) {
     if (mori.isCollection(obj)) {
       return mori.remove(fn, obj);
     }
@@ -779,7 +727,7 @@ namespace pbnj.core {
       }
       return results;
     }
-  };
+  };*/
 
   /**
    * @param {pbnj.ArrayLike} obj
@@ -788,7 +736,7 @@ namespace pbnj.core {
    * @param {?Object} context
    * @returns {*}
    */
-  _.reduce = _.foldl = function (obj, fn, memo) {
+  /*_.reduce = _.foldl = function (obj, fn, memo) {
     if (mori.isCollection(obj)) {
       return memo === void 0 ? mori.reduce(fn, obj) : mori.reduce(fn, memo, obj);
     }
@@ -810,7 +758,7 @@ namespace pbnj.core {
       }
       return memo;
     }
-  };
+  };*/
 
   /**
    * @param {pbnj.ArrayLike} obj

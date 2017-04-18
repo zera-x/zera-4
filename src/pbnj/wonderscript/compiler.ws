@@ -2,7 +2,7 @@
 (require "../jess.ws")
 (module pbnj.wonderscript)
 
-(define *js-root-object* (if (= *platform* "nodejs") 'global 'window))
+(define *js-root-object* (if (= *platform* :nodejs) 'global 'window))
 
 (define property-accessor? isPropertyAccessor)
 (define property-assignment? isPropertyAssignment)
@@ -24,12 +24,12 @@
 (define-function method-application->jess
   [env obj method]
   (if (list? method)
-    (cons '. (cons (ws->jess obj env) (cons (first method) (map (rest method) (lambda [x] (ws->jess x env))))))
+    (cons '. (cons (ws->jess obj env) (cons (first method) (map (lambda [x] (ws->jess x env)) (rest method)))))
     (list '. (ws->jess obj env) method)))
 
 (define-function class-instantiation->jess
   [env klass &args]
-  (cons 'new (cons (ws->jess klass env) (map args (lambda [x] (ws->jess x env))))))
+  (cons 'new (cons (ws->jess klass env) (map (lambda [x] (ws->jess x env)) args))))
 
 (define-function compile [exp]
   (pbnj.jess/compile (ws->jess exp (pbnj/env))))
@@ -42,15 +42,14 @@
 
 (define-function map->jess [exp env]
   (cons 'pbnj.core.hashMap
-        (mapcat exp
-                (lambda [xs]
-                        [(ws->jess (xs 0) env) (ws->jess (xs 1) env)]) )))
+        (mapcat (lambda [xs]
+                        [(ws->jess (xs 0) env) (ws->jess (xs 1) env)]) exp)))
 
 (define-function vector->jess [exp env]
-  (cons 'pbnj.core.vector (map exp (lambda [x] (ws->jess x env)))))
+  (cons 'pbnj.core.vector (map (lambda [x] (ws->jess x env)) exp)))
 
 (define-function set->jess [exp env]
-  (cons 'pbnj.core.set (map exp (lambda [x] (ws->jess x env)))))
+  (cons 'pbnj.core.set (map (lambda [x] (ws->jess x env)) exp)))
 
 (define variable? symbol?)
 
@@ -103,27 +102,28 @@
    (if (not= (mod (count body) 2) 0) (throw "Expecting an even number of arguments"))
    (let [pairs (reverse (pair body))
          alt? (lambda [xs] (= (first xs) :else))
-         alt (first (filter pairs alt?))
-         preds (cons alt (reject pairs alt?))]
+         alt (first (filter alt? pairs))
+         preds (cons alt (remove alt? pairs))]
      (reduce
-       preds
        (lambda [l xs]
                (if (alt? l)
                  (cond->jess env (xs 0) (xs 1) (ws->jess (second l) env))
-                 (first (cons (cond->jess env (xs 0) (xs 1) l)))))))))
+                 (first (cons (cond->jess env (xs 0) (xs 1) l)))))
+       preds))))
 
 (define lambda? (tag-predicate 'lambda))
 
+; argCount = _.reduce(args, function(sum, arg) { return (_.str(arg)[0] === '&' ? (sum + 1) * -1 : sum + 1) }, 0);
 ; TODO: add capture arguments
 ; TODO: add recursion points, define-type, and define-protocol
 (define-function lambda-body [body env]
   (reduce
-    (reverse body)
     (lambda [l exp]
             (if (empty? l)
               (cons (list 'return (ws->jess exp env)) l)
               (cons (ws->jess exp env) l)))
-    (list)))
+    (list)
+    (reverse body)))
 
 (define-function lambda-single-body [args body env]
   (list 'paren
@@ -143,10 +143,9 @@
              (list longest
                    (cons 'if-else
                          (concat
-                           (mapcat bodies
-                                   (lambda [body]
+                           (mapcat (lambda [body]
                                            [(list '=== 'arguments.length (count (first body)))
-                                            (cons 'do (lambda-body (rest body) env))]))
+                                            (cons 'do (lambda-body (rest body) env))]) bodies)
                            [:else (list 'throw (list 'new 'Error "Wrong number of arguments"))])))))))
 
 (define-function lambda->jess
