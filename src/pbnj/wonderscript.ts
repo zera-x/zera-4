@@ -1138,8 +1138,9 @@ namespace pbnj.wonderscript {
   };
 
   function fmtStacktrace(trace) {
-    var i, buffer = [];
+    var i, x, buffer = [];
     for (i = 0; i < trace.length; i++) {
+      x = trace[i];
       buffer.push([x[1], "@", x[0] || 'unknown', ":", x[2]].join(''));
     }
     return buffer.join('');

@@ -2,6 +2,9 @@
 (require "../jess.ws")
 (module pbnj.wonderscript)
 
+; TODO: add module definitions
+; TODO: add require support
+
 (define *js-root-object* (if (= *platform* :nodejs) 'global 'window))
 
 (define property-accessor? isPropertyAccessor)

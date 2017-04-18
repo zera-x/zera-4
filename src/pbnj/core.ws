@@ -1,54 +1,6 @@
 ; vim: ft=clojure
 (module pbnj.core)
 
-; aliases
-(define list? isList)
-(define map? isMap)
-(define vector? isVector)
-(define set? isSet)
-(define collection? isCollection)
-(define seq? isSeq)
-(define sequential? isSequential)
-(define associative? isAssociative)
-(define counted? isCounted)
-(define indexed? isIndexed)
-(define reduceable? isReduceable)
-(define seqable? isSeqable)
-(define reversible? isReversible)
-
-(define symbol? isSymbol)
-(define keyword? isKeyword)
-
-; js types
-(define map-object mapObject)
-(define map-indexed mapIndexed)
-
-(define odd? isOdd)
-(define even? isEven)
-
-(define subset? isSubset)
-(define superset? isSuperset)
-
-(define empty? isEmpty)
-
-; other mori functions
-(define has? hasKey)
-(define has-key? hasKey)
-(define hash-map hashMap)
-(define sorted-set sortedSet)
-(define get-in getIn)
-(define assoc-in assocIn)
-(define update-in updateIn)
-(define reduce-kv reduceKV)
-(define take-while takeWhile)
-(define drop-while dropWhile)
-(define sort-by sortBy)
-(define partition-by partitionBy)
-(define group-by groupBy)
-(define prim-seq primSeq)
-(define ->ws toClj)
-(define ->js toJs)
-
 (define-macro comment [&forms] nil)
 
 (define-macro if

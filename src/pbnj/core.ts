@@ -268,6 +268,50 @@ namespace pbnj.core {
   };
 
   _['into-array'] = mori.intoArray;
+  _['map-indexed'] = mori.mapIndexed;
+
+  _['symbol?'] = mori.isSymbol;
+  _['keyword?'] = mori.isKeyword;
+  _['list?'] = mori.isList;
+  _['map?'] = mori.isMap;
+  _['vector?'] = mori.isVector;
+  _['set?'] = mori.isSet;
+  _['collection?'] = mori.isCollection;
+  _['seq?'] = mori.isSeq;
+  _['sequential?'] = mori.isSequential;
+  _['associative?'] = mori.isAssociative;
+  _['counted?'] = mori.isCounted;
+  _['indexed?'] = mori.isIndexed;
+  _['reduceable?'] = mori.isReduceable;
+  _['seqable?'] = mori.isSeqable;
+  _['reversable?'] = mori.isReversable;
+
+  _['empty?'] = mori.isEmpty;
+  _['odd?'] = mori.isOdd;
+  _['even?'] = mori.isEven;
+  _['subset?'] = mori.isSubset;
+  _['superset?'] = mori.isSuperset;
+
+  _['has?'] = mori.hasKey;
+  _['has-key?'] = mori.hasKey;
+
+  _['hash-map'] = mori.hashMap;
+  _['sorted-set'] = mori.sortedSet;
+
+  _['get-in'] = mori.getIn;
+  _['assoc-in'] = mori.assocIn;
+  _['update-in'] = mori.updateIn;
+
+  _['reduce-kv'] = mori.reduceKV;
+  _['take-while'] = mori.takeWhile;
+  _['drop-while'] = mori.dropWhile;
+  _['sort-by'] = mori.sortBy;
+  _['partition-by'] = mori.partitionBy;
+  _['group-by'] = mori.groupBy;
+
+  _['prim-seq'] = mori.primSeq;
+  _['->ws'] = mori.toClj;
+  _['->js'] = mori.toJs;
 
   _.first = function(obj) {
     if (mori.isCollection(obj)) return mori.first(obj);
