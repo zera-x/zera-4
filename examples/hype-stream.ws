@@ -41,14 +41,34 @@
                                         PRIMARY KEY (`id`)
                                      ) ENGINE=INNODB;"))))))
 
-(define-function cache-item!
+(define-function add-item!
   [item]
   (.query @*dbconn*
           "INSERT INTO `items` (`t`, `type`, `content`) VALUES (? ? ?)"
           (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content)))))
 
+(define-function update-item!
+  [item]
+  (if-not (item :item/id)
+    (throw "An :item/id is required to perform update"))
+  (.query @*dbconn*
+          "UPDATE `items` SET `t` = ?, SET `type` = ?, SET `content` = ? WHERE `id` = ?"
+          (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content)) (item :item/id))))
+
 (define-function get-item!
-  [id])
+  [id]
+  (.query @*dbconn*
+          "SELECT `id`, `t`, `type`, `content` FROM `items` WHERE `id` = ?"
+          (array (item :item/id))))
+
+(define-function item
+  ([t type content]
+   (item nil t type conent))
+  ([id t type content]
+   {:item/id id
+    :item/t t
+    :item/type type
+    :item/content content}))
 
 (define-function instagram-client
   [id token]
