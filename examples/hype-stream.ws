@@ -154,7 +154,7 @@
 
 (define-function MAIN
   [key ref old new]
-  (if (and (not old) new)
+  (if (and (nil? old) new)
     (start hype-stream 4000
            (lambda [] (println "Hype Stream Service - listening at http://localhost:4000")))))
 
