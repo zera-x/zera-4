@@ -621,6 +621,12 @@ namespace pbnj.wonderscript {
         return eval([args[0], '>>', args[1]].join(''));
       }
     }
+    else if (op.toString().startsWith('.')) {
+      var meth = _.symbol(op.toString().slice(1));
+      var obj  = _.first(_.rest(exp));
+      var newExp = _.list(_.symbol('.'), obj, _.cons(meth, _.rest(_.rest(exp))));
+      return evalMethodApplication(newExp, env);
+    }
     
     func = ws.eval(op, env);
 

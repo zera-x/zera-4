@@ -16,6 +16,10 @@
 ;  :item/type keyword
 ;  :item/content map}
 
+; syntax for "then" chains
+(define-macro !!>
+  [])
+
 (define-function initdb!
   []
   (let [mysql (js.node/require "promise-mysql")]
@@ -27,32 +31,29 @@
                  :database "hype-stream"}))
         (then (lambda [conn]
                       (reset! *dbconn* conn)
-                      (. conn (query "CREATE SCHEMA IF NOT EXISTS `hype-stream`"))
-                      (. conn (query "CREATE TABLE IF NOT EXISTS `items` (
+                      (.query conn "CREATE SCHEMA IF NOT EXISTS `hype-stream`")
+                      (.query conn "CREATE TABLE IF NOT EXISTS `items` (
                                         `id` INT AUTO_INCREMENT,
                                         `t` TIMESTAMP NOT NULL,
                                         `type` VARCHAR(50) NOT NULL,
                                         `content` LONGBLOB NOT NULL,
                                         INDEX (`t`, `type`),
                                         PRIMARY KEY (`id`)
-                                     ) ENGINE=INNODB;")))))))
+                                     ) ENGINE=INNODB;"))))))
 
 (define-function cache-item!
   [item]
-  (. @*dbconn*
-     (query "INSERT INTO `items` (`t`, `type`, `content`) VALUES (? ? ?)"
-            (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content))))))
+  (.query @*dbconn*
+          "INSERT INTO `items` (`t`, `type`, `content`) VALUES (? ? ?)"
+          (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content)))))
 
 (define-function get-item!
   [id])
 
 (define-function instagram-client
   [id token]
-  (let [Instagram (.- (js.node/require "node-instagram") default)
-        params (. js/Object (create nil))]
-    (.-set! params "clientId" id)
-    (.-set! params "accessToken" token)
-  (new Instagram params)))
+  (let [Instagram (.- (js.node/require "node-instagram") default)]
+    (new Instagram (->js {:clientId id, :accessToken token}))))
 
 (define-function stackoverflow-feed
   [id]
@@ -85,7 +86,7 @@
 
 (define-function fmt-time [t]
   (let [d (new js/Date (* 1000 t))]
-    (str (+ 1 (. d getUTCMonth)) "/" (. d getUTCDate) "/" (. d getUTCFullYear))))
+    (str (+ 1 (.getUTCMonth d)) "/" (.getUTCDate d) "/" (.getUTCFullYear d))))
 
 (define-component :instagram/media-image
   (lambda
