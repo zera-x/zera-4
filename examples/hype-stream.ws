@@ -7,41 +7,84 @@
 (define- html pbnj.peanutbutter/compile)
 (define- define-component pbnj.peanutbutter/define-component)
 
-(define *client-id* "b9bd493916ff449bac5ed7d0f3ddb44f")
-(define *access-token* "4366567491.b9bd493.1e3417a1c28b438297fa134dca5d9c66")
+(define- *client-id* "b9bd493916ff449bac5ed7d0f3ddb44f")
+(define- *access-token* "4366567491.b9bd493.1e3417a1c28b438297fa134dca5d9c66")
+(define- *dbconn* (atom nil))
+
+; Stream Item
+; {:item/date js/Date
+;  :item/type keyword
+;  :item/content map}
+
+(define-function initdb!
+  []
+  (let [mysql (js.node/require "promise-mysql")]
+    (.. mysql
+        (createConnection
+          (->js {:host "localhost"
+                 :user "root"
+                 :password ""
+                 :database "hype-stream"}))
+        (then (lambda [conn]
+                      (reset! *dbconn* conn)
+                      (. conn (query "CREATE SCHEMA IF NOT EXISTS `hype-stream`"))
+                      (. conn (query "CREATE TABLE IF NOT EXISTS `items` (
+                                        `id` INT AUTO_INCREMENT,
+                                        `t` TIMESTAMP NOT NULL,
+                                        `type` VARCHAR(50) NOT NULL,
+                                        `content` LONGBLOB NOT NULL,
+                                        INDEX (`t`, `type`),
+                                        PRIMARY KEY (`id`)
+                                     ) ENGINE=INNODB;")))))))
+
+(define-function cache-item!
+  [item]
+  (. @*dbconn*
+     (query "INSERT INTO `items` (`t`, `type`, `content`) VALUES (? ? ?)"
+            (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content))))))
+
+(define-function get-item!
+  [id])
 
 (define-function instagram-client
   [id token]
   (let [Instagram (.- (js.node/require "node-instagram") default)
         params (. js/Object (create nil))]
-    (.-set! params "clientId" *client-id*)
-    (.-set! params "accessToken" *access-token*)
+    (.-set! params "clientId" id)
+    (.-set! params "accessToken" token)
   (new Instagram params)))
+
+(define-function stackoverflow-feed
+  [id]
+  (let [parser (js.node/require "feedparser-promised")]
+    (.. parser
+        (parse (str "https://stackoverflow.com/feeds/user/" id))
+        (catch (lambda [err] (console.error err))))))
 
 (define-function media-item
   [obj]
   (reduce
-     (array->list (. js/Object (keys obj)))
      (lambda [m k]
         (let [v (.- obj (symbol k))
               v* (cond (array? v) (array->list v)
                        (object? v) (object->map v)
                        :else v)]
           (assoc m (keyword k) v*)))
-     {}))
+     {}
+     (array->list (. js/Object (keys obj)))))
 
 (define-function media-stream
   [obj]
   (let [data (.- obj data)]
-    (map (array->list data) media-item)))
+    (map media-item (array->list data))))
 
 (define-component :instagram/media
   (lambda
     [stream]
-    (map stream (lambda [x] [:instagram/media-item x]))))
+    (map (lambda [x] [:instagram/media-item x]) stream)))
 
 (define-function fmt-time [t]
-  (let [d (new js/Date (* 1 t))]
+  (let [d (new js/Date (* 1000 t))]
     (str (+ 1 (. d getUTCMonth)) "/" (. d getUTCDate) "/" (. d getUTCFullYear))))
 
 (define-component :instagram/media-image
@@ -83,15 +126,19 @@
   "A web application to consolidate social media streams"
   (GET "/?" [req]
        (let [params (req :query)
-             cid (params :client-id)
-             token (params :access-token)
+             cid (get params :client-id *client-id*)
+             token (get params :access-token *access-token*)
              user (get params :user "self")]
-         (if-not (or cid token)
-           (throw (new js/Error "client-id and access-token are required")))
-         (show-media (instagram-client cid token) user))))
+         (show-media (instagram-client *client-id* *access-token*) user))))
 
-(start hype-stream 4000
-       (lambda [] (println "Hype Stream Service - listening at http://localhost:4000")))
+(define-function MAIN
+  [key ref old new]
+  (if (and (not old) new)
+    (start hype-stream 4000
+           (lambda [] (println "Hype Stream Service - listening at http://localhost:4000")))))
+
+(initdb!)
+(add-watch *dbconn* "main" MAIN)
 
 ; https://www.instagram.com/oauth/authorize/?client_id=b9bd493916ff449bac5ed7d0f3ddb44f&redirect_uri=http://delonnewman.name&response_type=code
 ; curl -F "client_id=b9bd493916ff449bac5ed7d0f3ddb44f" \

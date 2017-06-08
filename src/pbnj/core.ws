@@ -75,6 +75,65 @@
           true
           false)))
 
+(define-macro do-times
+  [bindings &body]
+  (if-not (and (vector? bindings) (= (count bindings) 2))
+    (throw "bindings should be a vector with two elements"))
+  (let [var (bindings 0)
+        init (bindings 1)]
+    (list 'loop [var 0]
+          (cons 'when
+                (cons (list '< var init)
+                      (concat body [(list 'again (list '+ var 1))])))
+          init)))
+
+(define-macro do-each
+  [bindings &body]
+  (if-not (and (vector? bindings) (= (count bindings) 2))
+    (throw "bindings should be a vector with two elements"))
+  (let [var (bindings 0)
+        col (bindings 1)
+        init (gen-sym "$init")
+        col-nm (gen-sym "$col")]
+    (list 'let [init col]
+    (list 'loop [var (list 'first init) col-nm (list 'rest init)]
+          (cons 'when
+                (cons var
+                      (concat body [(list 'again (list 'first col-nm) (list 'rest col-nm))])))
+          init))))
+
+(define-macro while
+  [pred &body]
+  (list 'loop []
+         (cons 'when (cons pred (concat body [(list 'again)])))))
+
+(define-macro until
+  [pred &body]
+  (list 'loop []
+        (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))
+
+(define-macro ->
+  [x &forms]
+  (loop [x* x, forms* forms]
+    (if (empty? forms*)
+      x*
+      (let [form (first forms*)
+            threaded (if (seq? form)
+                       (list (first form) x* (first (rest form)))
+                       (list form x*))]
+        (again threaded (rest forms*))))))
+
+(define-macro ->>
+  [x &forms]
+  (loop [x* x, forms* forms]
+    (if (empty? forms*)
+      x*
+      (let [form (first forms*)
+            threaded (if (seq? form)
+                       (list (first form) (first (rest form)) x*)
+                       (list form x*))]
+        (again threaded (rest forms*))))))
+
 (define-protocol IDeref
   (deref [self] (.- self value)))
 
@@ -90,12 +149,10 @@
   (processWatches
     [self newVal]
     (when (.- self watches)
-      (map (lambda [x]
-              (let [k (x 0)
-                    f (x 1)]
-                (f k self (.- self value) newVal)
-                x))
-           (.- self watches))))
+      (do-each [x (.- self watches)]
+        (let [k (x 0)
+              f (x 1)]
+          (f k self (.- self value) newVal)))))
   (reset
     [self val]
     (. self (processWatches val))
@@ -120,8 +177,8 @@
 (define-function swap! [x f]
   (.? x (swap f)))
 
-(define-function add-watch [x f]
-  (.? x (addWatch f)))
+(define-function add-watch [x k f]
+  (.? x (addWatch k f)))
 
 ;; ---------------------------- meta data ------------------------------ ;;
 
@@ -365,7 +422,7 @@
 (define-function prove-module [module]
   (into [] (map prove (map :test/name (collect-tests module)))))
 
-(define *sym-count* (atom 0))
+(define- *sym-count* (atom 0))
 (define-function gen-sym 
   ([] (gen-sym "sym"))
   ([prefix]
@@ -378,65 +435,6 @@
   (is (symbol? (gen-sym "prefix")))
   (is-not (= (gen-sym) (gen-sym)))
   (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
-
-(define-macro do-times
-  [bindings &body]
-  (if-not (and (vector? bindings) (= (count bindings) 2))
-    (throw "bindings should be a vector with two elements"))
-  (let [var (bindings 0)
-        init (bindings 1)]
-    (list 'loop [var 0]
-          (cons 'when
-                (cons (list '< var init)
-                      (concat body [(list 'again (list '+ var 1))])))
-          init)))
-
-(define-macro do-each
-  [bindings &body]
-  (if-not (and (vector? bindings) (= (count bindings) 2))
-    (throw "bindings should be a vector with two elements"))
-  (let [var (bindings 0)
-        col (bindings 1)
-        init (gen-sym "$init")
-        col-nm (gen-sym "$col")]
-    (list 'let [init col]
-    (list 'loop [var (list 'first init) col-nm (list 'rest init)]
-          (cons 'when
-                (cons var
-                      (concat body [(list 'again (list 'first col-nm) (list 'rest col-nm))])))
-          init))))
-
-(define-macro while
-  [pred &body]
-  (list 'loop []
-         (cons 'when (cons pred (concat body [(list 'again)])))))
-
-(define-macro until
-  [pred &body]
-  (list 'loop []
-        (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))
-
-(define-macro ->
-  [x &forms]
-  (loop [x* x, forms* forms]
-    (if (empty? forms*)
-      x*
-      (let [form (first forms*)
-            threaded (if (seq? form)
-                       (list (first form) x* (first (rest form)))
-                       (list form x*))]
-        (again threaded (rest forms*))))))
-
-(define-macro ->>
-  [x &forms]
-  (loop [x* x, forms* forms]
-    (if (empty? forms*)
-      x*
-      (let [form (first forms*)
-            threaded (if (seq? form)
-                       (list (first form) (first (rest form)) x*)
-                       (list form x*))]
-        (again threaded (rest forms*))))))
 
 (define-function fraction [n]
   (- n (. js/Math floor n)))
