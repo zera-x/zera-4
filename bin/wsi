@@ -33,6 +33,7 @@ else {
   
   ws.readString('(module pbnj.user)');
   ws.globalEnv.define('*dir*', process.cwd());
+  ws.globalEnv.define('*file*', null);
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
   
