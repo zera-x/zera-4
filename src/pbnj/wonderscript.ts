@@ -287,6 +287,10 @@ namespace pbnj.wonderscript {
     return func.$lang$ws$ident || func.name || 'anonymous';
   };
 
+  var isInvocable = function(val) {
+    return _.isFunction(val) || _.isAssociative(val) || _.isKeyword(val) || _.isSet(val) || (isQuoted(val) && _.isSymbol(evalQuoted(val)));
+  };
+
   ws.apply = function(func, args) {
     if (arguments.length !== 1 && arguments.length !== 2) {
       throw new Error(['wrong number of arguments expected: 1 or 2 arguments, got: ', arguments.length].join(''));
@@ -532,11 +536,6 @@ namespace pbnj.wonderscript {
     throw new RecursionPoint(args);
   };
 
-  var isInvocable = function(exp) {
-    //return _.isKeyword(exp) || _.isAssociative(exp) || _.isSet(exp);
-    return _.isObject(exp) && _.isFunction(exp.apply);
-  };
-
   var isApplication = ws.isApplication = function(exp) {
     return _.isList(exp);
   };
@@ -632,11 +631,14 @@ namespace pbnj.wonderscript {
       newExp = _.cons(_.symbol('new'), _.cons(ctr, _.rest(exp)))
       return evalClassInstantiation(newExp, env);
     }
+    else if (_.isAssociative(op) || _.isKeyword(op) || _.isSet(op) || (isQuoted(op) && _.isSymbol(op = evalQuote(op)))) {
+      return op.apply(null, args);
+    }
     
-    func = ws.eval(op, env);
+    func = evalVariable(op, env);
 
-    if (_.isFunction(func) || isInvocable(func)) {
-      return ws.apply(func, args);
+    if (isInvocable(func)) {
+      return func.apply(null, args);
     }
     else {
       console.log(func);
