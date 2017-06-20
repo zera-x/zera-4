@@ -247,16 +247,15 @@
     (inspect (cons (first body) (map eval (rest body))))
     (inspect body))))
 
-(define-macro is [body]
-  (list 'cond (list 'not body)
-        (list 'throw
-              (list 'str
-                    "FAILURE: "
-                    (inspect body)
-                    " is false"))))
+(define-macro is
+  ([body]
+   (list 'is body (list 'str "FAILURE: " (inspect body) " is false")))
+  ([body msg]
+   (list 'cond
+         (list 'not body) (list 'throw msg))))
 
-(define-macro is-not [body]
-  (list 'is (list 'not body)))
+(define-macro is-not [body &args]
+  (cons 'is (cons (list 'not body) args)))
 
 (test .?
   (let [d (new js/Date 2016 10 25)]
