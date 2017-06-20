@@ -635,7 +635,7 @@ namespace pbnj.wonderscript {
       return op.apply(null, args);
     }
     
-    func = evalVariable(op, env);
+    func = ws.eval(op, env);
 
     if (isInvocable(func)) {
       return func.apply(null, args);
