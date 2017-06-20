@@ -16,10 +16,6 @@
 ;  :item/type keyword
 ;  :item/content map}
 
-; syntax for "then" chains
-(define-macro !!>
-  [])
-
 (define-function initdb!
   []
   (let [mysql (js.node/require "promise-mysql")]
@@ -52,7 +48,7 @@
   (if-not (item :item/id)
     (throw "An :item/id is required to perform update"))
   (.query @*dbconn*
-          "UPDATE `items` SET `t` = ?, SET `type` = ?, SET `content` = ? WHERE `id` = ?"
+          "UPDATE `items` SET `t` = ?, `type` = ?, `content` = ? WHERE `id` = ?"
           (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content)) (item :item/id))))
 
 (define-function get-item!
@@ -152,14 +148,33 @@
              user (get params :user "self")]
          (show-media (instagram-client *client-id* *access-token*) user))))
 
-(define-function MAIN
+(define-function instagram-feed
+  [user]
+  (.get (instagram-client *client-id* *access-token*)
+        (str "users/" user "/media/recent")))
+
+(define-function store-instagram-items
+  [data]
+  (println data))
+
+(define-function store-feed
+  [type promise]
+  (.then promise store-instagram-items))
+
+(define-function start-service
   [key ref old new]
   (if (and (nil? old) new)
     (start hype-stream 4000
            (lambda [] (println "Hype Stream Service - listening at http://localhost:4000")))))
 
+(define-function store-feeds
+  [key ref old new]
+  (if (and (nil? old) new)
+    (store-feed :feed/instagram (instagram-feed "self"))))
+
 (initdb!)
-(add-watch *dbconn* "main" MAIN)
+;(add-watch *dbconn* "main" start-service)
+(add-watch *dbconn* "main" store-feeds)
 
 ; https://www.instagram.com/oauth/authorize/?client_id=b9bd493916ff449bac5ed7d0f3ddb44f&redirect_uri=http://delonnewman.name&response_type=code
 ; curl -F "client_id=b9bd493916ff449bac5ed7d0f3ddb44f" \
