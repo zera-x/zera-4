@@ -541,8 +541,8 @@ namespace pbnj.wonderscript {
     return _.isList(exp);
   };
 
-  var evalApplication = function(exp, env) {
-    var func, args, rawargs, buffer, op, i;
+  var evalApplication = ws.evalApplication = function(exp, env) {
+    var func, args, rawargs, buffer, op, sop, newExp, obj, meth, ctr, i;
 
     args    = [];
     rawargs = _.intoArray(_.rest(exp));
@@ -621,11 +621,16 @@ namespace pbnj.wonderscript {
         return eval([args[0], '>>', args[1]].join(''));
       }
     }
-    else if (op.toString().startsWith('.')) {
-      var meth = _.symbol(op.toString().slice(1));
-      var obj  = _.first(_.rest(exp));
-      var newExp = _.list(_.symbol('.'), obj, _.cons(meth, _.rest(_.rest(exp))));
+    else if ((sop = op.toString()).startsWith('.')) {
+      meth = _.symbol.apply(null, op.toString().slice(1).split('/'));
+      obj  = _.first(_.rest(exp));
+      newExp = _.list(_.symbol('.'), obj, _.cons(meth, _.rest(_.rest(exp))));
       return evalMethodApplication(newExp, env);
+    }
+    else if (sop.endsWith('.')) {
+      ctr = _.symbol.apply(null, sop.slice(0, sop.length - 1).split('/'));
+      newExp = _.cons(_.symbol('new'), _.cons(ctr, _.rest(exp)))
+      return evalClassInstantiation(newExp, env);
     }
     
     func = ws.eval(op, env);
@@ -775,7 +780,7 @@ namespace pbnj.wonderscript {
   var isClassInstantiation = ws.isClassInstantiation = makeTagPredicate(_.symbol('new'));
 
   var evalClassInstantiation = ws.evalClassInstantiation = function(exp, env) {
-    var ctr = ws.eval(_.second(exp), env);
+    var ctr = evalVariable(_.second(exp), env);
     if (!_.isFunction(ctr)) throw new Error('class given is not a valid constructor');
     var args = _.intoArray(mori.map(function(arg) { return ws.eval(arg, env) }, _.rest(exp)));
     return new (ctr.bind.apply(ctr, args));
@@ -1051,6 +1056,7 @@ namespace pbnj.wonderscript {
     console.log(ws.inspect(exp));
   }
   globalEnv.define('pprint', ws.pprint);
+  globalEnv.define('p', ws.pprint);
 
   ws.eval = function(exp, env) {
     var env = env || globalEnv;
