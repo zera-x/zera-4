@@ -1,6 +1,8 @@
 ; vim: ft=clojure
 (module pbnj.core)
 
+(set! *environment* :production)
+
 (define-macro comment [&forms] nil)
 
 (define-macro if
@@ -9,6 +11,19 @@
 
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
+
+; (case a
+;    5 "a is 5"
+;    6 "a is 6"
+;    :else "a is not 5 or 6")
+; =>
+; (cond (= a 5) "a is 5"
+;       (= a 6) "a is 6"
+;       :else "a is not 5 or 6")
+(define-macro case
+  [value &rules]
+  (cons 'cond (->> (pair rules)
+                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
 (define-macro define-
   ([nm] (list 'define :private nm))
@@ -229,8 +244,6 @@
   (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
 
 ;; ------------------------------------ testing -------------------------------------- ;;
-
-;(set! *environment* :production)
 
 (define-macro test [nm &body]
   (when (and (defined? *environment*) (or (= *environment* :development) (= *environment* :test)))
