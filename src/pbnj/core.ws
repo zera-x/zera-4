@@ -379,9 +379,11 @@
 (define-macro prove
   "Run the named test"
   [tname]
-  (let [v (gen-sym "var")]
-    (list 'let [v (list 'var tname)]
-         (list 'if v (list '-> (list '.getMeta v) :test 'apply)))))
+  (let [v (gen-sym "$var")
+        f (gen-sym "$fn")]
+    (list 'let [v (list 'var tname)
+                f (list 'if v (list '-> (list '.getMeta v) :test))]
+         (list 'if f (list 'apply f)))))
 
 (define-function prove-module [module]
   (map apply (tests module)))
@@ -534,16 +536,16 @@
   (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
 
 (define-function fraction [n]
-  (- n (. js/Math floor n)))
+  (- n (Math/floor n)))
 
 (define-function sign [n]
-  (if (number? n) (. js/Math sign n) 0))
+  (if (number? n) (Math/sign n) 0))
 
 (define-function positive? [n]
-  (= n (. js/Math abs n)))
+  (= n (Math/abs n)))
 
 (define-function negative? [n]
-  (not= n (. js/Math abs n)))
+  (not= n (Math/abs n)))
 
 (define-function integer? [n] (= 0 (fraction n)))
 
@@ -561,9 +563,9 @@
 (define-function generate-int
   ([] (generate-int -100 100))
   ([min max]
-   (let [a (. js/Math ceil min)
-         b (. js/Math ceil max)]
-     (+ a (. js/Math floor (* (. js/Math random) (- b a)))))))
+   (let [a (Math/ceil min)
+         b (Math/ceil max)]
+     (+ a (Math/floor (* (Math/random) (- b a)))))))
 
 (test generate-int
   (do-times [n 100]
@@ -572,7 +574,7 @@
 (define-function generate-nat
   ([] (generate-int 0 100))
   ([min max]
-   (let [a (. js/Math abs min)]
+   (let [a (Math/abs min)]
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
@@ -584,7 +586,7 @@
 (define-function generate-float
   ([] (generate-float 0 100))
   ([min max]
-   (+ (generate-int min max) (* (. js/Math random (- max min))))))
+   (+ (generate-int min max) (* (Math/random (- max min))))))
 
 (test generate-float
   (do-times [n 20]
@@ -595,11 +597,13 @@
   ([min max]
    (let [n (generate-nat min max)
          xs (take n (iterate (partial generate-nat 0x20 0x4000) (generate-nat 0x20 0x4000)))]
-     (apply-method js/String (.- js/String fromCodePoint) xs))))
+     (->> xs
+          (map (lambda [x] (.fromCodePoint js/String x)))
+          (reduce str)))))
 
-(test generate-string
+(test generate-str
   (do-times [n 20]
-    (is (string? (generate-string)))))
+    (is (string? (generate-str)))))
 
 (define-function generate-keyword
   ([] (generate-keyword 1 20))

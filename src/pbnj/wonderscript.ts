@@ -576,7 +576,7 @@ namespace pbnj.wonderscript {
     else if (_.equals(op, _.symbol('-'))) {
       if (args.length === 0) return 0;
       else if (args.length === 1) return eval(['-', args[0]].join(''));
-      return eval(args.join('-'));
+      return eval(args.map(function(x) { return ['(', x, ')'].join('') }).join('-'));
     }
     else if (_.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
       if (args.length === 0) return 1;
@@ -1246,13 +1246,13 @@ namespace pbnj.wonderscript {
         var exp = stream.peek();
         value = ws.eval(exp, env);
         if (_.isFunction(value) || isBlock(exp) || isTryBlock(exp)) {
-          env.setLocation(stream.line(), stream.column());
+          env.setSource(stream.source()).setLocation(stream.line(), stream.column());
         }
         else if (value && value["@@SCOPE@@"]) {
-          env = value["@@SCOPE@@"].setLocation(stream.line(), stream.column());
+          env = value["@@SCOPE@@"].setSource(stream.source()).setLocation(stream.line(), stream.column());
         }
         else {
-          env.setLocation(stream.line(), stream.column());
+          env.setSource(stream.source()).setLocation(stream.line(), stream.column());
         }
         stream.next();
       }
