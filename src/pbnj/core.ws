@@ -8,9 +8,14 @@
   (if (symbol? name)
     nil
     (throw (js/Error. "first argument of define-function should be a symbol")))
-  (let [x (first forms)]
-    (cond (string? x)
+  (let [x (first forms)
+        y (second forms)]
+    (cond (and (string? x) (map? y))
+            (list 'define (assoc y :doc x) name (cons 'lambda (rest (rest forms))))
+          (string? x)
             (list 'define {:doc x} name (cons 'lambda (rest forms)))
+          (map? x)
+            (list 'define x name (cons 'lambda (rest forms)))
           (or (vector? x) (list? x))
             (list 'define name (cons 'lambda forms))
           :else
