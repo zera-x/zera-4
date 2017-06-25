@@ -4,6 +4,8 @@
 (set! *environment* :production)
 
 (define-macro define-function
+  "(define-function name doc-string? meta-map? arguments body)
+  (define-function name doc-string? meta-map? (arguments body))"
   [name &forms]
   (if (symbol? name)
     nil

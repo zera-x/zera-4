@@ -125,8 +125,7 @@ namespace pbnj.wonderscript {
     if (env_) {
       var obj = env_.getObject(name)
       if (_.get(obj.getMeta(), _.keyword('macro')) === true) {
-        console.log(name);
-        //throw new Error("Cannot use a macro in this context");
+        throw new Error(["Cannot use a macro in this context: ", name].join(''));
       }
       return obj.getValue();
     }
@@ -1260,10 +1259,10 @@ namespace pbnj.wonderscript {
       return value;
     }
     catch(e) {
-      console.log(e);
+      console.error(e);
       //console.log(env);
-      console.log(fmtStacktrace(env.stacktrace()));
-      throw e; //new Error(wsError(e, env.stacktrace()));
+      console.error(fmtStacktrace(env.stacktrace()));
+      //throw e; //new Error(wsError(e, env.stacktrace()));
     }
   };
   globalEnv.define('read-stream', ws.readStream);
