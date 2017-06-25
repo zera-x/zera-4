@@ -67,8 +67,8 @@
 
 (define-function response [res val]
   (if (and (object? val) (.- val then))
-    (. val (then (lambda [x] (. res (send x)))))
-    (. res (send val))))
+    (.then val (lambda [x] (. res (send x))))
+    (.send res val)))
 
 (define-function- build-http-verb
   [verb path bindings body]

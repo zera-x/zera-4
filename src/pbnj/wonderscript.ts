@@ -360,6 +360,9 @@ namespace pbnj.wonderscript {
     this.bodies = function() {
       return bodies;
     };
+    this.arglists = function() {
+      return mori.map(function(body) { return body.args }, _.values(bodies));
+    };
     this.id = function() {
       return id;
     };
@@ -368,7 +371,6 @@ namespace pbnj.wonderscript {
     };
     this.length = argCount;
     this.scope = env.extend().setIdent(id).initStash();
-    this.scope.define('*recursion-point*', this);
     this.toString = function() {
       return ws.inspect(exp);
     };
@@ -447,9 +449,16 @@ namespace pbnj.wonderscript {
 
   Lambda.prototype.toFunction = function() {
     var that = this;
-    return function() {
+    var fn = function() {
       return that.bind(arguments).exec();
     };
+    var prop;
+    for (prop in this) {
+      if (this.hasOwnProperty(prop)) {
+        fn[prop] = this[prop];
+      }
+    }
+    return fn;
   };
 
   var evalLambda = function(exp, env) {
@@ -782,7 +791,7 @@ namespace pbnj.wonderscript {
   var isClassInstantiation = ws.isClassInstantiation = makeTagPredicate(_.symbol('new'));
 
   var evalClassInstantiation = ws.evalClassInstantiation = function(exp, env) {
-    var ctr = evalVariable(_.second(exp), env);
+    var ctr = ws.eval(_.second(exp), env);
     if (!_.isFunction(ctr)) throw new Error('class given is not a valid constructor');
     var args = _.intoArray(mori.map(function(arg) { return ws.eval(arg, env) }, _.rest(exp)));
     return new (ctr.bind.apply(ctr, args));
@@ -1245,10 +1254,12 @@ namespace pbnj.wonderscript {
     return ws.compileStream(stream);
   };
   globalEnv.define('compile-file', ws.compileFile);
-
+  
+  globalEnv.define('*version*', '0.0.1-alpha');
   globalEnv.define('*environment*', _.keyword('development'));
-  // TODO: detect browser?
   globalEnv.define('*platform*', typeof exports !== 'undefined' ? _.keyword('nodejs') : _.keyword('browser'));
+  // TODO: add browser detection
+  globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.versions.v8) : "Unknown Browser");
   globalEnv.define('*target-language*', _.keyword('javascript'));
 
   if (typeof exports !== 'undefined') {

@@ -18,3 +18,4 @@ examples/home.html
 src/pbnj/peanutbutter.js
 src/pbnj/peanutbutter.js.map
 examples/*.js
+examples/*.jwlibrary

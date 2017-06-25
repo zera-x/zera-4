@@ -22,7 +22,7 @@
 ;       :else "a is not 5 or 6")
 (define-macro case
   [value &rules]
-  (cons 'cond (->> (pair rules)
+  (cons 'cond (->> (partition 2 rules)
                    (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
 (define-macro define-
@@ -33,8 +33,8 @@
 (define-macro let [bindings &body]
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
   (cons 'do
-        (concat (map (lambda [pair] (list 'define :private (pair 0) (pair 1)))
-                     (pair bindings))
+        (concat (map (lambda [pair] (list 'define :private (first pair) (second pair)))
+                     (partition 2 bindings))
                 body)))
 
 (define-macro or
@@ -53,7 +53,17 @@
 
 (define-macro define-function
   [name &forms]
-  (list 'define name (cons 'lambda forms)))
+  (if (symbol? name)
+    nil
+    (throw (js/Error. "first argument of define-function should be a symbol")))
+  (let [x (first forms)]
+    (cond (string? x)
+            (list 'define {:doc x} name (cons 'lambda (rest forms)))
+          (or (vector? x) (list? x))
+            (list 'define name (cons 'lambda forms))
+          :else
+            (throw (js/Error. "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+
 
 (define-macro define-function-
   [name &forms]
@@ -180,22 +190,59 @@
       (.-set! self value newVal)
       self)))
 
-(define-function atom [x]
+(define-function atom
+  "Constructs a new Atom wrapping the given value `x`."
+  [x]
   (new Atom x))
 
-(define-function deref [x]
+(define-function deref
+  "
+  Dereferences (returning a hidden value) an instance of the `IDef` protocol `x`,
+  including Atoms. The reader provides a shorthand of the form:
+      
+      (define x (atom 1))
+      (deref x) => 1
+      @x => 1
+  "
+  [x]
   (.? x deref))
 
-(define-function reset! [x value]
+(define-function reset!
+  "
+  Resets the value of an Atom `x` to `value`, any watches that have
+  been added will be processed.
+
+  Example:
+      (define x (atom 1))
+      (rest! x 2)
+      @x => 2
+  "
+  [x value]
   (.? x (reset value)))
 
-(define-function swap! [x f]
+(define-function swap!
+  "
+  Swaps the the value of `x` with the return value of the function `f`
+  which receives the current value of `x` as it's single argument.
+  
+  Example:
+      (define x (atom 1))
+      (swap! x (lambda [val] (+ 1 val)))
+      (deref x) => 2
+  "
+  [x f]
   (.? x (swap f)))
 
 (define-function add-watch [x k f]
   (.? x (addWatch k f)))
 
 ;; ---------------------------- meta data ------------------------------ ;;
+
+(define current-module
+  (lambda [] pbnj.wonderscript/MODULE_SCOPE))
+
+(define current-module-name
+  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@NAME@@"))))
 
 (define-macro var
   ([nm]
@@ -216,21 +263,19 @@
 (define-function meta
   [obj]
   (println obj)
-  (. obj getMeta))
+  (.getMeta obj))
+
+(define-macro doc
+  [sym]
+  (list '-> (list 'var sym) '.getMeta :doc 'println))
 
 (define-function with-meta
   [obj meta]
-  (. obj (withMeta meta)))
+  (.withMeta obj meta))
 
 (define-function vary-meta
   [obj f &args]
-  (. obj (varyMeta f args)))
-
-(define current-module
-  (lambda [] pbnj.wonderscript/MODULE_SCOPE))
-
-(define current-module-name
-  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@NAME@@"))))
+  (.varyMeta obj f args))
 
 (define-macro define-once [nm value]
   (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))

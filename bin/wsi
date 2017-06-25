@@ -34,6 +34,10 @@ else {
   ws.readString('(module pbnj.user)');
   ws.globalEnv.define('*dir*', process.cwd());
   ws.globalEnv.define('*file*', null);
+  ws.readString('(println (str "WonderScript " *version*))');
+  ws.readString('(println *platform-version*)');
+  ws.readString('(println "   Exit: Control+D or exit")');
+  ws.readString('(println "   Help: (doc function-name-here)")');
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
   

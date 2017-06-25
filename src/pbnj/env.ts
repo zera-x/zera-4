@@ -188,6 +188,11 @@ namespace pbnj.core {
     if (scope = this.lookup('*source*')) {
       m = _.assoc(m, _.keyword('source'), scope.get('*source*'));
     }
+
+    if (_.isFunction(value) && value.arglists) {
+      m = _.assoc(m, _.keyword('arglists'), value.arglists());
+    }
+
     this.vars[sname] = new Variable(_.symbol(sname), value, _.merge(m, meta));
     return value;
   };
