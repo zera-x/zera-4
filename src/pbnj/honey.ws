@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(require "types.ws")
+;(require "types.ws")
 (module pbnj.honey)
 
 (define-function- parse-url
@@ -10,9 +10,11 @@
 (define-function- load-sqlite-db
   [url]
   (let [sqlite3 (.verbose (js.node/require "sqlite3"))
-        host (url :host)]
+        host (url :host)
+        path (url :path)]
     (new (.- sqlite3 Database)
-         (if (= "memory" host) ":memory" host))))
+         (if (= "memory" host) ":memory:"
+           (if path (.replace (str host path) "%20" " ") host)))))
 
 (define- *schemes*
   {"sqlite:" load-sqlite-db})

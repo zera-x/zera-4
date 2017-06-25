@@ -524,11 +524,6 @@
   (is-not (not= :a :a))
   (is-not (not= [1 2 3 4] [1 2 3 4])))
 
-(define-function join
-  [col delim]
-  (let [joiner (lambda [s x] (str s delim x))]
-    (reduce joiner col)))
-
 (test gen-sym
   (is (symbol? (gen-sym)))
   (is (symbol? (gen-sym "prefix")))
@@ -685,3 +680,14 @@
 (define-function lines
   [s]
   (-> (.split s \newline) array->list))
+
+(define-function split
+  [s delim]
+  (-> (.split s delim) array->list))
+
+(define-function join
+  [col delim]
+  (let [joiner (lambda [s x] (str s delim x))]
+    (reduce joiner col)))
+
+
