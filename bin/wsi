@@ -38,6 +38,7 @@ else {
   ws.readString('(println *platform-version*)');
   ws.readString('(println "   Exit: Control+D or exit")');
   ws.readString('(println "   Help: (doc function-name-here)")');
+  ws.readString('(println "         (source function-name-here)")');
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
   

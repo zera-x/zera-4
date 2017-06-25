@@ -8,11 +8,11 @@
 
 (define-function hello-server [req res]
   (.-set! res statusCode "200")
-  (. res (setHeader "Content-type" "text/plain"))
-  (. res (end "Hello, World\n")))
+  (.setHeader res "Content-type" "text/plain")
+  (.end res "Hello, World\n"))
 
 (define-function boot []
   (println (str "Server running at http://" host ":" port)))
 
-(define server (. http (createServer hello-server)))
-(. server (listen port host boot))
+(define server (.createServer http hello-server))
+(.listen server port host boot)

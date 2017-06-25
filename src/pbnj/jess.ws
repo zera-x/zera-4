@@ -302,76 +302,76 @@
 (define-function compile-string [input source]
   (compile-stream (pbnj.reader/readString input source)))
 
-(test literals
-  (is (= (compile nil) "null"))
-  (is (= (compile 1) "1"))
-  (is (= (compile 3435) "3435"))
-  (is (= (compile 3.14159) "3.14159"))
-  (is (= (compile -3.14159) "-3.14159"))
-  (is (= (compile true) "true"))
-  (is (= (compile false) "false"))
-  (is (= (compile 'symbol) "symbol"))
-  (is (= (compile 'namespaced/symbol) "namespaced.symbol"))
-  (is (= (compile :keyword) "keyword"))
-  (is (= (compile :namespaced/keyword) "namespaced.keyword"))
-  (is (= (compile "test") "\"test\""))
-  (is (= (compile (hash-map)) "({})"))
-  (is (= (compile (hash-map :a 1 :b 2)) "({a:1,b:2})"))
-  (is (= (compile (vector)) "([])"))
-  (is (= (compile (vector 1 2 3 4 5)) "([1,2,3,4,5])")))
-
-(test if-else
-  (is (= (compile '(if-else true 1)) "if(true){1}"))
-  (is (= (compile '(if-else true 1 false 2)) "if(true){1}else if(false){2}"))
-  (is (= (compile '(if-else true 1 false 2 :else 3)) "if(true){1}else if(false){2}else{3}")))
-
-(test if
-  (is (= (compile '(if true 1)) "(true)?(1):(null)"))
-  (is (= (compile '(if true 1 2)) "(true)?(1):(2)"))
-  (is (= (eval '(if true 1)) 1))
-  (is (= (eval '(if true 1 2)) 1))
-  (is (= (eval '(if false 1 2)) 2))
-  (is (= (eval '(if false 1)) nil)))
-
-(test ?
-  (is-not (eval '(? nil)))
-  (is (eval '(? true)))
-  (is (eval '(? false)))
-  (is (eval '(? {})))
-  (is (eval '(? [])))
-  (is (eval '(? "")))
-  (is (eval '(? 0))))
-
-(test instance?
-  (is (eval '(instance? (new Date) Date)))
-  (is-not (eval '(instance? Math Date))))
-
-(test typeof
-  (is (= "number" (eval '(typeof 1))))
-  (is (= "string" (eval '(typeof "aasfwewrqfwdf"))))
-  (is (= "object" (eval '(typeof nil))))
-  (is (= "boolean" (eval '(typeof true))))
-  (is (= "object" (eval '(typeof {}))))
-  (is (= "object" (eval '(typeof [])))))
-
-(test do
-  (is (= "1;2;3;4;" (compile '(do 1 2 3 4)))))
-
-(test var
-  (is (= "var x;" (compile '(var x))))
-  (is (= "var x=1;" (compile '(var x 1)))))
-
-(test let
-  (is (= "let x;" (compile '(let x))))
-  (is (= "let x=1;" (compile '(let x 1)))))
-
-(test const
-  (is (= "const x;" (compile '(const x))))
-  (is (= "const x=1;" (compile '(const x 1)))))
-
-(test function
-  (is (= 1, ((eval '(paren (function [x] (return x)))) 1))))
-
-(test application)
+;(test literals
+;  (is (= (compile nil) "null"))
+;  (is (= (compile 1) "1"))
+;  (is (= (compile 3435) "3435"))
+;  (is (= (compile 3.14159) "3.14159"))
+;  (is (= (compile -3.14159) "-3.14159"))
+;  (is (= (compile true) "true"))
+;  (is (= (compile false) "false"))
+;  (is (= (compile 'symbol) "symbol"))
+;  (is (= (compile 'namespaced/symbol) "namespaced.symbol"))
+;  (is (= (compile :keyword) "keyword"))
+;  (is (= (compile :namespaced/keyword) "namespaced.keyword"))
+;  (is (= (compile "test") "\"test\""))
+;  (is (= (compile (hash-map)) "({})"))
+;  (is (= (compile (hash-map :a 1 :b 2)) "({a:1,b:2})"))
+;  (is (= (compile (vector)) "([])"))
+;  (is (= (compile (vector 1 2 3 4 5)) "([1,2,3,4,5])")))
+;
+;(test if-else
+;  (is (= (compile '(if-else true 1)) "if(true){1}"))
+;  (is (= (compile '(if-else true 1 false 2)) "if(true){1}else if(false){2}"))
+;  (is (= (compile '(if-else true 1 false 2 :else 3)) "if(true){1}else if(false){2}else{3}")))
+;
+;(test if
+;  (is (= (compile '(if true 1)) "(true)?(1):(null)"))
+;  (is (= (compile '(if true 1 2)) "(true)?(1):(2)"))
+;  (is (= (eval '(if true 1)) 1))
+;  (is (= (eval '(if true 1 2)) 1))
+;  (is (= (eval '(if false 1 2)) 2))
+;  (is (= (eval '(if false 1)) nil)))
+;
+;(test ?
+;  (is-not (eval '(? nil)))
+;  (is (eval '(? true)))
+;  (is (eval '(? false)))
+;  (is (eval '(? {})))
+;  (is (eval '(? [])))
+;  (is (eval '(? "")))
+;  (is (eval '(? 0))))
+;
+;(test instance?
+;  (is (eval '(instance? (new Date) Date)))
+;  (is-not (eval '(instance? Math Date))))
+;
+;(test typeof
+;  (is (= "number" (eval '(typeof 1))))
+;  (is (= "string" (eval '(typeof "aasfwewrqfwdf"))))
+;  (is (= "object" (eval '(typeof nil))))
+;  (is (= "boolean" (eval '(typeof true))))
+;  (is (= "object" (eval '(typeof {}))))
+;  (is (= "object" (eval '(typeof [])))))
+;
+;(test do
+;  (is (= "1;2;3;4;" (compile '(do 1 2 3 4)))))
+;
+;(test var
+;  (is (= "var x;" (compile '(var x))))
+;  (is (= "var x=1;" (compile '(var x 1)))))
+;
+;(test let
+;  (is (= "let x;" (compile '(let x))))
+;  (is (= "let x=1;" (compile '(let x 1)))))
+;
+;(test const
+;  (is (= "const x;" (compile '(const x))))
+;  (is (= "const x=1;" (compile '(const x 1)))))
+;
+;(test function
+;  (is (= 1, ((eval '(paren (function [x] (return x)))) 1))))
+;
+;(test application)
 
 ;(pbnj.jess/readFile "src/pbnj/core.jess")

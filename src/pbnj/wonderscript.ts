@@ -121,7 +121,16 @@ namespace pbnj.wonderscript {
   ws.lookupVariable = lookupVariable;
 
   var getVariable = function(env, name) {
-    return _.isEnv(env) ? env.get(name) : env[name];
+    var env_ = _.isEnv(env) ? env : env["@@SCOPE@@"];
+    if (env_) {
+      var obj = env_.getObject(name)
+      if (_.get(obj.getMeta(), _.keyword('macro')) === true) {
+        throw new Error("Cannot use a macro in this context");
+      }
+      return obj.getValue();
+    }
+    if (env[name]) return env[name];
+    throw new Error(['cannot find variable: ', name].join(''));
   };
 
   var evalVariable = function(exp, env) {
@@ -182,7 +191,7 @@ namespace pbnj.wonderscript {
     var name = _.name(ident);
     var ns   = _.namespace(ident);
     
-    env.define(name); // do definition can refer to itself
+    env.define(name); // so definition can refer to itself
 
     var value = preVal == null ? null : ws.eval(preVal, env);
     defineVariable(env, ident, value, meta);
@@ -361,7 +370,7 @@ namespace pbnj.wonderscript {
       return bodies;
     };
     this.arglists = function() {
-      return mori.map(function(body) { return body.args }, _.values(bodies));
+      return _.map(function(body) { return _.isArray(body.args) ? _.vector.apply(null, body.args) : body.args }, _.values(bodies));
     };
     this.id = function() {
       return id;
@@ -560,7 +569,17 @@ namespace pbnj.wonderscript {
 
     // Primitive operators are inlined for performance
     op = _.first(exp);
-    if (_.equals(op, _.symbol('+')) || _.equals(op, _.symbol('-')) || _.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
+    if (_.equals(op, _.symbol('+'))) {
+      if (args.length === 0) return 0;
+      return eval(args.join('+'));
+    }
+    else if (_.equals(op, _.symbol('-'))) {
+      if (args.length === 0) return 0;
+      else if (args.length === 1) return eval(['-', args[0]].join(''));
+      return eval(args.join('-'));
+    }
+    else if (_.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
+      if (args.length === 0) return 1;
       return eval(args.join(op.toString()));
     }
     else if (_.equals(op, _.symbol('str'))) {
@@ -629,6 +648,13 @@ namespace pbnj.wonderscript {
         return eval([args[0], '>>', args[1]].join(''));
       }
     }
+    else if ((sop = op.toString()).startsWith('.-')) {
+      meth = _.symbol.apply(null, op.toString().slice(2).split('/'));
+      obj  = _.first(_.rest(exp));
+      newExp = _.list(_.symbol('.-'), obj, meth);
+      ws.pprint(newExp);
+      return evalPropertyAccessor(newExp, env);
+    }
     else if ((sop = op.toString()).startsWith('.')) {
       meth = _.symbol.apply(null, op.toString().slice(1).split('/'));
       obj  = _.first(_.rest(exp));
@@ -684,44 +710,94 @@ namespace pbnj.wonderscript {
     return null;
   };
 
-  var isMacro = makeTagPredicate(_.symbol('define-macro'));
+  var isMacroDef = makeTagPredicate(_.symbol('define-macro'));
 
-  var evalMacro = function(exp, env) {
-    var rest = _.rest(exp);
-    var name = _.first(rest);
-    var args = _.second(rest);
-    var body = _.rest(_.rest(rest));
-    var lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
-    var ns = _.namespace(name);
-    var mod = ns ? getModule(_.symbol(ns)) : ws.MODULE_SCOPE;
-    mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
-    var fn = evalLambda(lambda, env);
+  ws.TAGGED_SPECIAL_FORMS = _.set([
+    _.symbol('lambda'),
+    _.symbol('quote'),
+    _.symbol('cond'),
+    _.symbol('define'),
+    _.symbol('do'),
+    _.symbol('try'),
+    _.symbol('catch'),
+    _.symbol('throw'),
+    _.symbol('again'),
+    _.symbol('set!'),
+    _.symbol('define-type'),
+    _.symbol('define-protocol'),
+    _.symbol('define-macro'),
+    _.symbol('.-'),
+    _.symbol('.'),
+    _.symbol('new'),
+    _.symbol('module'),
+    _.symbol('require'),
+    _.symbol('use')
+  ]);
+
+  var evalMacroDef = function(exp, env) {
+    var rest, name, args, body, lambda, fn;
+
+    rest = _.rest(exp);
+    name = _.first(rest);
+    forms = _.rest(rest);
+    var x = _.first(forms);
+    if (_.isString(x)) {
+      args = _.second(forms);
+      body = _.rest(_.rest(forms));
+      meta = _.hashMap(_.keyword('doc'), x);
+    }
+    else {
+      args = _.second(rest);
+      body = _.rest(_.rest(rest));
+      meta = _.hashMap();
+    }
+    lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
+    //ns = _.namespace(name);
+
+    env.define(name); // so macro can refer to itself
+    fn = evalLambda(lambda, env);
     fn.$lang$ws$ident = name; // give it an ident for stacktrace
-    mod['@@MACROS@@'][_.name(name)] = fn;
+    defineVariable(env, name, fn, _.assoc(meta, _.keyword('macro'), true));
+    
+    /*var mod = ns ? getModule(_.symbol(ns)) : ws.MODULE_SCOPE;
+    mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
+    mod['@@MACROS@@'][_.name(name)] = fn;*/
     return name;
   };
 
-  var macroexpand = ws.macroexpand = function(exp) {
-    var ns, name, mod, scope, macros, m, macro;
+  var getMacro = function(scope, name) {
+    if (scope === null) return null;
+    var env = _.isEnv(scope) ? scope : scope["@@SCOPE@@"];
+    if (env) {
+      var obj = env.getObject(_.name(name));
+      var meta = obj.getMeta();
+      if (_.get(meta, _.keyword('macro')) === true) {
+        return obj.getValue();
+      }
+    }
+    else {
+      //console.log(scope);
+      //ws.pprint(name);
+      //throw new Error('nothing in @@SCOPE@@');
+    }
+    return null;
+  };
 
-    if (_.isList(exp) && _.isSymbol(name = _.first(exp))) {
-      ns = _.namespace(name);
-      if (ns === 'js') return exp;
-      mod = (ns == null ? ws.MODULE_SCOPE : findModule(_.symbol(ns)))
-      if (mod == null) {
-        scope = lookupVariable(_.symbol(ns))
-        if (scope === null) return exp;
-        mod = getVariable(scope, ns);
-        if (mod == null) {
-          return exp;
-        }
-      }
-      macros = mod['@@MACROS@@'];
-      m = (macros && macros[_.name(name)]);
-      macro = m == null ? pbnj.core["@@MACROS@@"][name] : m;
-      if (macro) {
-        return macroexpand(macro.apply(macro, _.intoArray(_.rest(exp))));
-      }
+  var isMacro = ws.isMacro = ws['macro?'] = function(name) {
+    var scope = lookupVariable(name);
+    return getMacro(scope, name);
+  };
+
+  var macroexpand = ws.macroexpand = function(exp) {
+    var macro, name;
+    if (!(_.isList(exp) && _.isSymbol(name = _.first(exp)))) {
+      return exp;
+    }
+    if (_.hasKey(ws.TAGGED_SPECIAL_FORMS, name)) {
+      return exp;
+    }
+    if (macro = isMacro(name)) {
+      return macroexpand(macro.apply(macro, _.intoArray(_.rest(exp))));
     }
     return exp;
   };
@@ -817,8 +893,6 @@ namespace pbnj.wonderscript {
     if (mod) {
       var scope = globalEnv.extend().setIdent('' + name);
       scope.define('*module-name*', name);
-      mod["@@SCOPE@@"] = scope;
-      mod["@@NAME@@"] = name;
       mod.$lang$ws$type = 'module';
       pbnj.MODULE_SCOPE = mod;
       globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
@@ -834,22 +908,15 @@ namespace pbnj.wonderscript {
 
   var evalModuleDefinition = function(exp, env) {
     var name = _.second(exp); 
-    return defineModule(name);
-  };
-
-  var isModuleDefinition = ws.isModuleDefinition = makeTagPredicate(_.symbol('module'));
-
-  var evalModuleDefinition = function(exp, env) {
-    var name = _.second(exp); 
     var mod = defineModule(name);
     if (mod) {
       var scope = env.extend().setIdent('' + name);
       scope.define('*module-name*', name);
-      mod["@@SCOPE@@"] = scope;
-      mod["@@NAME@@"] = name;
+      if (!mod["@@SCOPE@@"]) mod["@@SCOPE@@"] = scope;
+      if (!mod["@@NAME@@"]) mod["@@NAME@@"] = name;
       mod.$lang$ws$type = 'module';
       ws.MODULE_SCOPE = mod;
-      globalEnv.define(name, mod);
+      globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
     }
     else {
       throw new Error(['There was an error defining module "', name, '"'].join(''));
@@ -1026,7 +1093,6 @@ namespace pbnj.wonderscript {
 
   ws.MODULE_SCOPE = pbnj.core; // default scope
   pbnj.core["@@NAME@@"] = _.symbol('pbnj.core');
-  pbnj.core["@@MACROS@@"] = {};
 
   var globalEnv = pbnj.core['@@SCOPE@@'] = pbnj.env().setSource('src/pbnj/wonderscript.js');
   globalEnv.define('*module-name*', _.symbol('pbnj.core'));
@@ -1118,8 +1184,8 @@ namespace pbnj.wonderscript {
     else if (isType(exp)) {
       return evalType(exp, env);
     }
-    else if (isMacro(exp)) {
-      return evalMacro(exp, env);
+    else if (isMacroDef(exp)) {
+      return evalMacroDef(exp, env);
     }
     else if (isThrownException(exp)) {
       return evalThrownException(exp, env);
@@ -1261,6 +1327,14 @@ namespace pbnj.wonderscript {
   // TODO: add browser detection
   globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.versions.v8) : "Unknown Browser");
   globalEnv.define('*target-language*', _.keyword('javascript'));
+
+  ws["@@SCOPE@@"] = globalEnv.extend().setIdent(_.symbol('pbnj.wonderscript'));
+
+  for (var prop in ws) {
+    if (ws.hasOwnProperty(prop)) {
+      ws["@@SCOPE@@"].define(prop, ws[prop]);
+    }
+  }
 
   if (typeof exports !== 'undefined') {
     module.exports = ws;

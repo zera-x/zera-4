@@ -188,14 +188,14 @@
     [&rules]
     [:stype {:type "text/css"} (pbnj.jelly/css rules)))
 
-(test html
-  (is (= "<br />" (html [:br])))
-  (is (= "<br />" (html '(br))))
-  (is (= "<b>Test</b>" (html [:b "Test"])))
-  (is (= "<a href=\"#\">Test</a>" (html [:a {:href "#"} "Test"])))
-  (is (= "<script type=\"text/javascript\">alert(\"test\")</script>"
-         (html [:javascript "alert(\"test\")"])))
-  (is (= "<script type=\"text/javascript\">alert(\"test\")</script>"
-         (html [:javascript '(alert "test")])))
-  (is (= "<script type=\"text/javascript\">alert(\"test\")</script>"
-         (html [:wonderscript '(alert "test")]))))
+;(test html
+;  (is (= "<br />" (html [:br])))
+;  (is (= "<br />" (html '(br))))
+;  (is (= "<b>Test</b>" (html [:b "Test"])))
+;  (is (= "<a href=\"#\">Test</a>" (html [:a {:href "#"} "Test"])))
+;  (is (= "<script type=\"text/javascript\">alert(\"test\")</script>"
+;         (html [:javascript "alert(\"test\")"])))
+;  (is (= "<script type=\"text/javascript\">alert(\"test\")</script>"
+;         (html [:javascript '(alert "test")])))
+;  (is (= "<script type=\"text/javascript\">alert(\"test\")</script>"
+;         (html [:wonderscript '(alert "test")]))))

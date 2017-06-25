@@ -3,6 +3,23 @@
 
 (set! *environment* :production)
 
+(define
+  {:macro true
+   :doc "definition of 'define-macro' as a macro"}
+  define-macro*
+  (lambda
+    [name &forms]
+    (if (symbol? name)
+      nil
+      (throw (js/Error. "first argument of define-macro should be a symbol")))
+    (let [x (first forms)]
+      (cond (string? x)
+              (list 'define {:doc x :macro true} name (cons 'lambda (rest forms)))
+            (or (vector? x) (list? x))
+              (list 'define :macro name (cons 'lambda forms))
+            :else
+              (throw (js/Error. "after name define-macro expects a doc string, an arguments vector, or a list of bodies"))))))
+
 (define-macro comment [&forms] nil)
 
 (define-macro if
@@ -12,20 +29,23 @@
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
 
-; (case a
-;    5 "a is 5"
-;    6 "a is 6"
-;    :else "a is not 5 or 6")
-; =>
-; (cond (= a 5) "a is 5"
-;       (= a 6) "a is 6"
-;       :else "a is not 5 or 6")
 (define-macro case
+  "
+  (case a
+     5 \"a is 5\"
+     6 \"a is 6\"
+     :else \"a is not 5 or 6\")
+  =>
+  (cond (= a 5) \"a is 5\"
+        (= a 6) \"a is 6\"
+        :else \"a is not 5 or 6\")
+  "
   [value &rules]
   (cons 'cond (->> (partition 2 rules)
                    (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
 (define-macro define-
+  "define a private variable (it cannot be seen outside of the module scope)."
   ([nm] (list 'define :private nm))
   ([nm value] (list 'define :private nm value))
   ([meta nm value] (list 'define (assoc meta :private true) nm value)))
@@ -267,7 +287,26 @@
 
 (define-macro doc
   [sym]
-  (list '-> (list 'var sym) '.getMeta :doc 'println))
+  (let [meta (gen-sym "meta")
+        src (gen-sym "src")
+        doc (gen-sym "doc")
+        args (gen-sym "args")
+        kind (gen-sym "kind")]
+    (list 'let [meta (list '.? (list 'var sym) 'getMeta)]
+          (list 'if
+                meta
+                (list 'let [doc  (list meta :doc)
+                            args (list meta :arglists)
+                            kind (list 'if (list meta :macro) :macro :function)]
+                      (list 'println (list 'str kind))
+                      (list 'println (list 'str args))
+                      (list 'if doc (list 'println doc)))))))
+
+(define-macro source
+  [sym]
+  (let [meta (gen-sym "meta")]
+    (list 'let [meta (list '.getValue (list 'var sym))]
+          (list 'println (list '.toString meta)))))
 
 (define-function with-meta
   [obj meta]
@@ -601,7 +640,9 @@
   ([value left right]
    (if (nil? value) (left) (right value))))
 
+(define-function identity [x] x)
+
+(define-function always [x] (lambda [] x))
+
 (if (= *platform* :nodejs)
   (define-function print [&vals] (. process/stdout (write (apply str vals)))))
-
-(require "wonderscript/compiler.ws")
