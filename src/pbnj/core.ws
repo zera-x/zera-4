@@ -655,5 +655,33 @@
 ;  ([x &more]
 ;   (str x (reduce (lambda [s x] (str s x)) more))))
 
-(if (= *platform* :nodejs)
-  (define-function print [&vals] (. process/stdout (write (apply str vals)))))
+(define-macro node.js?
+  [&forms]
+  (list 'if (list '= '*platform* :nodejs)
+        (cons 'do forms)))
+
+(node.js?
+  (define-function print
+    [&vals]
+    (.write process/stdout (apply str vals)))
+
+  (define-function say
+    [&vals]
+    (console/log (apply str vals)))
+
+  (define- *fs* (js.node/require "fs"))
+
+  (define-function slurp
+    "Read entire contents of `file` to a string"
+    [file]
+    (-> (.readFileSync *fs* file) .toString))
+
+  (define-function spit
+    "Write `data` to `file`. Data can be a String, Buffer, or Uint8Array."
+    [file data]
+    (.writeFileSync *fs* file data) file)
+)
+
+(define-function lines
+  [s]
+  (-> (.split s \newline) array->list))
