@@ -3,22 +3,22 @@
 
 (set! *environment* :production)
 
-(define
-  {:macro true
-   :doc "definition of 'define-macro' as a macro"}
-  define-macro*
-  (lambda
-    [name &forms]
-    (if (symbol? name)
-      nil
-      (throw (js/Error. "first argument of define-macro should be a symbol")))
-    (let [x (first forms)]
-      (cond (string? x)
-              (list 'define {:doc x :macro true} name (cons 'lambda (rest forms)))
-            (or (vector? x) (list? x))
-              (list 'define :macro name (cons 'lambda forms))
-            :else
-              (throw (js/Error. "after name define-macro expects a doc string, an arguments vector, or a list of bodies"))))))
+(define-macro define-function
+  [name &forms]
+  (if (symbol? name)
+    nil
+    (throw (js/Error. "first argument of define-function should be a symbol")))
+  (let [x (first forms)]
+    (cond (string? x)
+            (list 'define {:doc x} name (cons 'lambda (rest forms)))
+          (or (vector? x) (list? x))
+            (list 'define name (cons 'lambda forms))
+          :else
+            (throw (js/Error. "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+
+(define-macro define-function-
+  [name &forms]
+  (list 'define :private name (cons 'lambda forms)))
 
 (define-macro comment [&forms] nil)
 
@@ -71,24 +71,6 @@
    (let [and* (first forms)]
      (list 'if and* (cons 'and (rest forms)) and*))))
 
-(define-macro define-function
-  [name &forms]
-  (if (symbol? name)
-    nil
-    (throw (js/Error. "first argument of define-function should be a symbol")))
-  (let [x (first forms)]
-    (cond (string? x)
-            (list 'define {:doc x} name (cons 'lambda (rest forms)))
-          (or (vector? x) (list? x))
-            (list 'define name (cons 'lambda forms))
-          :else
-            (throw (js/Error. "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
-
-
-(define-macro define-function-
-  [name &forms]
-  (list 'define :private name (cons 'lambda forms)))
-
 (define-macro .?
   ([obj method]
    (list '.? obj method nil))
@@ -111,14 +93,11 @@
 
 (define-macro defined?
   [sym]
-  (let [ns (namespace sym)
-        nm (name sym)]
-    (list 'if
+    (let [ns (namespace sym)
+                nm (name sym)]
           (list 'if ns
-                (list '.- (symbol ns) nm)
-                (list '.? '*scope* (list 'lookup nm)))
-          true
-          false)))
+                (list '.- (list 'symbol ns) (list 'symbol nm))
+                (list '.? (list 'current-module-scope) (list 'lookup (list 'symbol nm))))))
 
 (define-macro do-times
   [bindings &body]
@@ -256,6 +235,17 @@
 (define-function add-watch [x k f]
   (.? x (addWatch k f)))
 
+(define-function add1 [n] (+ 1 n))
+(define-function sub1 [n] (- 1 n))
+
+(define- *sym-count* (atom 0))
+(define-function gen-sym 
+  ([] (gen-sym "sym"))
+  ([prefix]
+   (let [sym (symbol (str prefix "-" @*sym-count*))]
+     (swap! *sym-count* add1)
+     sym)))
+
 ;; ---------------------------- meta data ------------------------------ ;;
 
 (define current-module
@@ -264,7 +254,11 @@
 (define current-module-name
   (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@NAME@@"))))
 
+(define current-module-scope
+  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@SCOPE@@"))))
+
 (define-macro var
+  "Return the named Variable object"
   ([nm]
    (let [ns (namespace nm)
          sname (name nm)]
@@ -281,9 +275,31 @@
          (list 'getObject (list 'str (list 'quote nm))))))
 
 (define-function meta
-  [obj]
-  (println obj)
-  (.getMeta obj))
+  "Return meta data for the given Variable object `x`."
+  [x] (.getMeta x))
+
+(define-function with-meta
+  "Add meta data `meta` (expects a Map) to the given Variable object `x`."
+  [x meta]
+  (.withMeta x meta))
+
+(define-function vary-meta
+  "Change the meta data for the given Variable object `x`,
+  with the function `f` and any required `args`."
+  [x f &args]
+  (.varyMeta x f args))
+
+(define-macro define-once
+  [nm value]
+  (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))
+
+(define-macro defined-in-module?
+  ([nm] (list '.- 'pbnj.wonderscript/MODULE_SCOPE nm))
+  ([mod nm]
+   (list '.- mod nm)))
+
+(define-macro define-in-module-once [nm value]
+  (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
 
 (define-macro doc
   [sym]
@@ -307,25 +323,6 @@
   (let [meta (gen-sym "meta")]
     (list 'let [meta (list '.getValue (list 'var sym))]
           (list 'println (list '.toString meta)))))
-
-(define-function with-meta
-  [obj meta]
-  (.withMeta obj meta))
-
-(define-function vary-meta
-  [obj f &args]
-  (.varyMeta obj f args))
-
-(define-macro define-once [nm value]
-  (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))
-
-(define-macro defined-in-module?
-  ([nm] (list '.- 'pbnj.wonderscript/MODULE_SCOPE nm))
-  ([mod nm]
-   (list '.- mod nm)))
-
-(define-macro define-in-module-once [nm value]
-  (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
 
 ;; ------------------------------------ testing -------------------------------------- ;;
 
@@ -353,6 +350,39 @@
 
 (define-macro is-not [body &args]
   (cons 'is (cons (list 'not body) args)))
+
+(define-function module-scope
+  "Return the scope of the named module."
+  [mod]
+  (if (symbol? mod)
+    (.- (eval mod) (symbol "@@SCOPE@@"))
+    (.- mod (symbol "@@SCOPE@@"))))
+
+(define-function tests
+  "Collect all the tests in the given module, if no module us specified
+  the tests from the current module are returned."
+  ([] (tests (current-module)))
+  ([mod]
+   (->> (module-scope mod)
+        .getObjects
+        (map meta)
+        (filter :test)
+        (map :test))))
+
+(define-macro prove
+  "Run the named test"
+  [tname]
+  (let [v (gen-sym "var")]
+    (list 'let [v (list 'var tname)]
+         (list 'if v (list '-> (list '.getMeta v) :test 'apply)))))
+
+(define-function prove-module [module]
+  (map apply (tests module)))
+
+(test prove
+  (test passing-test (is (= 1 1)))
+  (test failing-test (is (= 0 1)))
+  (is (= (prove passing-test) [:passing-test :passed])))
 
 (test .?
   (let [d (new js/Date 2016 10 25)]
@@ -485,46 +515,10 @@
   (is-not (not= :a :a))
   (is-not (not= [1 2 3 4] [1 2 3 4])))
 
-(define-function add1 [n] (+ 1 n))
-(define-function sub1 [n] (- 1 n))
-
 (define-function join
   [col delim]
   (let [joiner (lambda [s x] (str s delim x))]
     (reduce joiner col)))
-
-(define-function tests [mod] (.- mod *tests*))
-
-(define-function prove [tname]
-  (let [ns (namespace tname)
-        nm (name tname)
-        mod (if ns (eval (symbol ns)) pbnj.wonderscript/MODULE_SCOPE)
-        tmap (tests mod)]
-    (let [t (get tmap (keyword nm))]
-      (unless t
-        (let [ts (keys *tests*)]
-          (if (empty? ts)
-            (throw "no tests found in *tests*")
-            (throw (str "could not find test, " (inspect tname) " in *tests*, found: " (inspect ts))))))
-      ((:test/fn t)))))
-
-(test prove
-  (test passing-test (is (= 1 1)))
-  (test failing-test (is (= 0 1)))
-  (is (= (prove :passing-test) [:passing-test :passed])))
-
-(define-function collect-tests [module] (vals (eval (symbol (name module) "*tests*"))))
-
-(define-function prove-module [module]
-  (into [] (map prove (map :test/name (collect-tests module)))))
-
-(define- *sym-count* (atom 0))
-(define-function gen-sym 
-  ([] (gen-sym "sym"))
-  ([prefix]
-   (let [sym (symbol (str prefix "-" @*sym-count*))]
-     (swap! *sym-count* add1)
-     sym)))
 
 (test gen-sym
   (is (symbol? (gen-sym)))
@@ -643,6 +637,12 @@
 (define-function identity [x] x)
 
 (define-function always [x] (lambda [] x))
+
+;(define-function str
+;  ([] "")
+;  ([x] (str x))
+;  ([x &more]
+;   (str x (reduce (lambda [s x] (str s x)) more))))
 
 (if (= *platform* :nodejs)
   (define-function print [&vals] (. process/stdout (write (apply str vals)))))
