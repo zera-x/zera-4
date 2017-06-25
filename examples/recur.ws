@@ -18,6 +18,13 @@
           acc
         (again (sub1 cnt) (* acc cnt))))))
 
+(define-function fact!
+  ([n] (fact! n 1))
+  ([n acc]
+   (if (= 0 n)
+     acc
+     (again (sub1 n) (* acc n)))))
+
 (define-function map*
   [f col]
   (cond (empty? col) col
@@ -27,7 +34,7 @@
 
 (define-function times2 [x] (* x 2))
 
-(println (factorial 5))
+(println (fact! 5))
 
 ;(.-set! pbnj.core DEBUG true)
 ;(println
@@ -39,7 +46,7 @@
 ;                  n2 (again (- n 2))]
 ;              (+ n1 n2)))))
 
-(println (map* times2 (range 5)))
+;(println (map* times2 (range 5)))
 
 ;(println (fib 5))
 
