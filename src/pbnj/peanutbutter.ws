@@ -13,7 +13,7 @@
 (define-function nil? [exp]
   (or (pbnj.core/nil? exp) (and (collection? exp) (empty? exp))))
 
-(define render-nil (always ""))
+(define render-nil (constantly ""))
 
 (define-function tag? [exp]
   (and (sequential? exp)
@@ -41,7 +41,7 @@
         kattr (if (symbol? attr) (keyword (name attr)) (keyword attr))
         v (pair 1)
         value (cond (and (= kattr :style) (map? v)) (render-declaration v)
-                    (EVENTS kattr) (. (pbnj.wonderscript/compile v) (replace (new js/RegExp "\"" "g") "\\\""))
+                    (EVENTS kattr) (.replace (pbnj.wonderscript/compile v) (js/RegExp. "\"" "g") "\\\"")
                     :else
                       (str v))]
     (str (name attr) "=\"" value "\"")))
@@ -67,19 +67,10 @@
 (define-function render-expression-list [exprs]
   (reduce str (map html exprs)))
 
-(define-function component-index [nm]
-  (. (str nm) (replace (new js/RegExp "^:") "")))
-
-(define-function define-component [nm fn]
-  (swap! *components* (lambda [comps] (assoc comps (component-index nm) fn))) nil)
-
-(define-macro component
-  ([nm x]
-   (list 'pbnj.peanutbutter/define-component nm (list 'lambda [] x)))
-  ([nm args &body]
-   (list 'pbnj.peanutbutter/define-component nm (list 'lambda (cons args body)))))
-
-(define-function components [] *components*)
+(define-macro define-component
+  [nm &forms]
+  (let [sym (if (keyword? nm) (symbol (namespace nm) (name nm)) nm)]
+    (list 'define {:peanutbutter/component true} sym (cons 'lambda forms))))
 
 (define-function definition? [exp]
   (and (list? exp) (= (first exp) 'define)))
@@ -91,16 +82,19 @@
    (unless (vector? args) (throw "argument list should be a vector"))
    (define-component nm (eval (cons 'lambda (cons args body))))))
 
-(define-function have-component? [nm]
-  (has-key? (deref *components*) (component-index nm)))
+(define-function get-component
+  {:memoize true}
+  [exp]
+  (let [v    (eval (list 'var exp))
+        meta (.? v getMeta)]
+    (if (meta :peanutbutter/component) (.getValue v) nil)))
 
-(define-function get-component [nm]
-  (get (deref *components*) (component-index nm)))
+(define-function component?
+  [exp]
+  (and (tag? exp) (get-component (first exp))))
 
-(define-function component? [exp]
-  (and (tag? exp) (have-component? (first exp))))
-
-(define-function render-component [exp]
+(define-function render-component
+  [exp]
   (let [component (get-component (first exp))]
     (html (apply component (rest exp)))))
 
@@ -160,33 +154,28 @@
   [file]
   (compile-stream (pbnj.reader/readFile file)))
 
-(define-component :javascript
-  (lambda
-    [code]
-    [:script {:type "text/javascript"}
-     (if (string? code)
-       code
-       (pbnj.jess/compile code))]))
+(define-component javascript
+  [code]
+  [:script {:type "text/javascript"}
+    (if (string? code)
+      code
+      (pbnj.jess/compile code))])
 
-(define-component :wonderscript
-  (lambda
-    [code]
-    [:script {:type "text/javascript"} (pbnj.wonderscript/compile code)]))
+(define-component wonderscript
+  [code]
+  [:script {:type "text/javascript"} (pbnj.wonderscript/compile code)])
 
-(define-component :php
-  (lambda
-    [code]
-    (pbnj.phay/compile (list '<?php code))))
+(define-component php
+  [code]
+  (pbnj.phay/compile (list '<?php code)))
 
-(define-component :php=
-  (lambda
-    [code]
-    (pbnj.phay/compile (list '<?php (list 'echo code)))))
+(define-component php=
+  [code]
+  (pbnj.phay/compile (list '<?php (list 'echo code))))
 
-(define-component :css
-  (lambda
-    [&rules]
-    [:stype {:type "text/css"} (pbnj.jelly/css rules)))
+(define-component css
+  [&rules]
+  [:stype {:type "text/css"} (pbnj.jelly/css rules))
 
 ;(test html
 ;  (is (= "<br />" (html [:br])))

@@ -1,4 +1,4 @@
-; vim: set=clojure
+; vim: ft=clojure
 (require "../src/pbnj/types.ws")
 (module examples.types)
 

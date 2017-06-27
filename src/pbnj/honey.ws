@@ -24,12 +24,3 @@
   (let [url* (parse-url url)
         connector (*schemes* (url* :protocol))]
     (connector url*)))
-
-(define-function sql-query
-  [db sql]
-  (let [first 
-  (.each
-    db
-    sql
-    (lambda [err row]
-            )))
