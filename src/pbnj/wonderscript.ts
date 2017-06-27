@@ -426,6 +426,20 @@ namespace pbnj.wonderscript {
     return this;
   };
 
+  function ccFrame(exprs, scope) {
+    return function() {
+      var exp, exprs_ = exprs;
+      while (_.count(exprs_) !== 0) {
+        exp = _.first(exprs_);
+        ret = ws.eval(exp, scope);
+        exprs_ = _.rest(exprs_);
+      }
+      return ret;
+    };
+  }
+
+  var CCFRAMES = {};
+
   Lambda.prototype.exec = function() {
     var body = this.body;
     if (!body) throw new Error('the lambda must be bound to arguments first');
@@ -433,7 +447,17 @@ namespace pbnj.wonderscript {
     while (_.count(exprs) !== 0) {
       try {
         exp = _.first(exprs);
-        ret = ws.eval(exp, this.scope);
+        try {
+          ret = ws.eval(exp, this.scope);
+        }
+        catch (e) {
+          if (e instanceof SetContinuationPoint) {
+            CCFRAMES[e.id] = ccFrame(_.rest(exprs), this.scope.extend());
+          }
+          else {
+            throw e;
+          }
+        }
         exprs = _.rest(exprs);
       }
       catch (e) {
@@ -552,6 +576,54 @@ namespace pbnj.wonderscript {
   var evalRecursionPoint = function(exp, env) {
     var args = _.intoArray(mori.map(function(x) { return ws.eval(x, env); }, _.rest(exp)));
     throw new RecursionPoint(args);
+  };
+
+  var CONTINUATION_ID = 0;
+  function ContinuationCall(scope) {
+    this.id = _.symbol(['continuation-', CONTINUATION_ID++].join(''));
+    this.scope = scope;
+  }
+
+  function SetContinuationPoint(id) {
+    this.id = id;
+  }
+
+  var isContinuationPoint = _.makeTagPredicate(_.symbol('call-with-current-continuation'));
+
+  var evalContinuationPoint = function(exp, env) {
+    if (_.count(exp) != 2) throw new Error('call-with-current-contiuation expression should be a list of 2 elements');
+    var fn = ws.eval(_.second(exp), env);
+    if (_.isFunction(fn)) {
+      var cc  = new ContinuationCall(scope);
+      var scope = env.extend().setIdent(cc.id);
+      var c = function() {
+        //throw cc;
+        //console.log(CCFRAMES);
+        var frame = CCFRAMES[cc.id];
+        if (frame) {
+          return frame.call();
+        }
+        else {
+          throw new Error('Continuation frame not set for: ' + cc.id);
+        }
+      };
+      fn.call(null, c);
+      throw new SetContinuationPoint(cc.id);
+    }
+    else {
+      throw new Error('call-with-current-continuation expects a function argument');
+    }
+  };
+
+  var continuationCall = function(cp, fn) {
+    try {
+      fn.call(null, cp); // 
+    }
+    catch (e) {
+      if (e instanceof ContinuationPoint && e.id === cp.id) {
+        
+      }
+    }
   };
 
   var isApplication = ws.isApplication = function(exp) {
@@ -1174,6 +1246,9 @@ namespace pbnj.wonderscript {
     }
     else if (isRecursionPoint(exp)) {
       return evalRecursionPoint(exp, env);
+    }
+    else if (isContinuationPoint(exp)) {
+      return evalContinuationPoint(exp, env);
     }
     else if (isAssignment(exp)) {
       return evalAssignment(exp, env);
