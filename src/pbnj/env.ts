@@ -189,8 +189,28 @@ namespace pbnj.core {
       m = _.assoc(m, _.keyword('source'), scope.get('*source*'));
     }
 
-    if (_.isFunction(value) && value.arglists) {
-      m = _.assoc(m, _.keyword('arglists'), value.arglists());
+    if (_.isFunction(value)) {
+      if (value.arglists) {
+        m = _.assoc(m, _.keyword('arglists'), value.arglists());
+      }
+      var hash;
+      if (hash = _.hasKey(meta, _.keyword('memoize'))) {
+        var enclosed = value;
+        var hasher = _.isFunction(hash) ? hash : null;
+        value = function(key) {
+          var ret;
+          if (ret = _.get(value.memo, key)) {
+            return ret;
+          }
+          else {
+            var address = hasher ? hasher.apply(this, arguments) : key;
+            ret = enclosed.apply(this, arguments);
+            value.memo = _.assoc(value.memo, address, ret);
+            return ret;
+          }
+        };
+        value.memo = _.hashMap();
+      }
     }
 
     this.vars[sname] = new Variable(_.symbol(sname), value, _.merge(m, meta));
