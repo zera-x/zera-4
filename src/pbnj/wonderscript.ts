@@ -279,12 +279,15 @@ namespace pbnj.wonderscript {
       }
     };
 
+    var types = _.set([ctr]);
+
     // TODO: add checks to make sure that specs list is in the following format (PROTOCOL METHODS?, PROTOCOL METHODS?, ...)
     if (specs.length !== 0) {
       ctr.prototype = {};
       for (i = 0; i < specs.length; i++) {
         if (_.isSymbol(specs[i])) {
           mixin = ws.eval(specs[i], env);
+          types = _.conj(types, mixin);
           // TODO: perform checks based on meta data
           mixin.call(null, ctr.prototype);
         }
@@ -306,12 +309,16 @@ namespace pbnj.wonderscript {
       return ["#<", name, " ",  vars, ">"].join('');
     };
 
+    ctr.prototype.types = function() {
+      return types;
+    };
+
     ctr.prototype['class'] = function() {
       return ctr;
     };
 
     ctr.prototype.isa = function(klass) {
-      return ctr === klass;
+      return _.has(types, klass);
     };
 
     var meta_ = _.hashMap(_.keyword('type'), true);
