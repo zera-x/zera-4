@@ -3,6 +3,8 @@
 
 (set! *environment* :production)
 
+; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
+
 (define-macro define-function
   "(define-function name doc-string? meta-map? arguments body)
   (define-function name doc-string? meta-map? (arguments body))"
@@ -165,41 +167,104 @@
                        (list form x*))]
         (again threaded (rest forms*))))))
 
-(define-protocol IDeref
-  (deref [self] (.- self value)))
+(define-function prototype
+  [x]
+  (cond
+    (.-prototype x) (.-prototype x)
+    (.-__proto__ x) (.-__proto__ x)
+    :else
+      nil))
 
-(define-type Atom
-  [value]
-  IDeref
+(define-function constructor
+  [x]
+  (.- (prototype x) constructor))
+
+(define-function isa?
+  [x klass]
+  (.? x (isa klass)
+      (identical? (..- x prototype constructor) klass)))
+
+(define-function class
+  [x]
+  (.? x class (eval (symbol "js" (class-name x)))))
+
+(define-protocol IRef
+  (deref [self] (.- self value))
+  (setValidator
+    [self fn]
+    (.-set! self validator fn)
+    self)
   (addWatch
     [self k f]
     (.-set! self watches
             (if (.- self watches)
-              (conj (.- self watches) [k f])
-              (list [k f]))))
+              (assoc (.- self watches) k f)
+              {k f}))
+    self)
+  (removeWatch
+    [self k]
+    (.-set! self watches
+            (if (.-watches self)
+              (dissoc (.-watches self) k)))
+    self)
   (processWatches
     [self newVal]
     (when (.- self watches)
       (do-each [x (.- self watches)]
         (let [k (x 0)
               f (x 1)]
-          (f k self (.- self value) newVal)))))
+          (f k self (.- self value) newVal))))
+    self))
+
+(define-protocol IMeta
+  (getMeta [self] (.-meta self))
+  (withMeta [self m] (.-set! self meta m))
+  (varyMeta
+    [self f &args]
+    (.withMeta (apply f (cons (.-meta self) args)))))
+
+(define-type Atom
+  [value meta validator]
+  IMeta
+  IRef
   (reset
     [self val]
+    (if (.-validator self)
+      (if-not (.validator self val)
+        (throw (js/Error. (str "'" (inspect val) "' is not a valid value")))))
     (. self (processWatches val))
     (.-set! self value val)
     self)
   (swap
     [self f]
     (let [newVal (f (.- self value))]
+      (if (.-validator self)
+        (if-not (.validator self newVal)
+          (throw (js/Error. (str "'" (inspect newVal) "' is not a valid value")))))
       (. self (processWatches newVal))
       (.-set! self value newVal)
       self)))
 
 (define-function atom
   "Constructs a new Atom wrapping the given value `x`."
-  [x]
-  (new Atom x))
+  {:added "1.0"}
+  [x &options]
+  (if (empty? options)
+    (Atom. x {} nil)
+    (let [opts (partition 2 options)
+          meta (first (filter (lambda [x] (= :meta (first x))) opts))
+          validator (first (filter (lambda [x] (= :validator (first x))) opts))]
+      (cond (and meta validator)
+              (Atom. x (second meta) (second validator))
+            validator
+              (Atom. x {} (second validator))
+            meta
+              (Atom. x (second meta) nil)
+            :else
+              (Atom. x {} nil)))))
+
+(define-function atom?
+  [x])
 
 (define-function deref
   "
@@ -210,6 +275,7 @@
       (deref x) => 1
       @x => 1
   "
+  {:added "1.0"}
   [x]
   (.? x deref))
 
@@ -223,6 +289,7 @@
       (rest! x 2)
       @x => 2
   "
+  {:added "1.0"}
   [x value]
   (.? x (reset value)))
 
@@ -236,17 +303,61 @@
       (swap! x (lambda [val] (+ 1 val)))
       (deref x) => 2
   "
+  {:added "1.0"}
   [x f]
   (.? x (swap f)))
 
-(define-function add-watch [x k f]
+(define-function add-watch
+  "
+  Add watch function to the atom `x` with a key `k` (that can be used for traces).
+  The watch function will be proccessed each time the atom value changes. When
+  the watch function is proccessed it is passed 4 arguments, the key, the atom,
+  the current value, and the new value.
+
+  Example:
+      (define x (atom 1))
+      (add-watch x :times-are-a-changin
+        (lambda [k a old new]
+                (println (str \"processing \" k))
+                (println (str \"old value: \" (inspect old)))
+                (println (str \"new value: \" (inspect new)))))
+  "
+  {:added "1.0"}
+  [x k f]
   (.? x (addWatch k f)))
+
+(define-function remove-watch
+  "Removes a watch (set by add-watch) from a reference"
+  {:added "1.0"}
+  [x k]
+  (.? x (removeWatch k)))
+
+(define-function compare-and-set!
+  "
+  Atomically sets the value of atom to newval if and only if the
+  current value of the atom is identical to oldval. Returns true if
+  set happened, else false
+  "
+  {:added "1.0"}
+  [x old new]
+  (if (identical? @x old)
+    (do
+      (reset! x new)
+      true)
+    false))
+
+(define-function set-validator!
+  {:added "1.0"}
+  [x fn]
+  (.? x (setValidator fn)))
 
 (define-function add1 [n] (+ 1 n))
 (define-function sub1 [n] (- 1 n))
 
 (define- *sym-count* (atom 0))
 (define-function gen-sym 
+  "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
+  {:added "1.0"}
   ([] (gen-sym "sym"))
   ([prefix]
    (let [sym (symbol (str prefix "-" @*sym-count*))]
@@ -281,6 +392,30 @@
          (list 'lookup (list 'str (list 'quote nm)))
          (list 'getObject (list 'str (list 'quote nm))))))
 
+(define-function var-set
+  [x value]
+  (.? x (set value)) x)
+
+(define-function var-get
+  [x]
+  (.? x get))
+
+(define-function macro?
+  [x]
+  (.? x isMacro))
+
+(define-function var?
+  [x]
+  (isa? x Var))
+
+(define-function class?
+  [x]
+  (cond (var? x)
+          (.isClass x)
+        (and (function? x) (.-getMeta x))
+          ((.getMeta x) :type)
+        :else false))
+
 (define-function meta
   "Return meta data for the given Variable object `x`."
   [x] (.getMeta x))
@@ -309,6 +444,7 @@
   (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
 
 (define-macro doc
+  "Retreive documentation for the given symbol"
   [sym]
   (let [meta (gen-sym "meta")
         src (gen-sym "src")
@@ -321,6 +457,7 @@
                 (list 'let [doc  (list meta :doc)
                             args (list meta :arglists)
                             kind (list 'if (list meta :macro) :macro :function)]
+                      (list 'println "----------------------")
                       (list 'println (list 'str kind))
                       (list 'println (list 'str args))
                       (list 'if doc (list 'println doc)))))))
@@ -328,7 +465,7 @@
 (define-macro source
   [sym]
   (let [meta (gen-sym "meta")]
-    (list 'let [meta (list '.getValue (list 'var sym))]
+    (list 'let [meta (list 'deref (list 'var sym))]
           (list 'println (list '.toString meta)))))
 
 ;; ------------------------------------ testing -------------------------------------- ;;
@@ -343,7 +480,7 @@
 
 (define :private format-test-results
  (lambda [body]
-  (println "body" body)
+  ;(println "body" body)
   (if (list? body)
     (inspect (cons (first body) (map eval (rest body))))
     (inspect body))))
@@ -542,7 +679,7 @@
 (define-function negative? [n]
   (not= n (Math/abs n)))
 
-(define-function integer? [n] (= 0 (fraction n)))
+(define-function integer? [n] (and (number? n) (= 0 (fraction n))))
 
 (define-function natural? [n]
   (and (integer? n) (positive? n)))
@@ -640,6 +777,10 @@
   ([value left right]
    (if (nil? value) (left) (right value))))
 
+(define-function raise
+  [e]
+  (lambda [] (throw e)))
+
 (define-function identity [x] x)
 
 (define-function always [x] (lambda [] x))
@@ -649,6 +790,52 @@
 ;  ([x] (str x))
 ;  ([x &more]
 ;   (str x (reduce (lambda [s x] (str s x)) more))))
+
+(define-macro define-generic
+  "
+  Defines a generic function
+
+  Example:
+      (define-generic t string?)
+      (define-method t false [_] :not-string)
+      (define-method t true [_] :string)
+  "
+  ([name fn]
+   (list 'define-generic name nil fn))
+  ([name doc fn]
+   (list 'define
+         {:generic-function true :doc doc :methods {}}
+         name
+         (list 'lambda ['&args]
+               (list 'let ['meths (list '-> (list 'var name) '.getMeta :methods)]
+                     (list 'if (list 'empty? 'meths)
+                           (list 'throw (str "There are no methods for the generic function '" name "'")))
+                     (list 'let ['meth (list 'get 'meths (list 'apply fn 'args))]
+                           (list 'if-not 'meth
+                                 (list 'throw (str "there is no method for the given arguments " (list 'inspect 'args))))
+                           (list 'apply 'meth 'args)))))))
+
+(define-macro define-method
+  "
+  Defines a method for a generic function
+
+  Example:
+      (define-generic t string?)
+      (define-method t false [_] :not-string)
+      (define-method t true [_] :string)
+  "
+  [name val args &body]
+  (list '.varyMeta (list 'var name)
+        (list 'lambda '[m]
+              (list 'let ['meths (list 'get 'm :methods)
+                          'fn (cons 'lambda (cons args body))]
+                    (list 'assoc 'm :methods (list 'assoc 'meths val 'fn))))))
+
+(define-generic t
+  "A generic function example"
+  string?)
+(define-method t false [_] :not-string)
+(define-method t true [_] :string)
 
 (define-macro node.js?
   [&forms]
@@ -690,4 +877,10 @@
   (let [joiner (lambda [s x] (str s delim x))]
     (reduce joiner col)))
 
-
+(define-function replace
+  ([s pat]
+   (replace s pat ""))
+  ([s pat val]
+   (if (nil? s)
+     ""
+     (.replace s pat val))))

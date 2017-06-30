@@ -10,6 +10,8 @@
   "license": "ISC",
   "dependencies": {
     "bluebird": "^3.5.0",
+    "datascript": "^0.16.1",
+    "datascript-mori": "^0.17.0",
     "google-closure-compiler": "^20160619.0.0",
     "google-closure-library": "^20160619.0.0",
     "js-atom": "^0.4.0",

@@ -153,7 +153,7 @@ namespace pbnj.wonderscript {
     }
     else {
       // define value in module scope
-      var mod = ns == null ? pbnj.MODULE_SCOPE : getModule(_.symbol(ns));
+      var mod = ns == null ? ws.MODULE_SCOPE : findModule(_.symbol(ns));
       if (!mod) throw new Error(["module ", ns ," is undefined"].join(''));
       if (!mod["@@SCOPE@@"]) {
         mod["@@SCOPE@@"] = globalEnv.extend();
@@ -243,13 +243,29 @@ namespace pbnj.wonderscript {
 
   // (define-type Point [x y])
   var evalType = function(exp, env) {
-    var rest, name, fields, specs, argc, names, ctr, mixin, method, i;
+    var rest, name, fields, specs, argc, names, ctr, mixin, method, i, doc, meta;
     rest = _.rest(exp);
     name = _.first(rest);
-    fields = _.second(rest);
-    specs = _.intoArray(_.rest(_.rest(rest)));
-
     if (!_.isSymbol(name)) throw new Error('name should be a symbol');
+
+    if (_.isVector(fields = _.second(rest))) {
+      specs = _.intoArray(_.rest(_.rest(rest)));
+    }
+    else if (_.isString(doc = fields) && _.isMap(meta = _.first(_.rest(_.rest(rest))))) {
+      fields = _.first(_.rest(_.rest(_.rest(rest))));
+      specs = _.intoArray(_.rest(_.rest(_.rest(_.rest(rest)))));
+    }
+    else if (_.isString(doc = fields)) {
+      meta = null;
+      fields = _.first(_.rest(_.rest(rest)));
+      specs = _.intoArray(_.rest(_.rest(_.rest(rest))));
+    }
+    else if (_.isMap(meta = fields)) {
+      doc = null;
+      fields = _.first(_.rest(_.rest(rest)));
+      specs = _.intoArray(_.rest(_.rest(_.rest(rest))));
+    }
+
     if (!_.isVector(fields)) throw new Error('field list should be a vector of symbols');
 
     argc  = _.count(fields);
@@ -283,7 +299,34 @@ namespace pbnj.wonderscript {
       }
     }
 
-    defineVariable(env, name, ctr, _.hashMap(_.keyword('type'), true));
+    ctr.prototype.toString = function() {
+      var that = this;
+      var vars = _.reduce(function(s, x) { return [s, ', ', x].join('') },
+                    _.map(function(x) { return [x, ': ', ws.inspect(that[x])].join('') }, names));
+      return ["#<", name, " ",  vars, ">"].join('');
+    };
+
+    ctr.prototype['class'] = function() {
+      return ctr;
+    };
+
+    ctr.prototype.isa = function(klass) {
+      return ctr === klass;
+    };
+
+    var meta_ = _.hashMap(_.keyword('type'), true);
+    if (meta) meta_ = _.merge(meta_, meta);
+    if (doc) meta_ = _.assoc(meta_, _.keyword('doc'), doc);
+
+    ctr.getMeta = function() {
+      return meta_;
+    };
+
+    ctr.toString = function() {
+      return name.toString();
+    };
+
+    defineVariable(env, name, ctr, meta_);
 
     return name;
   };
@@ -680,8 +723,12 @@ namespace pbnj.wonderscript {
         throw new Error(['expected 1 argument, got: ', _.coargs.length].join(''));
       }
       else {
-        if (args[0] == null) return true;
-        return eval(['!', args[0]].join(''));
+        if (args[0] == null || args[0] === false) {
+          return true;
+        }
+        else {
+          return false;
+        }
       }
     }
     else if (_.equals(op, _.symbol('mod'))) {
@@ -724,7 +771,6 @@ namespace pbnj.wonderscript {
       meth = _.symbol.apply(null, op.toString().slice(2).split('/'));
       obj  = _.first(_.rest(exp));
       newExp = _.list(_.symbol('.-'), obj, meth);
-      ws.pprint(newExp);
       return evalPropertyAccessor(newExp, env);
     }
     else if ((sop = op.toString()).startsWith('.')) {
@@ -831,9 +877,6 @@ namespace pbnj.wonderscript {
     fn.$lang$ws$ident = name; // give it an ident for stacktrace
     defineVariable(env, name, fn, _.assoc(meta, _.keyword('macro'), true));
     
-    /*var mod = ns ? getModule(_.symbol(ns)) : ws.MODULE_SCOPE;
-    mod['@@MACROS@@'] = mod['@@MACROS@@'] || {}; 
-    mod['@@MACROS@@'][_.name(name)] = fn;*/
     return name;
   };
 
@@ -966,7 +1009,7 @@ namespace pbnj.wonderscript {
       var scope = globalEnv.extend().setIdent('' + name);
       scope.define('*module-name*', name);
       mod.$lang$ws$type = 'module';
-      pbnj.MODULE_SCOPE = mod;
+      ws.MODULE_SCOPE = mod;
       globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
     }
     else {
@@ -1032,7 +1075,8 @@ namespace pbnj.wonderscript {
   var evalModuleSet = function(exp, env) {
     var name = _.second(exp);
     if (_.isSymbol(name)) {
-      ws.MODULE_SCOPE = getModule(name);
+      var mod = findModule(name);
+      ws.MODULE_SCOPE = mod;
       env.define('*module-name*', name);
     }
     else {
@@ -1041,7 +1085,7 @@ namespace pbnj.wonderscript {
     return null;
   };
 
-  var findModule = ws.getModule = function(name) {
+  var findModule = ws.findModule = function(name) {
     if (!_.isSymbol(name)) throw new Error('symbol expected');
     var path = ('' + name).split('/')[0].split('.');
     var mod = ROOT_OBJECT;
@@ -1049,19 +1093,6 @@ namespace pbnj.wonderscript {
       mod = mod[path[i]];
       if (mod == null) break; //throw new Error(_.str('module ', name, ' is undefined'));
     }
-    return mod;
-  };
-
-  var getModule = ws.getModule = function(name) {
-    if (!_.isSymbol(name)) throw new Error('symbol expected');
-    var path = ('' + name).split('/')[0].split('.');
-    var mod = ROOT_OBJECT;
-    _.each(path, function(nm) {
-      if (!_.isObject(mod[nm])) {
-        mod[nm] = {};
-      }
-      mod = mod[nm];
-    });
     return mod;
   };
 
@@ -1167,7 +1198,7 @@ namespace pbnj.wonderscript {
   pbnj.core["@@NAME@@"] = _.symbol('pbnj.core');
 
   var globalEnv = pbnj.core['@@SCOPE@@'] = pbnj.env().setSource('src/pbnj/wonderscript.js');
-  globalEnv.define('*module-name*', _.symbol('pbnj.core'));
+  //globalEnv.define('*module-name*', _.symbol('pbnj.core'));
   importModule(pbnj.core);
   ws.globalEnv = globalEnv;
   

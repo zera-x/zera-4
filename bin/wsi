@@ -5,12 +5,18 @@ const readline = require('readline');
 const _  = require('../src/pbnj/core.js');
 const ws = require('../src/pbnj/wonderscript.js');
 
+const HISTORY_FILE = process.cwd() + '/.wsi-history';
+
 function currentModuleName() {
   return ws.MODULE_SCOPE["@@NAME@@"];
 }
 
-function loadCoreLib() {
-  ws.readFile(__dirname + "/../src/pbnj/core.ws");
+function loadHistory() {
+  ws.readFile(HISTORY_FILE);
+}
+
+function appendHistory(exp) {
+  fs.appendFileSync(HISTORY_FILE, exp);
 }
   
 if (process.argv.length === 3) {
@@ -42,8 +48,10 @@ else {
   ws.readString('(println "         (source function-name-here)")');
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
+
+  //loadHistory();
   
-  var stack = _.list();
+  //var stack = _.list();
   rl.on('line', function(line) {
     try {
       var input = line.trim();
@@ -52,16 +60,20 @@ else {
         process.exit(0);
       }
       else {
+        //appendHistory(input);
         var res = ws.readString(input);
         console.log(_.str("=> ", ws.inspect(res)));
         rl.setPrompt(_.str(currentModuleName(), "> "));
-        stack = _.conj(stack, res);
+        //stack = _.conj(stack, res);
       }
     }
     catch (e) {
       console.error(e);
     }
     rl.prompt();
+  }).on('close', function() {
+    console.log("Bye for now!");
+    process.exit(0);
   });
   process.exitCode = 0;
 }

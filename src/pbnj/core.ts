@@ -204,6 +204,44 @@ namespace pbnj.core {
     }
   };
 
+  _['class-name'] = _.getClassName = function(obj) { // webreflection.blogspot.com
+    function get_class(obj) {
+      return "".concat(obj).replace(/^.*function\s+([^\s]*|[^\(]*)\([^\x00]+$/, "$1") || "anonymous";
+    };
+
+    var result = "";
+    if (obj == null) {
+      result = "nil";
+    }
+    else {
+      result = get_class(obj.constructor);
+      if (result === "Object" && obj.constructor.prototype) {
+        for (result in this) {
+          if (typeof(this[result]) === "function" && obj instanceof this[result]) {
+            result = get_class(this[result]);
+            break;
+          }
+        }
+      }
+    }
+    return result
+  };
+
+  _.isa = function isa(obj, className) { // webreflection.blogspot.com
+    if (_.isSymbol(className)) {
+      var className = className.toString();
+    }
+    if (_.isString(className)) {
+      return _.getClassName(obj) === className
+    }
+    else if (_.isFunction(className)) {
+      return obj instanceof eval(className)
+    }
+    else {
+      throw new Error("class must be a string, symbol, or constructor");
+    }
+  };
+
   /** @interface */
   pbnj.IArray = function() {};
   pbnj.IArray.prototype.length = 0;

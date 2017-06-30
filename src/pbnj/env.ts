@@ -9,45 +9,73 @@ namespace pbnj.core {
   }
 
   function Variable(name, value, meta) {
-    this.$name = name;
-    this.$value = value;
-    this.$meta = meta;
+    this.name = name;
+    this.value = value;
+    this.meta = meta;
   }
 
   var Var = Variable.prototype;
 
   Var.getMeta = function() {
-    return this.$meta;
+    return this.meta;
   };
 
   Var.setValue = function(value) {
-    this.$value = value;
+    this.value = value;
     return this;
   };
+  Var.set = Var.setValue;
 
   Var.getValue = function() {
-    return this.$value;
+    return this.value;
   };
-
+  Var.get = Var.getValue;
   Var.deref = Var.getValue;
 
   Var.getName = function() {
-    return this.$value;
+    return this.value;
   };
 
   Var.withMeta = function(meta) {
-    this.$meta = meta;
+    this.meta = meta;
     return this;
   };
 
   Var.varyMeta = function(f, args) {
-    this.$meta = f.apply(null, [this.$meta].concat(_.intoArray(args)));
+    this.meta = f.apply(null, [this.meta].concat(_.intoArray(args)));
     return this;
   };
 
   Var.toString = function() {
-    return _.str('#<Variable name: ', this.$name, ' meta: ', this.$meta, ' value: ', this.$value, '>');
+    return _.str('#<Var name: ', this.name, ' meta: ', this.meta, ' value: ', this.value, '>');
   };
+
+  Var['class'] = function() {
+    return Variable;
+  };
+
+  Var.isa = function(klass) {
+    return Variable === klass;
+  };
+
+  Var.isMacro = function() {
+    return this.meta && _.get(this.meta, _.keyword('macro'));
+  };
+
+  Var.isClass = function() {
+    return this.meta && _.get(this.meta, _.keyword('type'));
+  };
+
+  var meta = _.hashMap(_.keyword('type'), true);
+  Variable.getMeta = function() {
+    return meta;
+  };
+
+  Variable.toString = function() {
+    return "Var";
+  };
+
+  _.Var = Variable;
 
   var id = 0;
 
