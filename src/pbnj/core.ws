@@ -181,8 +181,7 @@
 
 (define-function isa?
   [x klass]
-  (.? x (isa klass)
-      (identical? (..- x prototype constructor) klass)))
+  (.? x (isa klass) false))
 
 (define-function class
   [x]
@@ -264,7 +263,8 @@
               (Atom. x {} nil)))))
 
 (define-function atom?
-  [x])
+  [x]
+  (isa? x Atom))
 
 (define-function deref
   "
