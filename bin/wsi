@@ -42,7 +42,7 @@ else {
   ws.globalEnv.define('*file*', null);
   ws.readString('(println (str "WonderScript " *version*))');
   ws.readString('(println *platform-version*)');
-  ws.readString('(println (str "Running in a " *environment* " environment"))');
+  ws.readString('(println (str "Running in " *mode* " mode"))');
   ws.readString('(println "   Exit: Control+D or exit")');
   ws.readString('(println "   Help: (doc function-name-here)")');
   ws.readString('(println "         (source function-name-here)")');

@@ -1,8 +1,6 @@
 ; vim: ft=clojure
 (module pbnj.core)
 
-(set! *environment* :production)
-
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
 
 (define-macro define-function
@@ -39,16 +37,10 @@
   (list 'cond pred (cons 'do acts)))
 
 (define-macro case
-  "
-  (case a
+  "(case a
      5 \"a is 5\"
      6 \"a is 6\"
-     :else \"a is not 5 or 6\")
-  =>
-  (cond (= a 5) \"a is 5\"
-        (= a 6) \"a is 6\"
-        :else \"a is not 5 or 6\")
-  "
+     :else \"a is not 5 or 6\")"
   [value &rules]
   (cons 'cond (->> (partition 2 rules)
                    (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
@@ -187,8 +179,10 @@
   [x]
   (.? x class (eval (symbol "js" (class-name x)))))
 
+(define-protocol IDeref
+  (deref [self] (.- self value)))
+
 (define-protocol IRef
-  (deref [self] (.- self value))
   (setValidator
     [self fn]
     (.-set! self validator fn)
@@ -225,6 +219,7 @@
 (define-type Atom
   [value meta validator]
   IMeta
+  IDeref
   IRef
   (reset
     [self val]
@@ -276,8 +271,10 @@
       @x => 1
   "
   {:added "1.0"}
-  [x]
-  (.? x deref))
+  ([x]
+   (.? x deref))
+  ([x timeout-ms timeout-val]
+   (.? x (deref timeout-ms timeout-val))))
 
 (define-function reset!
   "
@@ -350,6 +347,58 @@
   {:added "1.0"}
   [x fn]
   (.? x (setValidator fn)))
+
+(define-protocol IBlockingDeref
+  (deref
+    ([self]
+     (.deref self 3000 nil))
+    ([self timeout-ms timeout-val]
+     (let [t0 (.valueOf (js/Date.))]
+     (until (or (.-value self)
+                (<= timeout-ms (- (.valueOf (js/Date.)) t0)))
+            nil)
+     (or (.-value self) timeout-val)))))
+
+(define-protocol IPending
+  (realized?
+    [self]
+    (.-value self)))
+
+(define-type Promise
+  [value]
+  IDeref
+  IBlockingDeref
+  IPending
+  (-invoke
+    [self x]
+    (.-set! self value (first x))
+    self))
+
+(define-function promise
+  []
+  (Promise. nil))
+
+(define-function deliver
+  [promise value]
+  (promise value))
+
+(define-function realized?
+  [x]
+  (.? x realized?))
+
+(define-type Delay
+  [fn value]
+  IDeref
+  IPending
+  (deref
+    [self]
+    (if-not (.-value self)
+      (.-set! self value ((.-fn self))))
+    (.-value self)))
+
+(define-macro delay
+  [&body]
+  (list 'Delay. (cons 'lambda (cons [] body)) nil))
 
 (define-function add1 [n] (+ 1 n))
 (define-function sub1 [n] (- 1 n))
@@ -446,20 +495,33 @@
 (define-macro doc
   "Retreive documentation for the given symbol"
   [sym]
-  (let [meta (gen-sym "meta")
-        src (gen-sym "src")
-        doc (gen-sym "doc")
-        args (gen-sym "args")
-        kind (gen-sym "kind")]
-    (list 'let [meta (list '.? (list 'var sym) 'getMeta)]
+  (let [v (gen-sym "$var")
+        meta (gen-sym "$meta")
+        src (gen-sym "$src")
+        doc (gen-sym "$doc")
+        args (gen-sym "$args")
+        kind (gen-sym "$kind")]
+    (list 'let [v (list 'var sym)
+                meta (list '.? v 'getMeta)]
           (list 'if
-                meta
+                v
                 (list 'let [doc  (list meta :doc)
-                            args (list meta :arglists)
-                            kind (list 'if (list meta :macro) :macro :function)]
+                            kind (list 'cond (list meta :macro) "Macro"
+                                             (list meta :type) "Type"
+                                             (list meta :protocol) "Protocol"
+                                             (list meta :special-form) "Special Form"
+                                             :else "Function")
+                            args (list meta :arglists)]
                       (list 'println "----------------------")
                       (list 'println (list 'str kind))
-                      (list 'println (list 'str args))
+                      (list 'unless (list 'or (list 'not args) (list '= kind "Protocol"))
+                        (list 'println (list 'str args)))
+                      (list 'when (list 'or (list '= kind "Type") (list '= kind "Protocol"))
+                        (list 'println "Methods")
+                        (list 'println
+                              (list 'map
+                                    '(lambda [x] [(.methodName x) (.arglists x)])
+                                    (list '.instanceMethods (list 'deref v)))))
                       (list 'if doc (list 'println doc)))))))
 
 (define-macro source
@@ -470,8 +532,8 @@
 
 ;; ------------------------------------ testing -------------------------------------- ;;
 
-(define-macro test [nm &body]
-  (when (and (defined? *environment*) (or (= *environment* :development) (= *environment* :test)))
+(define-macro define-test [nm &body]
+  (when (and (defined? *mode*) (or (= *mode* :development) (= *mode* :test)))
     (let [t (cons 'lambda (cons [] (concat body [[(keyword (namespace nm) (name nm)) :passed]])))]
       (list 'if
             (list 'defined? nm)
@@ -525,26 +587,59 @@
 (define-function prove-module [module]
   (map apply (tests module)))
 
-(test prove
-  (test passing-test (is (= 1 1)))
-  (test failing-test (is (= 0 1)))
+(define-test prove
+  (define-test passing-test (is (= 1 1)))
+  (define-test failing-test (is (= 0 1)))
   (is (= (prove passing-test) [:passing-test :passed])))
 
-(test .?
+;; document and test special forms
+
+(define
+  {:doc "Takes a set of test/expression pairs. It evaluates each test one at a
+time.  If a test returns logical true, cond evaluates and returns
+the value of the corresponding expr and doesn't evaluate any of the
+other tests or exprs. (cond) returns nil.
+
+  Example:
+    (cond (< a 1) :less-than
+          (> a 1) :greater-than
+          :else   :equal)"
+   :special-form true
+   :added "1.0"}
+  cond)
+
+;(set! *mode* :test)
+
+;; TODO: move tests to "test" directory, make "prove" binary for running tests
+
+(define-test cond
+  (is (= (cond) nil))
+  (try
+    (is (cond 1) nil)
+    (is false "Should have throw an exception")
+    (catch [e js/Error]
+      (is true)))
+  (is (= (cond 1 2) 2))
+  (is (= (cond nil 2 3 4) 4))
+  (is (= (cond nil 2 false 4 5 6) 6))
+  (is (= (cond nil 2 false 4 true 6) 6))
+  (is (= (cond nil 2 false 4 :else 6) 6)))
+
+(define-test .?
   (let [d (new js/Date 2016 10 25)]
     (is (= (.? d getMonth) 10))
     (is (= (.? d missing-method) nil))
     (.? d (setMonth 11))
     (is (= (.? d (getMonth)) 11))))
 
-(test ..
+(define-test ..
   (let [xs (array 1 2 3 4 5)]
     (.. "1,2,3,4,5"
         (split ",")
         (map (lambda [x &rest] (* 1 x)))
         (forEach (lambda [x i other] (is (= x (.- xs i))))))))
 
-(test ..?
+(define-test ..?
   (let [xs (array 1 2 3 4 5)]
     (..? "1,2,3,4,5"
          (split ",")
@@ -554,7 +649,7 @@
                        (is (= x (.- xs i)))))))
   (is (= nil (..? "1,2,3,4,5" (split ",") (missing-method 1 2 3 4 5)))))
 
-(test read-string
+(define-test read-string
   (let [n (generate-nat)]
     (is (= n (read-string (str n)))))
   (is (= -1 (read-string "-1")))
@@ -573,11 +668,11 @@
   (is (= 5000 (read-string "5_000")))
   (is (= 5 (read-string "5.000"))))
 
-(test comment
+(define-test comment
   (is (= nil (comment)))
   (is (= nil (comment asdfasdf asfasdf sfasdfasd asfasdfasd))))
 
-(test let
+(define-test let
   (is (= [1 2]
          (let [x 1
                y (+ x 1)]
@@ -585,7 +680,7 @@
            (is (= y 2))
            [x y]))))
 
-(test if
+(define-test if
   (is (= 1 (if true 1)))
   (is (= 1 (if true 1 2)))
   (is (= 2 (if false 1 2)))
@@ -596,7 +691,7 @@
   ([pred conse] (list 'cond (list 'not pred) conse))
   ([pred conse alt] (list 'cond (list 'not pred) conse :else alt)))
 
-(test if-not
+(define-test if-not
   (is (= 1 (if-not false 1)))
   (is (= 1 (if-not false 1 2)))
   (is (= 2 (if-not true 1 2)))
@@ -606,15 +701,15 @@
 (define-macro unless [pred &acts]
   (list 'cond (list 'not pred) (cons 'do acts)))
 
-(test unless
+(define-test unless
   (is (= 5 (unless false 1 2 3 4 5)))
   (is (= nil (unless true 1 2 3 4 5))))
 
-(test when
+(define-test when
   (is (= 5 (when true 1 2 3 4 5)))
   (is (= nil (when false 1 2 3 4 5))))
 
-(test or
+(define-test or
   (is (or true))
   (is (or false true))
   (is (or false false true))
@@ -623,7 +718,7 @@
   (is-not (or false false))
   (is-not (or false false false)))
 
-(test and
+(define-test and
   (is (and true))
   (is (and true true))
   (is (and true true true))
@@ -634,7 +729,7 @@
   (is-not (and false true true))
   (is-not (and true true false)))
 
-(test define-function
+(define-test define-function
   (define-function ident [x] x)
   (define-function inc [x] (+ 1 x))
   (is (= 1 (ident 1)))
@@ -642,7 +737,7 @@
   (is (= 4 (inc 3)))
   (is (= 5 (pbnj.core/inc 4))))
 
-(test define-function-
+(define-test define-function-
   (define-function- ident- [x] x)
   (define-function- inc- [x] (+ 1 x))
   ;(is (= :a (pbnj.core/ident- :a)))
@@ -653,7 +748,7 @@
 (define-macro not= [&values]
   (list 'not (cons '= values)))
 
-(test not=
+(define-test not=
   (is (not= 1 2))
   (is (not= :a :b))
   (is (not= 1 :a))
@@ -661,7 +756,7 @@
   (is-not (not= :a :a))
   (is-not (not= [1 2 3 4] [1 2 3 4])))
 
-(test gen-sym
+(define-test gen-sym
   (is (symbol? (gen-sym)))
   (is (symbol? (gen-sym "prefix")))
   (is-not (= (gen-sym) (gen-sym)))
@@ -684,11 +779,14 @@
 (define-function natural? [n]
   (and (integer? n) (positive? n)))
 
-(test natural?
+(define-test natural?
   (is (natural? 0))
   (is (natural? 1))
   (is (natural? 34))
   (is (natural? 21412412341234123463456435437456))
+  (is-not (natural? nil))
+  (is-not (natrual? "1"))
+  (is-not (natrual? true))
   (is-not (natural? -1))
   (is-not (natrual? 1.1)))
 
@@ -699,7 +797,7 @@
          b (Math/ceil max)]
      (+ a (Math/floor (* (Math/random) (- b a)))))))
 
-(test generate-int
+(define-test generate-int
   (do-times [n 100]
     (is (integer? (generate-int)))))
 
@@ -710,7 +808,7 @@
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
-(test generate-nat
+(define-test generate-nat
   (do-times [n 20]
     (let [m (generate-nat)]
       (is (natural? (generate-nat))))))
@@ -720,7 +818,7 @@
   ([min max]
    (+ (generate-int min max) (* (Math/random (- max min))))))
 
-(test generate-float
+(define-test generate-float
   (do-times [n 20]
     (is (number? (generate-float)))))
 
@@ -733,7 +831,7 @@
           (map (lambda [x] (.fromCodePoint js/String x)))
           (reduce str)))))
 
-(test generate-str
+(define-test generate-str
   (do-times [n 20]
     (is (string? (generate-str)))))
 
@@ -747,7 +845,7 @@
       (keyword ns nm)
       (keyword nm)))))
 
-(test generate-keyword
+(define-test generate-keyword
   (do-times [n 20]
     (is (keyword? (generate-keyword)))))
 
@@ -761,7 +859,7 @@
       (symbol ns nm)
       (symbol nm)))))
 
-(test generate-symbol
+(define-test generate-symbol
   (do-times [n 20]
     (is (symbol? (generate-symbol)))))
 
@@ -785,21 +883,14 @@
 
 (define-function always [x] (lambda [] x))
 
-;(define-function str
-;  ([] "")
-;  ([x] (str x))
-;  ([x &more]
-;   (str x (reduce (lambda [s x] (str s x)) more))))
-
 (define-macro define-generic
-  "
-  Defines a generic function
+  "Defines a generic function
 
   Example:
       (define-generic t string?)
       (define-method t false [_] :not-string)
-      (define-method t true [_] :string)
-  "
+      (define-method t true [_] :string)"
+  {:added "1.0"}
   ([name fn]
    (list 'define-generic name nil fn))
   ([name doc fn]
@@ -816,14 +907,13 @@
                            (list 'apply 'meth 'args)))))))
 
 (define-macro define-method
-  "
-  Defines a method for a generic function
+  "Defines a method for a generic function
 
   Example:
       (define-generic t string?)
       (define-method t false [_] :not-string)
-      (define-method t true [_] :string)
-  "
+      (define-method t true [_] :string)"
+  {:added "1.0"}
   [name val args &body]
   (list '.varyMeta (list 'var name)
         (list 'lambda '[m]
@@ -837,31 +927,160 @@
 (define-method t false [_] :not-string)
 (define-method t true [_] :string)
 
-(define-macro node.js?
+(define-protocol ITest0
+  IMeta
+  IRef
+  IDeref)
+(define-type Test0 [] ITest0)
+
+(define-protocol ITest1
+  IDeref
+  (unwrap [self] (.-value self)))
+
+(define-protocol ITest2
+  "This is my third test of protocols"
+  IDeref
+  (unwrap [self] (.-value self)))
+
+(define-protocol ITest3
+  "This is my fourth test of protocols"
+  {:added "4th"}
+  IDeref
+  (unwrap [self] (.-value self)))
+
+(define-type Test1 [value] ITest1)
+
+(define-macro nodejs?
+  "If `*platform*` is `:nodejs` wrap code in a `do` block
+  in place otherwise return `nil`."
+  {:added "1.0"}
   [&forms]
-  (list 'if (list '= '*platform* :nodejs)
-        (cons 'do forms)))
+  (if (= *platform* :nodejs)
+    (cons 'do forms)))
 
-(node.js?
-  (define-function print
-    [&vals]
+(define-macro browser?
+  "If `*platform*` is `:browser` wrap code in a `do` block
+  in place otherwise return `nil`."
+  {:added "1.0"}
+  [&forms]
+  (if (= *platform* :browser)
+    (cons 'do forms)))
+
+(define-macro javascript?
+  "If `*target-language*` is `:javascript` wrap code in a `do` block
+  in place otherwise return `nil`."
+  {:added "1.0"}
+  [&forms]
+  (if (= *target-language* :browser)
+    (cons 'do forms)))
+
+(define-function say
+  "String concatenate `vals` and print to console
+  with a new line at the end (depending on platform)."
+  {:platforms #{:javascript}
+   :added "1.0"}
+  [&vals]
+  (javascript?
+    (console/log (apply str vals))))
+
+(define-function print
+  "String concatenate `vals` and print to console
+  with a new line at the end (depending on platform)."
+  {:platforms #{:nodejs :browser}
+   :added "1.0"}
+  [&vals]
+  (nodejs?
     (.write process/stdout (apply str vals)))
+  (browser?
+    (console/log (apply str vals))))
 
-  (define-function say
-    [&vals]
-    (console/log (apply str vals)))
+(nodejs?
+  
+  (define
+    {:doc ""
+     :platforms #{:nodejs}
+     :added "1.0"}
+    *operating-system* process/platform)
+  
+  (define 
+    {:doc "A map of environment variables"
+     :platforms #{:nodejs}
+     :added "1.0"}
+    *env* (object->map process/env))
+
+  (define
+    {:doc "A vector of command line arguments"
+     :platforms #{:nodejs}
+     :added "1.0"}
+    *argv* (array->vector (.slice process/argv 2)))
+
+  ;; XXX: some POSIX stuff (should this go in pbnj.system or something similar?)
+
+  (define
+    {:doc "An alias for process.abort() on Node.js"
+     :platforms #{:nodejs}
+     :added "1.0"}
+    abort process/abort)
+
+  (define 
+    {:doc "An alias for process.chdir() on Node.js"
+     :arglists '([directory])
+     :platforms #{:nodejs}
+     :added "1.0"}
+    chdir process/chdir)
+
+  (define
+    {:doc "An alias for process.cwd() on Node.js"
+     :arglists '([])
+     :platforms #{:nodejs}
+     :added "1.0"}
+    cwd process/cwd)
+
+  (define
+    {:doc "An alias for process.exit() on Node.js"
+     :arglists '([] [code])
+     :platforms #{:nodejs}
+     :added "1.0"}
+    exit process/exit)
 
   (define- *fs* (js.node/require "fs"))
 
+  ;; TODO: Make a browser version of slurp and spit
+
   (define-function slurp
     "Read entire contents of `file` to a string"
+    {:added "1.0"}
     [file]
     (-> (.readFileSync *fs* file) .toString))
 
   (define-function spit
     "Write `data` to `file`. Data can be a String, Buffer, or Uint8Array."
+    {:added "1.0"}
     [file data]
     (.writeFileSync *fs* file data) file)
+
+  (define- *path* (js.node/require "path"))
+
+  (define
+    {:doc "An alias for path.basename() on Node.js"
+     :arglists '([path] [path ext])
+     :platforms #{:nodejs}
+     :added "1.0"}
+    basename (.-basename *path*))
+
+  (define
+    {:doc "An alias for path.dirname() on Node.js"
+     :arglists '([path] [path ext])
+     :platforms #{:nodejs}
+     :added "1.0"}
+    dirname (.-dirname *path*))
+
+  (define
+    {:doc "An alias for path.extname() on Node.js"
+     :arglists '([path] [path ext])
+     :platforms #{:nodejs}
+     :added "1.0"}
+    extname (.-extname *path*))
 )
 
 (define-function lines

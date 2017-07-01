@@ -33,6 +33,11 @@ namespace pbnj.wonderscript {
            _.isRegExp(exp);
   };
 
+  // Exceptions
+  ws.ArgumentException = function() {
+    this.message = _.str();
+  };
+
   var makeTagPredicate = _.makeTagPredicate;
 
   var evalSelfEvaluating = _.identity;
@@ -206,37 +211,116 @@ namespace pbnj.wonderscript {
 
   // (distance [self other] ...)
   var evalMethod = function(exp, env) {
-    var lambda, name, expr;
+    var lambda, name, expr, meth;
     name = _.first(exp);
     expr = _.cons(_.symbol('lambda'), _.rest(exp));
-    lambda = ws.eval(expr, env);
-    return [name, function() {
+    //ws.pprint(expr);
+    lambda = evalLambda(expr, env);
+    meth = function() {
       return lambda.apply(null, [].concat([this], Array.prototype.slice.call(arguments)));
-    }];
+    };
+    var prop;
+    for (prop in lambda) {
+      if (lambda.hasOwnProperty(prop)) {
+        meth[prop] = lambda[prop];
+      }
+    }
+    meth.toString = function() {
+      return ws.inspect(exp);
+    };
+    meth.methodName = function() {
+      return name;
+    };
+    return [name, meth];
   };
 
   // (define-protocol IPoint
   //  (distance [self] ...))
   // (define-type Point [x y] IPoint)
   var evalProtocol = function(exp, env) {
-    var rest, name, specs, mixin, methods;
+    var rest, name, specs, mixin, methods, types, mixins, doc, meta;
     rest = _.rest(exp);
     name = _.first(rest);
-    specs = _.rest(rest);
 
     if (!_.isSymbol(name)) throw new Error('name should be a symbol');
     
-    methods = _.intoArray(mori.map(function(spec) { return evalMethod(spec, env) }, specs));
+    if (_.isString(doc = _.second(rest)) && _.isMap(meta = _.first(_.rest(_.rest(rest))))) {
+      specs = _.intoArray(_.rest(_.rest(_.rest(rest))));
+    }
+    else if (_.isString(doc)) {
+      meta = null;
+      specs = _.intoArray(_.rest(_.rest(rest)));
+    }
+    else if (_.isMap(meta)) {
+      doc = null;
+      specs = _.intoArray(_.rest(_.rest(rest)));
+    }
+    else {
+      doc = meta = null;
+      specs = _.intoArray(_.rest(rest));
+    }
+
+    methods = []; //_.intoArray(mori.map(function(spec) { return evalMethod(spec, env) }, specs));
+    types   = _.set();
+    mixins  = [];
+
+    if (specs.length !== 0) {
+      for (i = 0; i < specs.length; i++) {
+        if (_.isSymbol(specs[i])) {
+          mixin = ws.eval(specs[i], env);
+          types = _.conj(types, mixin);
+          mixins.push(mixin);
+        }
+        else if (_.isList(specs[i])) {
+          methods.push(evalMethod(specs[i], env));
+        }
+        else {
+          console.log(specs[i]);
+          throw new Error('spec should be either a protocol name or a method definition');
+        }
+      }
+    }
 
     mixin = function(obj) {
-      for (var i = 0; i < methods.length; i++) {
-        obj[methods[i][0]] = methods[i][1];
+      if (arguments.length !== 1) {
+        throw new Error(['1 arguments expected, got: ', arguments.length].join(''));
       }
+      if (mixins.length !== 0) {
+        for (var i = 0; i < mixins.length; i++) {
+          mixins[i].call(null, obj);
+        }
+      }
+      if (methods.length !== 0) {
+        for (var i = 0; i < methods.length; i++) {
+          obj[methods[i][0]] = methods[i][1];
+        }
+      }
+      return obj;
     };
 
-    defineVariable(env, name, mixin, _.hashMap(_.keyword('protocol'), true));
+    mixin.types = function() {
+      return types;
+    };
 
-    return name;
+    mixin.toString = function() {
+      return ['#<Protocol: ', name.toString(), '>'].join('');
+    };
+
+    mixin.instanceMethods = function() {
+      return _.map(function(x) { return x[1] }, methods);
+    };
+
+    var meta_ = _.hashMap(_.keyword('protocol'), true);
+    if (meta) meta_ = _.merge(meta_, meta);
+    if (doc) meta_ = _.assoc(meta_, _.keyword('doc'), doc);
+
+    mixin.getMeta = function() {
+      return meta_;
+    };
+
+    defineVariable(env, name, mixin, meta_);
+
+    return mixin;
   };
 
   var isType = ws.isType = makeTagPredicate(_.symbol('define-type'));
@@ -280,19 +364,20 @@ namespace pbnj.wonderscript {
     };
 
     var types = _.set([ctr]);
+    var methods = [];
 
-    // TODO: add checks to make sure that specs list is in the following format (PROTOCOL METHODS?, PROTOCOL METHODS?, ...)
     if (specs.length !== 0) {
       ctr.prototype = {};
       for (i = 0; i < specs.length; i++) {
         if (_.isSymbol(specs[i])) {
           mixin = ws.eval(specs[i], env);
-          types = _.conj(types, mixin);
+          types = _.union(_.conj(types, mixin), mixin.types());
           // TODO: perform checks based on meta data
           mixin.call(null, ctr.prototype);
         }
         else if (_.isList(specs[i])) {
           method = evalMethod(specs[i], env);
+          methods.push(method);
           ctr.prototype[method[0]] = method[1];
         }
         else {
@@ -321,7 +406,7 @@ namespace pbnj.wonderscript {
       return _.has(types, klass);
     };
 
-    var meta_ = _.hashMap(_.keyword('type'), true);
+    var meta_ = _.hashMap(_.keyword('type'), true, _.keyword('arglists'), _.list(fields));
     if (meta) meta_ = _.merge(meta_, meta);
     if (doc) meta_ = _.assoc(meta_, _.keyword('doc'), doc);
 
@@ -331,6 +416,10 @@ namespace pbnj.wonderscript {
 
     ctr.toString = function() {
       return name.toString();
+    };
+
+    ctr.instanceMethods = function() {
+      return _.map(function(x) { return x[1] }, methods);
     };
 
     defineVariable(env, name, ctr, meta_);
@@ -796,13 +885,17 @@ namespace pbnj.wonderscript {
     }
     
     func = ws.eval(op, env);
+    //ws.pprint(func);
 
     if (isInvocable(func)) {
       return func.apply(null, args);
     }
+    else if (func['-invoke']) {
+      return func['-invoke'](args);
+    }
     else {
       console.log(func);
-      throw new Error(["'", ws.inspect(exp), "' is not a function"].join(''));
+      throw new Error(["'", ws.inspect(op), "' is not a function"].join(''));
     }
   };
 
@@ -860,22 +953,33 @@ namespace pbnj.wonderscript {
   ]);
 
   var evalMacroDef = function(exp, env) {
-    var rest, name, args, body, lambda, fn;
+    var rest, name, args, body, lambda, fn, meta, forms;
 
     rest = _.rest(exp);
     name = _.first(rest);
     forms = _.rest(rest);
     var x = _.first(forms);
-    if (_.isString(x)) {
+    if (_.isString(x) && _.isMap(_.second(forms))) {
+      args = _.second(_.rest(forms));
+      body = _.rest(_.rest(_.rest(forms)));
+      meta = _.assoc(_.second(forms), _.keyword('doc'), x);
+    }
+    else if (_.isString(x)) {
       args = _.second(forms);
       body = _.rest(_.rest(forms));
       meta = _.hashMap(_.keyword('doc'), x);
     }
+    else if (_.isMap(x)) {
+      args = _.second(forms);
+      body = _.rest(_.rest(forms));
+      meta = x;
+    }
     else {
-      args = _.second(rest);
-      body = _.rest(_.rest(rest));
+      args = x;
+      body = _.rest(forms);
       meta = _.hashMap();
     }
+
     lambda = _.cons(_.symbol('lambda'), _.cons(args, body));
     //ns = _.namespace(name);
 
@@ -1189,7 +1293,7 @@ namespace pbnj.wonderscript {
       catch (e) {
         var cBlock;
         while (cBlock = _.first(catchBlock)) {
-          ws.pprint(cBlock);
+          //ws.pprint(cBlock);
           value = evalCatchBlock(cBlock, e, scope);
           catchBlock = _.rest(catchBlock);
         }
@@ -1435,7 +1539,7 @@ namespace pbnj.wonderscript {
   globalEnv.define('compile-file', ws.compileFile);
   
   globalEnv.define('*version*', '0.0.1-alpha');
-  globalEnv.define('*environment*', _.keyword('development'));
+  globalEnv.define('*mode*', _.keyword('production'));
   globalEnv.define('*platform*', typeof exports !== 'undefined' ? _.keyword('nodejs') : _.keyword('browser'));
   // TODO: add browser detection
   globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.versions.v8) : "Unknown Browser");

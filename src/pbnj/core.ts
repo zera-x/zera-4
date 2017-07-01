@@ -420,6 +420,20 @@ namespace pbnj.core {
     return _.hashMap.apply(null, buffer);
   };
 
+  _['map->object'] = function(map) {
+    if (map === null) return {};
+    var obj = {};
+    mori.each(map, function(x) {
+      var k = mori.nth(x, 0);
+      var v = mori.nth(x, 1);
+      if (mori.isKeyword(k)) {
+        k = k.toString().replace(/^:/, '');
+      }
+      obj[k] = v;
+    });
+    return obj;
+  };
+
   _.objectToVector = _['object->vector'] = function(obj) {
     if (obj == null) {
       return _.vector();
