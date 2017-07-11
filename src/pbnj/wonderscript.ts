@@ -5,11 +5,7 @@ namespace pbnj.wonderscript {
   if (typeof exports !== 'undefined') {
     mori = require('mori');
     _    = require('./core.js');
-    var pbnjEnv = require('./env.js');
-    var pbnj = pbnj || {};
-    pbnj.env = pbnjEnv.env;
     pbnj.core = _;
-    pbnj.core.isEnv = pbnjEnv.isEnv;
     pbnj.reader = require('./reader.js');
     ROOT_OBJECT = global;
   }
@@ -21,7 +17,398 @@ namespace pbnj.wonderscript {
   ROOT_OBJECT.pbnj.wonderscript = ws;
   ROOT_OBJECT.pbnj.core = _;
   ROOT_OBJECT.pbnj.reader = pbnj.reader;
-  ROOT_OBJECT.pbnj.env = pbnj.env;
+
+  // types
+  //
+
+  function Atom(value) {
+    this.value = value;
+  }
+
+  Atom.prototype.deref = function() {
+    return this.value;
+  };
+
+  Atom.prototype.reset = function(val) {
+    this.value = val;
+  };
+
+  Atom.prototype.swap = function(fn) {
+    this.value = fn.apply(null, [this.value].concat(Array.prototype.slice.call(arguments, 1)));
+  };
+
+  ws.Atom = Atom;
+
+  /**
+   * @constructor
+   * @final
+   */
+  function Var(name, value, meta) {
+    this.name = name;
+    this.value = value;
+    this.meta = meta;
+  }
+
+  Var.prototype.getMeta = function() {
+    return this.meta;
+  };
+
+  Var.prototype.setValue = function(value) {
+    this.value = value;
+    return this;
+  };
+  Var.prototype.set = Var.prototype.setValue;
+
+  Var.prototype.getValue = function() {
+    return this.value;
+  };
+  Var.prototype.get = Var.prototype.getValue;
+  Var.prototype.deref = Var.prototype.getValue;
+
+  Var.prototype.getName = function() {
+    return this.value;
+  };
+
+  Var.prototype.withMeta = function(meta) {
+    this.meta = meta;
+    return this;
+  };
+
+  Var.prototype.varyMeta = function(f, args) {
+    this.meta = f.apply(null, [this.meta].concat(_.intoArray(args)));
+    return this;
+  };
+
+  Var.prototype.toString = function() {
+    return _.str('#<v name: ', this.name, ' meta: ', this.meta, ' value: ', this.value, '>');
+  };
+
+  Var.prototype['class'] = function() {
+    return Var;
+  };
+
+  Var.prototype.isa = function(klass) {
+    return viable === klass;
+  };
+
+  Var.prototype.isMacro = function() {
+    return this.meta && _.get(this.meta, _.keyword('macro'));
+  };
+
+  Var.prototype.isClass = function() {
+    return this.meta && _.get(this.meta, _.keyword('type'));
+  };
+
+  var VarMeta = _.hashMap(_.keyword('type'), true);
+  Var.getMeta = function() {
+    return VarMeta;
+  };
+
+  Var.toString = function() {
+    return "Var";
+  };
+
+  _.Var = ws.Var = Var;
+
+  var ENV_ID = 0;
+
+  /**
+   * @constructor
+   * @final
+   */
+  function Env(parent) {
+    this.vars = Object.create(parent ? parent.vars : null);
+    this.parent = parent;
+    this.define('*scope*', this);
+    this.id = ENV_ID++;
+  }
+
+  Env.prototype.maybeSetCallstack = function() {
+    if (!this._callstack) this._callstack = _.list();
+    return this;
+  };
+
+  Env.prototype.updateCallstack = function(opts) {
+    if (this._callstack) {
+      this._callstack = _.conj(this._callstack, this.trace(opts));
+    }
+    return this;
+  };
+
+  Env.prototype.callstack = function() {
+    return this._callstack;
+  };
+
+  Env.prototype.trace = function(opts) {
+    var opts = opts || {};
+    return _.vector(
+      opts.ident || this.getIdent(),
+      opts.source || this.getSource(),
+      opts.line || this.getLine(),
+      opts.column || this.getColumn()
+    );
+  };
+
+  Env.prototype.extend = function() {
+    return new Env(this);
+  };
+
+  Env.prototype.lookup = function(name) {
+    var scope = this;
+    while (scope) {
+      if (Object.prototype.hasOwnProperty.call(scope.vars, name)) {
+        return scope;
+      }
+      scope = scope.parent;
+    }
+    return null;
+  };
+
+  Env.prototype.getObject = function(name) {
+    if (name in this.vars) {
+      return this.vars[name];
+    }
+    throw new Error(_.str("Undefined variable: '", name, "'"));
+  };
+
+  Env.prototype.getObjects = function() {
+    var buffer = [];
+    var scope = this;
+    while (scope) {
+      for (var prop in scope.vars) {
+        if (Object.prototype.hasOwnProperty.call(scope.vars, prop)) {
+          buffer.push(scope.vars[prop]);
+        }
+      }
+      scope = scope.parent;
+    }
+    return mori.list.apply(null, buffer);
+  };
+
+  Env.prototype.get = function(name) {
+    var obj = this.getObject(name);
+    return obj.getValue();
+  };
+
+  Env.prototype.set = function(name, value) {
+    var scope = this.lookup(name);
+    // cannot define globals from a nested environment
+    if (!scope && this.parent) throw new Error(_.str("Undefined variable: '", name, "'"));
+    (scope || this).vars[name].setValue(value);
+    return value;
+  };
+
+  var typeTag = function(value) {
+    if (_.isFunction(value)) {
+      if (value.$lang$ws$tag) {
+        return value.$lang$ws$tag;
+      }
+      return _.keyword('js', 'Function');
+    }
+    else if (_.isKeyword(value)) {
+      return _.keyword('keyword');
+    }
+    else if (_.isSymbol(value)) {
+      return _.keyword('symbol');
+    }
+    else if (_.isCollection(value)) {
+      if (_.isList(value)) {
+        return _.keyword('list');
+      }
+      else if (_.isVector(value)) {
+        return _.keyword('vector');
+      }
+      else if (_.isMap(value)) {
+        return _.keyword('map');
+      }
+      else if (_.isSet(value)) {
+        return _.keyword('set');
+      }
+      else {
+        return _.keyword('collection');
+      }
+    }
+    else if (_.isArray(value)) {
+      return _.keyword('js', 'Array');
+    }
+    else if (_.isObject(value)) {
+      var nm = value.constructor && value.constructor.name;
+      if (nm === 'Object' || nm === '' || nm == null) {
+        return _.keyword('js', 'Object');
+      }
+      else {
+        return _.keyword('js', nm);
+      }
+    }
+    else {
+      return typeof value;
+    }
+  };
+
+  Env.prototype.define = function(name, value, meta) {
+    var sname = _.str(name);
+    var meta = _.merge(_.hashMap(_.keyword('name'), _.symbol(sname), _.keyword('tag'), typeTag(value)), meta || _.hashMap());
+
+    var scope, m = _.hashMap();
+    if (scope = this.lookup('*scope-name*')) {
+      m = _.assoc(m, _.keyword('scope-name'), scope.get('*scope-name*'));
+    }
+    if (scope = this.lookup('*line*')) {
+      m = _.assoc(m, _.keyword('line'), scope.get('*line*'));
+    }
+    if (scope = this.lookup('*column*')) {
+      m = _.assoc(m, _.keyword('column'), scope.get('*column*'));
+    }
+    if (scope = this.lookup('*source*')) {
+      m = _.assoc(m, _.keyword('source'), scope.get('*source*'));
+    }
+
+    if (_.isFunction(value)) {
+      if (value.arglists) {
+        m = _.assoc(m, _.keyword('arglists'), value.arglists());
+      }
+      var hash;
+      if (hash = _.hasKey(meta, _.keyword('memoize'))) {
+        var enclosed = value;
+        var hasher = _.isFunction(hash) ? hash : null;
+        value = function(key) {
+          var ret;
+          if (ret = _.get(value.memo, key)) {
+            return ret;
+          }
+          else {
+            var address = hasher ? hasher.apply(this, arguments) : key;
+            ret = enclosed.apply(this, arguments);
+            value.memo = _.assoc(value.memo, address, ret);
+            return ret;
+          }
+        };
+        value.memo = _.hashMap();
+      }
+    }
+
+    this.vars[sname] = new Var(_.symbol(sname), value, _.merge(m, meta));
+    return value;
+  };
+
+  Env.prototype.setLocation = function(line, column) {
+    this.define('*line*', line);
+    this.define('*column*', column);
+    return this;
+  };
+
+  Env.prototype.getLine = function() {
+    if (scope = this.lookup('*line*')) {
+      return scope.get('*line*');
+    }
+    return null;
+  };
+
+  Env.prototype.getColumn = function() {
+    if (scope = this.lookup('*column*')) {
+      return scope.get('*column*');
+    }
+    return null;
+  };
+
+  Env.prototype.getSource = function() {
+    if (scope = this.lookup('*source*')) {
+      return scope.get('*source*');
+    }
+    return null;
+  }
+
+  Env.prototype.setSource = function(source) {
+    this.define('*source*', source);
+    return this;
+  };
+
+  Env.prototype.setIdent = function(ident) {
+    this.define('*scope-name*', _.symbol(_.str(ident)));
+    return this;
+  };
+
+  Env.prototype.getIdent = function() {
+    try {
+      return this.lookup('*scope-name*').get('*scope-name*');
+    }
+    catch (e) {
+      return null;
+    }
+  };
+
+  Env.prototype.stash = function() {
+    var scope = this.lookup('*stash*');
+    if (scope) {
+      return scope.get('*stash*');
+    }
+    return null;
+  };
+
+  Env.prototype.initStash = function() {
+    var stash = new Env();
+    this.define('*stash*', stash);
+    return this;
+  };
+
+  Env.prototype.setStashValue = function(key, value) {
+    var stash = this.stash();
+    if (stash) {
+      stash.define(key, value);
+    }
+    else {
+      throw new Error("could not find stash");
+    }
+    return this;
+  };
+
+  Env.prototype.getStashValue = function(key) {
+    var stash = this.stash();
+    if (stash) {
+      try {
+        return stash.get(key);
+      }
+      catch (e) {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  Env.prototype.stacktrace = function() {
+    var trace = _.list();
+    var scope = this;
+    while (scope) {
+      if (scope.trace) trace = _.conj(trace, scope.trace);
+      scope = scope.parent;
+    }
+    return trace;
+  };
+
+  ws.env = function(parent) {
+    return new Env(parent);
+  };
+
+  ws['var'] = function(name, value, meta) {
+    return new Var(name, value, meta);
+  };
+
+  ws.isEnv = function(val) {
+    return val instanceof Env;
+  };
+
+  _.Env = ws.Env = Env;
+
+  // Exceptions
+  ws.ArgumentException = function() {
+    this.message = _.str();
+  };
+
+  //
+  // Evaluator
+  //
+
+  var makeTagPredicate = _.makeTagPredicate;
 
   var isSelfEvaluating = ws.isSelfEvaluating = function(exp) {
     return _.isNull(exp) ||
@@ -32,13 +419,6 @@ namespace pbnj.wonderscript {
            _.isDate(exp) ||
            _.isRegExp(exp);
   };
-
-  // Exceptions
-  ws.ArgumentException = function() {
-    this.message = _.str();
-  };
-
-  var makeTagPredicate = _.makeTagPredicate;
 
   var evalSelfEvaluating = _.identity;
 
@@ -126,7 +506,7 @@ namespace pbnj.wonderscript {
   ws.lookupVariable = lookupVariable;
 
   var getVariable = function(env, name) {
-    var env_ = _.isEnv(env) ? env : env["@@SCOPE@@"];
+    var env_ = ws.isEnv(env) ? env : env["@@SCOPE@@"];
     if (env_) {
       var obj = env_.getObject(name)
       if (_.get(obj.getMeta(), _.keyword('macro')) === true) {
@@ -180,7 +560,7 @@ namespace pbnj.wonderscript {
       var preVal = _.second(rest);
     }
     else if (_.isMap(first)) {
-      var meta   = first;
+      var meta   = ws.eval(first, env);
       var ident  = _.first(_.rest(rest));
       var preVal = _.second(_.rest(rest));
     }
@@ -451,17 +831,32 @@ namespace pbnj.wonderscript {
     return func.apply(null, args ? _.intoArray(args) : []);
   };
 
+  function ContinuationException(fn) {
+    this.fn = fn;
+    this.frames = [];
+  }
+
+  ContinuationException.prototype.pushFrame = function(frame) {
+    this.frames.push(frame);
+  };
+
+  ws.ContinuationException = ContinuationException;
+
   var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
 
   var lambdaID = 0;
-  function Lambda(exp, env) {
+  function Lambda(exp, env, callstack) {
     var id, rest, names, argCount, bodies, i, fn, exprs, args, body, sum, keys, arities;
 
-    if (arguments.length !== 2) {
-      throw new Error(['2 arguments expected got: ', arguments.length].join(''));
+    if (arguments.length < 2) {
+      throw new Error(['at least 2 arguments expected got: ', arguments.length].join(''));
     }
 
     id = ['lambda-', lambdaID++].join('');
+
+    this.callstack = callstack || new Atom(_.list());
+    this.callstack.swap(_.conj, env.trace({ident: _.symbol(id)}));
+
     rest = _.rest(exp);
     names = _.first(rest);
     argCount = 0;
@@ -565,48 +960,34 @@ namespace pbnj.wonderscript {
     return this;
   };
 
-  function ccFrame(exprs, scope) {
-    return function() {
-      var exp, exprs_ = exprs;
-      while (_.count(exprs_) !== 0) {
-        exp = _.first(exprs_);
-        ret = ws.eval(exp, scope);
-        exprs_ = _.rest(exprs_);
-      }
-      return ret;
-    };
-  }
-
-  var CCFRAMES = {};
-
   Lambda.prototype.exec = function() {
     var body = this.body;
     if (!body) throw new Error('the lambda must be bound to arguments first');
-    var exprs = body.code, exp, ret;
+    var exprs = body.code, exp, ret, index = 0;
     while (_.count(exprs) !== 0) {
+      exp = _.first(exprs);
       try {
-        exp = _.first(exprs);
-        try {
-          ret = ws.eval(exp, this.scope);
-        }
-        catch (e) {
-          if (e instanceof SetContinuationPoint) {
-            CCFRAMES[e.id] = ccFrame(_.rest(exprs), this.scope.extend());
-          }
-          else {
-            throw e;
-          }
-        }
-        exprs = _.rest(exprs);
+        ret = ws.eval(exp, this.scope);
+        index++; // TODO: add static analysis to index just what's needed
       }
       catch (e) {
-        if (e instanceof RecursionPoint) {
-          this.bind(e.args).exec();
+        if (e instanceof ContinuationException) {
+          console.log('contiuation in lambda: ', e);
+          e.pushFrame({
+            index: index,
+            args: body.args,
+            scope: this.scope
+          });
+          throw e;
+        }
+        else if (e instanceof RecursionPoint) {
+          return this.bind(e.args).exec();
         }
         else {
           throw e;
         }
       }
+      exprs = _.rest(exprs);
     }
     return ret;
   };
@@ -633,8 +1014,8 @@ namespace pbnj.wonderscript {
     return fn;
   };
 
-  var evalLambda = function(exp, env) {
-    return new Lambda(exp, env).toFunction();
+  var evalLambda = function(exp, env, callstack) {
+    return new Lambda(exp, env, callstack).toFunction();
   };
 
   var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
@@ -717,60 +1098,52 @@ namespace pbnj.wonderscript {
     throw new RecursionPoint(args);
   };
 
-  var CONTINUATION_ID = 0;
-  function ContinuationCall(scope) {
-    this.id = _.symbol(['continuation-', CONTINUATION_ID++].join(''));
-    this.scope = scope;
-  }
-
   function SetContinuationPoint(id) {
     this.id = id;
   }
 
-  var isContinuationPoint = _.makeTagPredicate(_.symbol('call-with-current-continuation'));
-
-  var evalContinuationPoint = function(exp, env) {
-    if (_.count(exp) != 2) throw new Error('call-with-current-contiuation expression should be a list of 2 elements');
-    var fn = ws.eval(_.second(exp), env);
-    if (_.isFunction(fn)) {
-      var cc  = new ContinuationCall(scope);
-      var scope = env.extend().setIdent(cc.id);
-      var c = function() {
-        //throw cc;
-        //console.log(CCFRAMES);
-        var frame = CCFRAMES[cc.id];
-        if (frame) {
-          return frame.call();
-        }
-        else {
-          throw new Error('Continuation frame not set for: ' + cc.id);
-        }
-      };
-      fn.call(null, c);
-      throw new SetContinuationPoint(cc.id);
-    }
-    else {
-      throw new Error('call-with-current-continuation expects a function argument');
-    }
-  };
-
-  var continuationCall = function(cp, fn) {
-    try {
-      fn.call(null, cp); // 
-    }
-    catch (e) {
-      if (e instanceof ContinuationPoint && e.id === cp.id) {
-        
+  function ccFrame(exprs, scope) {
+    return function() {
+      var exp, exprs_ = exprs;
+      while (_.count(exprs_) !== 0) {
+        exp = _.first(exprs_);
+        ret = ws.eval(exp, scope);
+        exprs_ = _.rest(exprs_);
       }
-    }
+      return ret;
+    };
+  }
+
+  var CCID = 0;
+  var CCFRAMES = {};
+
+  /*
+   * (define cont)
+   * (callcc (lambda [c] (set! cont c)))
+   * (cont)
+   *
+   * Possible special forms
+   * CollectionLiteral?
+   * Definition
+   * Cond
+   * Lambda
+   * Block
+   * TryBlock
+   * Assignment
+   * Application
+   *
+   */
+
+  _.suspend = function(fn) {
+    throw new ContinuationException(fn);
   };
 
   var isApplication = ws.isApplication = function(exp) {
     return _.isList(exp);
   };
 
-  var evalApplication = ws.evalApplication = function(exp, env) {
-    var func, args, rawargs, buffer, op, sop, newExp, obj, meth, ctr, i;
+  var evalApplication = ws.evalApplication = function(exp, env, callstack) {
+    var func, args, rawargs, buffer, op, op_, sop, newExp, obj, meth, ctr, i;
 
     args    = [];
     rawargs = _.intoArray(_.rest(exp));
@@ -780,18 +1153,22 @@ namespace pbnj.wonderscript {
 
     // Primitive operators are inlined for performance
     op = _.first(exp);
+
+    var callstack = callstack || new Atom(_.list());
+    callstack.swap(_.conj, env.trace({ident: op}));
+
     if (_.equals(op, _.symbol('+'))) {
       if (args.length === 0) return 0;
-      return eval(args.join('+'));
+      return eval(['(', args.join(')+('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('-'))) {
       if (args.length === 0) return 0;
       else if (args.length === 1) return eval(['-', args[0]].join(''));
-      return eval(args.map(function(x) { return ['(', x, ')'].join('') }).join('-'));
+      return eval(['(', args.join(')-('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
       if (args.length === 0) return 1;
-      return eval(args.join(op.toString()));
+      return eval(['(', args.join(')*('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('str'))) {
       if (args.length === 0) return '';
@@ -828,16 +1205,16 @@ namespace pbnj.wonderscript {
       }
     }
     else if (_.equals(op, _.symbol('mod'))) {
-      return eval(args.join('%'));
+      return eval(['(', args.join(')&('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('bit-or'))) {
-      return eval(args.join('|'));
+      return eval(['(', args.join(')|('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('bit-and'))) {
-      return eval(args.join('&'));
+      return eval(['(', args.join(')&('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('bit-xor'))) {
-      return eval(args.join('^'));
+      return eval(['(', args.join(')^('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('bit-not'))) {
       if (args.length !== 1) {
@@ -880,21 +1257,20 @@ namespace pbnj.wonderscript {
       newExp = _.cons(_.symbol('new'), _.cons(ctr, _.rest(exp)))
       return evalClassInstantiation(newExp, env);
     }
-    else if (_.isAssociative(op) || _.isKeyword(op) || _.isSet(op) || (isQuoted(op) && _.isSymbol(op = evalQuote(op)))) {
-      return op.apply(null, args);
+    else if (_.isAssociative(op) || _.isKeyword(op) || _.isSet(op) || (isQuoted(op) && _.isSymbol(op_ = evalQuote(op)))) {
+      return op_.apply(null, args);
     }
-    
-    func = ws.eval(op, env);
-    //ws.pprint(func);
+
+    func = ws.eval(op, env, callstack);
 
     if (isInvocable(func)) {
       return func.apply(null, args);
     }
-    else if (func['-invoke']) {
+    else if (func && func['-invoke']) {
       return func['-invoke'](args);
     }
     else {
-      console.log(func);
+      console.log('func value: ', func);
       throw new Error(["'", ws.inspect(op), "' is not a function"].join(''));
     }
   };
@@ -993,7 +1369,7 @@ namespace pbnj.wonderscript {
 
   var getMacro = function(scope, name) {
     if (scope === null) return null;
-    var env = _.isEnv(scope) ? scope : scope["@@SCOPE@@"];
+    var env = ws.isEnv(scope) ? scope : scope["@@SCOPE@@"];
     if (env) {
       var obj = env.getObject(_.name(name));
       var meta = obj.getMeta();
@@ -1037,7 +1413,7 @@ namespace pbnj.wonderscript {
     var value = ws.eval(_.second(_.rest(exp)), env);
     var ns = _.namespace(name);
     var sname = '' + name;
-    if (_.isEnv(scope)) {
+    if (ws.isEnv(scope)) {
       scope.set(sname, value);
     }
     else {
@@ -1052,9 +1428,10 @@ namespace pbnj.wonderscript {
   var isThrownException = ws.isThrownException = makeTagPredicate(_.symbol('throw'));
 
   var evalThrownException = function(exp, env) {
+    env.updateCallstack({ident: _.symbol('throw')});
     var error = ws.eval(_.second(exp), env);
     if (_.isString(error)) {
-      throw new Error(wsError(error, env.stacktrace()));
+      throw new Error(error); //wsError(error, env.stacktrace()));
     }
     else {
       throw error;
@@ -1308,7 +1685,7 @@ namespace pbnj.wonderscript {
   ws.MODULE_SCOPE = pbnj.core; // default scope
   pbnj.core["@@NAME@@"] = _.symbol('pbnj.core');
 
-  var globalEnv = pbnj.core['@@SCOPE@@'] = pbnj.env().setSource('src/pbnj/wonderscript.js');
+  var globalEnv = pbnj.core['@@SCOPE@@'] = ws.env().setIdent(_.symbol('global')).setSource('src/pbnj/wonderscript.js');
   //globalEnv.define('*module-name*', _.symbol('pbnj.core'));
   importModule(pbnj.core);
   ws.globalEnv = globalEnv;
@@ -1349,90 +1726,117 @@ namespace pbnj.wonderscript {
   globalEnv.define('pprint', ws.pprint);
   globalEnv.define('p', ws.pprint);
 
-  ws.eval = function(exp, env) {
+  ws.RESTORE = {frames: []};
+  ws.RESTORE.popFrame = function() {
+    return this.frames.pop();
+  };
+
+  ws.eval = function(exp, env, callstack) {
     var env = env || globalEnv;
     var exp = macroexpand(exp);
+    var callstack = callstack || new Atom(_.list());
 
-    if (isSelfEvaluating(exp)) {
-      return evalSelfEvaluating(exp);
+    try {
+      if (isSelfEvaluating(exp)) {
+        return evalSelfEvaluating(exp);
+      }
+      else if (_.isKeyword(exp)) {
+        return evalKeyword(exp, env);
+      }
+      else if (isCollectionLiteral(exp)) {
+        return evalCollectionLiteral(exp, env);
+      }
+      else if (isVariable(exp)) {
+        return evalVariable(exp, env);
+      }
+      else if (isQuoted(exp)) {
+        return evalQuote(exp);
+      }
+      else if (isDefinition(exp)) {
+        return evalDefinition(exp, env);
+      }
+      else if (isCond(exp)) {
+        return evalCond(exp, env);
+      }
+      else if (isLambda(exp)) {
+        return evalLambda(exp, env, callstack);
+      }
+      else if (isBlock(exp)) {
+        return evalBlock(exp, env);
+      }
+      else if (isTryBlock(exp)) {
+        return evalTryBlock(exp, env);
+      }
+      else if (isLoop(exp)) {
+        return evalLoop(exp, env);
+      }
+      else if (isRecursionPoint(exp)) {
+        return evalRecursionPoint(exp, env);
+      }
+      else if (isAssignment(exp)) {
+        return evalAssignment(exp, env);
+      }
+      else if (isProtocol(exp)) {
+        return evalProtocol(exp, env);
+      }
+      else if (isType(exp)) {
+        return evalType(exp, env);
+      }
+      else if (isMacroDef(exp)) {
+        return evalMacroDef(exp, env);
+      }
+      else if (isThrownException(exp)) {
+        return evalThrownException(exp, env);
+      }
+      else if (isPropertyAccessor(exp)) {
+        return evalPropertyAccessor(exp, env);
+      }
+      else if (isPropertyAssignment(exp)) {
+        return evalPropertyAssignment(exp, env);
+      }
+      else if (isMethodApplication(exp)) {
+        return evalMethodApplication(exp, env);
+      }
+      else if (isClassInstantiation(exp)) {
+        return evalClassInstantiation(exp, env);
+      }
+      else if (isModuleDefinition(exp)) {
+        return evalModuleDefinition(exp, env);
+      }
+      else if (isModuleRequire(exp)) {
+        return evalModuleRequire(exp, env);
+      }
+      else if (isModuleSet(exp)) {
+        return evalModuleSet(exp, env);
+      }
+      else if (isApplication(exp)) {
+        return evalApplication(exp, env, callstack);
+      }
+      else {
+        throw new Error(["invalid expression: '", exp, "'"].join(''));
+      }
     }
-    else if (_.isKeyword(exp)) {
-      return evalKeyword(exp, env);
-    }
-    else if (isCollectionLiteral(exp)) {
-      return evalCollectionLiteral(exp, env);
-    }
-    else if (isVariable(exp)) {
-      return evalVariable(exp, env);
-    }
-    else if (isQuoted(exp)) {
-      return evalQuote(exp);
-    }
-    else if (isDefinition(exp)) {
-      return evalDefinition(exp, env);
-    }
-    else if (isCond(exp)) {
-      return evalCond(exp, env);
-    }
-    else if (isLambda(exp)) {
-      return evalLambda(exp, env);
-    }
-    else if (isBlock(exp)) {
-      return evalBlock(exp, env);
-    }
-    else if (isTryBlock(exp)) {
-      return evalTryBlock(exp, env);
-    }
-    else if (isLoop(exp)) {
-      return evalLoop(exp, env);
-    }
-    else if (isRecursionPoint(exp)) {
-      return evalRecursionPoint(exp, env);
-    }
-    else if (isContinuationPoint(exp)) {
-      return evalContinuationPoint(exp, env);
-    }
-    else if (isAssignment(exp)) {
-      return evalAssignment(exp, env);
-    }
-    else if (isProtocol(exp)) {
-      return evalProtocol(exp, env);
-    }
-    else if (isType(exp)) {
-      return evalType(exp, env);
-    }
-    else if (isMacroDef(exp)) {
-      return evalMacroDef(exp, env);
-    }
-    else if (isThrownException(exp)) {
-      return evalThrownException(exp, env);
-    }
-    else if (isPropertyAccessor(exp)) {
-      return evalPropertyAccessor(exp, env);
-    }
-    else if (isPropertyAssignment(exp)) {
-      return evalPropertyAssignment(exp, env);
-    }
-    else if (isMethodApplication(exp)) {
-      return evalMethodApplication(exp, env);
-    }
-    else if (isClassInstantiation(exp)) {
-      return evalClassInstantiation(exp, env);
-    }
-    else if (isModuleDefinition(exp)) {
-      return evalModuleDefinition(exp, env);
-    }
-    else if (isModuleRequire(exp)) {
-      return evalModuleRequire(exp, env);
-    }
-    else if (isModuleSet(exp)) {
-      return evalModuleSet(exp, env);
-    }
-    else if (isApplication(exp)) {
-      return evalApplication(exp, env);
-    }
-    else {
-      throw new Error(["invalid expression: '", exp, "'"].join(''));
+    catch (e) {
+      if (e instanceof RecursionPoint) {
+        throw e;
+      }
+      else if (e instanceof ContinuationException) {
+      /*
+       * Possible special forms:
+       * CollectionLiteral?
+       * Cond
+       * Lambda
+       * Block
+       * Assignment
+       * Application
+       */
+        ws.RESTORE.dorestore = true;
+        ws.RESTORE.frames = e.frames;
+      }
+      else {
+        console.log('callstack: ', ws.inspect(callstack.deref()));
+        throw e;
+      }
     }
   };
   globalEnv.define('eval', ws.eval);
@@ -1457,15 +1861,15 @@ namespace pbnj.wonderscript {
 
   ws.readStream = function(stream, env) {
     var env = (env || globalEnv).extend().setSource(stream.source()).setLocation(stream.line(), stream.column());
+    var callstack = new Atom(_.list());
     try {
       var value = null;
       while (!stream.eof()) {
         var exp = stream.peek();
-        value = ws.eval(exp, env);
-        if (_.isFunction(value) || isBlock(exp) || isTryBlock(exp)) {
-          env.setSource(stream.source()).setLocation(stream.line(), stream.column());
-        }
-        else if (value && value["@@SCOPE@@"]) {
+        value = ws.eval(exp, env, callstack);
+        // FIXME: for some reason if this first clause in the if/else in not here we get an error when defining
+        // *sym-count* in core.ws saying that 'atom' is not a function
+        if (value && value["@@SCOPE@@"]) {
           env = value["@@SCOPE@@"].setSource(stream.source()).setLocation(stream.line(), stream.column());
         }
         else {
@@ -1477,8 +1881,9 @@ namespace pbnj.wonderscript {
     }
     catch(e) {
       console.error(e);
+      //console.log('callstack: ', ws.inspect(env.callstack()));
       //console.log(env);
-      console.error(fmtStacktrace(env.stacktrace()));
+      //console.error(fmtStacktrace(env.stacktrace()));
       //throw e; //new Error(wsError(e, env.stacktrace()));
     }
   };

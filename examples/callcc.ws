@@ -1,7 +1,7 @@
 ; vim: ft=clojure
 (module callcc)
 
-(define C false)
+(define C)
 
 (define-function test-cc
   []
@@ -10,10 +10,12 @@
   (set! i (add1 i))
   i)
 
-(say (test-cc))
-;(println "test-cc: " (test-cc))
-;(println "test-cc: " (test-cc))
-(println (C))
-(println (C))
-(say (test-cc))
-(println (C))
+;(say (test-cc))
+;;(println "test-cc: " (test-cc))
+;;(println "test-cc: " (test-cc))
+;(println (C))
+;(println (C))
+;(say (test-cc))
+;(println (C))
+
+(cond 1 (callcc (lambda [c] (set! C c)))

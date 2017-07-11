@@ -1,4 +1,3 @@
-; vim: ft=clojure
 (module pbnj.core)
 
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
@@ -99,6 +98,23 @@
           (list 'if ns
                 (list '.- (list 'symbol ns) (list 'symbol nm))
                 (list '.? (list 'current-module-scope) (list 'lookup (list 'symbol nm))))))
+
+(define-macro do-to
+  "Take an object `x` and perform (presumably) mutation operations `forms` on it.
+  The expression evaluates to the object.
+  
+      Example:
+          (do-to person
+            (.setFirstName \"John\")
+            (.setLastName \"Smith\")
+            (.setAge 21))"
+  {:added "1.0"}
+  [x &forms]
+  (let [obj (gen-sym "$obj")]
+    (cons 'let
+            (cons [obj x]
+                  (concat (map (lambda [form] (cons (first form) (cons obj (rest form)))) forms)
+                          (list obj))))))
 
 (define-macro do-times
   [bindings &body]
@@ -262,14 +278,13 @@
   (isa? x Atom))
 
 (define-function deref
-  "
-  Dereferences (returning a hidden value) an instance of the `IDef` protocol `x`,
+  "Dereferences (returning a hidden value) an instance of the `IDef` protocol `x`,
   including Atoms. The reader provides a shorthand of the form:
       
+  Example:
       (define x (atom 1))
       (deref x) => 1
-      @x => 1
-  "
+      @x => 1"
   {:added "1.0"}
   ([x]
    (.? x deref))
@@ -277,36 +292,31 @@
    (.? x (deref timeout-ms timeout-val))))
 
 (define-function reset!
-  "
-  Resets the value of an Atom `x` to `value`, any watches that have
+  "Resets the value of an Atom `x` to `value`, any watches that have
   been added will be processed.
 
   Example:
       (define x (atom 1))
       (rest! x 2)
-      @x => 2
-  "
+      @x => 2"
   {:added "1.0"}
   [x value]
   (.? x (reset value)))
 
 (define-function swap!
-  "
-  Swaps the the value of `x` with the return value of the function `f`
+  "Swaps the the value of `x` with the return value of the function `f`
   which receives the current value of `x` as it's single argument.
   
   Example:
       (define x (atom 1))
       (swap! x (lambda [val] (+ 1 val)))
-      (deref x) => 2
-  "
+      (deref x) => 2"
   {:added "1.0"}
   [x f]
   (.? x (swap f)))
 
 (define-function add-watch
-  "
-  Add watch function to the atom `x` with a key `k` (that can be used for traces).
+  "Add watch function to the atom `x` with a key `k` (that can be used for traces).
   The watch function will be proccessed each time the atom value changes. When
   the watch function is proccessed it is passed 4 arguments, the key, the atom,
   the current value, and the new value.
@@ -317,8 +327,7 @@
         (lambda [k a old new]
                 (println (str \"processing \" k))
                 (println (str \"old value: \" (inspect old)))
-                (println (str \"new value: \" (inspect new)))))
-  "
+                (println (str \"new value: \" (inspect new)))))"
   {:added "1.0"}
   [x k f]
   (.? x (addWatch k f)))
@@ -330,11 +339,9 @@
   (.? x (removeWatch k)))
 
 (define-function compare-and-set!
-  "
-  Atomically sets the value of atom to newval if and only if the
+  "Atomically sets the value of atom to newval if and only if the
   current value of the atom is identical to oldval. Returns true if
-  set happened, else false
-  "
+  set happened, else false."
   {:added "1.0"}
   [x old new]
   (if (identical? @x old)
@@ -403,15 +410,16 @@
 (define-function add1 [n] (+ 1 n))
 (define-function sub1 [n] (- 1 n))
 
-(define- *sym-count* (atom 0))
-(define-function gen-sym 
-  "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
-  {:added "1.0"}
-  ([] (gen-sym "sym"))
-  ([prefix]
-   (let [sym (symbol (str prefix "-" @*sym-count*))]
-     (swap! *sym-count* add1)
-     sym)))
+(do
+  (define- sym-count (atom 0))
+  (define-function gen-sym 
+    "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
+    {:added "1.0"}
+    ([] (pbnj.core/gen-sym "$sym")) ;; FIXME: this should work without fully qualified name
+    ([prefix]
+     (let [sym (symbol (str prefix "-" @sym-count))]
+       (swap! sym-count add1)
+       sym))))
 
 ;; ---------------------------- meta data ------------------------------ ;;
 
@@ -522,7 +530,12 @@
                               (list 'map
                                     '(lambda [x] [(.methodName x) (.arglists x)])
                                     (list '.instanceMethods (list 'deref v)))))
-                      (list 'if doc (list 'println doc)))))))
+                      (list 'if doc (list 'println doc))
+                      (list 'when (list meta :see-also)
+                            (list 'println)
+                            (list 'println "See Also:")
+                            (list 'do-each ['cite (list meta :see-also)]
+                                (list 'println 'cite))))) nil)))
 
 (define-macro source
   [sym]
@@ -587,180 +600,60 @@
 (define-function prove-module [module]
   (map apply (tests module)))
 
-(define-test prove
-  (define-test passing-test (is (= 1 1)))
-  (define-test failing-test (is (= 0 1)))
-  (is (= (prove passing-test) [:passing-test :passed])))
-
-;; document and test special forms
+;; Special Forms
 
 (define
   {:doc "Takes a set of test/expression pairs. It evaluates each test one at a
-time.  If a test returns logical true, cond evaluates and returns
-the value of the corresponding expr and doesn't evaluate any of the
-other tests or exprs. (cond) returns nil.
+        time.  If a test returns logical true, cond evaluates and returns
+        the value of the corresponding expr and doesn't evaluate any of the
+        other tests or exprs. (cond) returns nil.
 
-  Example:
-    (cond (< a 1) :less-than
-          (> a 1) :greater-than
-          :else   :equal)"
+        Example:
+          (cond (< a 1) :less-than
+                (> a 1) :greater-than
+                :else   :equal)"
    :special-form true
+   :see-also
+    '(pbnj.core/if
+      pbnj.core/when
+      pbnj.core/unless
+      pbnj.core/if-not
+      pbnj.core/or
+      pbnj.core/and)
    :added "1.0"}
   cond)
 
-;(set! *mode* :test)
+(define
+  {:doc "A function (lambda) expression, not a true function in the strictest sense (it does allow imperative programming, i.e. side-effects)
+        but they are true closures, in that any variables that are defined in a higher scope or passed as parameters are available
+        to the function at execution time.
 
-;; TODO: move tests to "test" directory, make "prove" binary for running tests
-
-(define-test cond
-  (is (= (cond) nil))
-  (try
-    (is (cond 1) nil)
-    (is false "Should have throw an exception")
-    (catch [e js/Error]
-      (is true)))
-  (is (= (cond 1 2) 2))
-  (is (= (cond nil 2 3 4) 4))
-  (is (= (cond nil 2 false 4 5 6) 6))
-  (is (= (cond nil 2 false 4 true 6) 6))
-  (is (= (cond nil 2 false 4 :else 6) 6)))
-
-(define-test .?
-  (let [d (new js/Date 2016 10 25)]
-    (is (= (.? d getMonth) 10))
-    (is (= (.? d missing-method) nil))
-    (.? d (setMonth 11))
-    (is (= (.? d (getMonth)) 11))))
-
-(define-test ..
-  (let [xs (array 1 2 3 4 5)]
-    (.. "1,2,3,4,5"
-        (split ",")
-        (map (lambda [x &rest] (* 1 x)))
-        (forEach (lambda [x i other] (is (= x (.- xs i))))))))
-
-(define-test ..?
-  (let [xs (array 1 2 3 4 5)]
-    (..? "1,2,3,4,5"
-         (split ",")
-         (map (lambda [x &rest] (* 1 x)))
-         (forEach (lambda [x i other]
-                       (println "x" x "xs" xs (str "xs[" i "]") (.- xs i))
-                       (is (= x (.- xs i)))))))
-  (is (= nil (..? "1,2,3,4,5" (split ",") (missing-method 1 2 3 4 5)))))
-
-(define-test read-string
-  (let [n (generate-nat)]
-    (is (= n (read-string (str n)))))
-  (is (= -1 (read-string "-1")))
-  (is (= -1.14 (read-string "-1.14")))
-  (is (= 1.14 (read-string "+1.14")))
-  (is (= 1 (read-string "+1")))
-  (is (= 3.14159 (read-string "3.14159")))
-  (is (= 3000 (read-string "3_000")))
-  (is (= "abc" (read-string "\"abc\"")))
-  (is (= :a (read-string ":a")))
-  (is (= 'b (read-string "'b")))
-  (is (= '(1 2 3) (read-string "'(1 2 3)")))
-  (is (= [1 2 3] (read-string "[1 2 3]")))
-  (is (= {:a 1 :b 2 :c 3} (read-string "{:a 1 :b 2 :c 3}")))
-  (is (= 5000 (read-string "5,000")))
-  (is (= 5000 (read-string "5_000")))
-  (is (= 5 (read-string "5.000"))))
-
-(define-test comment
-  (is (= nil (comment)))
-  (is (= nil (comment asdfasdf asfasdf sfasdfasd asfasdfasd))))
-
-(define-test let
-  (is (= [1 2]
-         (let [x 1
-               y (+ x 1)]
-           (is (= x 1))
-           (is (= y 2))
-           [x y]))))
-
-(define-test if
-  (is (= 1 (if true 1)))
-  (is (= 1 (if true 1 2)))
-  (is (= 2 (if false 1 2)))
-  (is (= nil (if false 1)))
-  (is (= 2 (if nil 1 2))))
+        Example:
+            (lambda [x] x) ;; the identity function
+            (lambda [x] (lambda [] x)) ;; the returning function will always return the first value"
+   :special-form true
+   :see-also
+    '("https://en.wikipedia.org/wiki/Functional_programming"
+      "https://en.wikipedia.org/wiki/Imperative_programming"
+      "https://en.wikipedia.org/wiki/Closure_(computer_programming)"
+      pbnj.core/identity
+      pbnj.core/always
+      pbnj.core/define-function
+      pbnj.core/define-macro
+      pbnj.core/define-generic
+      pbnj.core/define-method)
+   :added "1.0"}
+  lambda)
 
 (define-macro if-not
   ([pred conse] (list 'cond (list 'not pred) conse))
   ([pred conse alt] (list 'cond (list 'not pred) conse :else alt)))
 
-(define-test if-not
-  (is (= 1 (if-not false 1)))
-  (is (= 1 (if-not false 1 2)))
-  (is (= 2 (if-not true 1 2)))
-  (is (= nil (if-not true 1)))
-  (is (= 1 (if-not nil 1 2))))
-
 (define-macro unless [pred &acts]
   (list 'cond (list 'not pred) (cons 'do acts)))
 
-(define-test unless
-  (is (= 5 (unless false 1 2 3 4 5)))
-  (is (= nil (unless true 1 2 3 4 5))))
-
-(define-test when
-  (is (= 5 (when true 1 2 3 4 5)))
-  (is (= nil (when false 1 2 3 4 5))))
-
-(define-test or
-  (is (or true))
-  (is (or false true))
-  (is (or false false true))
-  (is (or false false false true))
-  (is-not (or false))
-  (is-not (or false false))
-  (is-not (or false false false)))
-
-(define-test and
-  (is (and true))
-  (is (and true true))
-  (is (and true true true))
-  (is-not (and false))
-  (is-not (and false false))
-  (is-not (and false false false))
-  (is-not (and false true))
-  (is-not (and false true true))
-  (is-not (and true true false)))
-
-(define-test define-function
-  (define-function ident [x] x)
-  (define-function inc [x] (+ 1 x))
-  (is (= 1 (ident 1)))
-  (is (= :a (pbnj.core/ident :a)))
-  (is (= 4 (inc 3)))
-  (is (= 5 (pbnj.core/inc 4))))
-
-(define-test define-function-
-  (define-function- ident- [x] x)
-  (define-function- inc- [x] (+ 1 x))
-  ;(is (= :a (pbnj.core/ident- :a)))
-  ;(is (= 5 (pbnj.core/+1- 4)))
-  (is (= 1 (ident- 1)))
-  (is (= 4 (inc- 3))))
-
 (define-macro not= [&values]
   (list 'not (cons '= values)))
-
-(define-test not=
-  (is (not= 1 2))
-  (is (not= :a :b))
-  (is (not= 1 :a))
-  (is-not (not= 1 1))
-  (is-not (not= :a :a))
-  (is-not (not= [1 2 3 4] [1 2 3 4])))
-
-(define-test gen-sym
-  (is (symbol? (gen-sym)))
-  (is (symbol? (gen-sym "prefix")))
-  (is-not (= (gen-sym) (gen-sym)))
-  (is-not (= (gen-sym "prefix") (gen-sym "prefix"))))
 
 (define-function fraction [n]
   (- n (Math/floor n)))
@@ -779,27 +672,12 @@ other tests or exprs. (cond) returns nil.
 (define-function natural? [n]
   (and (integer? n) (positive? n)))
 
-(define-test natural?
-  (is (natural? 0))
-  (is (natural? 1))
-  (is (natural? 34))
-  (is (natural? 21412412341234123463456435437456))
-  (is-not (natural? nil))
-  (is-not (natrual? "1"))
-  (is-not (natrual? true))
-  (is-not (natural? -1))
-  (is-not (natrual? 1.1)))
-
 (define-function generate-int
   ([] (generate-int -100 100))
   ([min max]
    (let [a (Math/ceil min)
          b (Math/ceil max)]
      (+ a (Math/floor (* (Math/random) (- b a)))))))
-
-(define-test generate-int
-  (do-times [n 100]
-    (is (integer? (generate-int)))))
 
 (define-function generate-nat
   ([] (generate-int 0 100))
@@ -808,19 +686,10 @@ other tests or exprs. (cond) returns nil.
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
-(define-test generate-nat
-  (do-times [n 20]
-    (let [m (generate-nat)]
-      (is (natural? (generate-nat))))))
-
 (define-function generate-float
   ([] (generate-float 0 100))
   ([min max]
    (+ (generate-int min max) (* (Math/random (- max min))))))
-
-(define-test generate-float
-  (do-times [n 20]
-    (is (number? (generate-float)))))
 
 (define-function generate-str
   ([] (generate-str 1 20))
@@ -830,10 +699,6 @@ other tests or exprs. (cond) returns nil.
      (->> xs
           (map (lambda [x] (.fromCodePoint js/String x)))
           (reduce str)))))
-
-(define-test generate-str
-  (do-times [n 20]
-    (is (string? (generate-str)))))
 
 (define-function generate-keyword
   ([] (generate-keyword 1 20))
@@ -845,10 +710,6 @@ other tests or exprs. (cond) returns nil.
       (keyword ns nm)
       (keyword nm)))))
 
-(define-test generate-keyword
-  (do-times [n 20]
-    (is (keyword? (generate-keyword)))))
-
 (define-function generate-symbol
   ([] (generate-keyword 1 20))
   ([min max]
@@ -858,10 +719,6 @@ other tests or exprs. (cond) returns nil.
      (if ns?
       (symbol ns nm)
       (symbol nm)))))
-
-(define-test generate-symbol
-  (do-times [n 20]
-    (is (symbol? (generate-symbol)))))
 
 (define-function maybe
   ([value just]
@@ -921,35 +778,6 @@ other tests or exprs. (cond) returns nil.
                           'fn (cons 'lambda (cons args body))]
                     (list 'assoc 'm :methods (list 'assoc 'meths val 'fn))))))
 
-(define-generic t
-  "A generic function example"
-  string?)
-(define-method t false [_] :not-string)
-(define-method t true [_] :string)
-
-(define-protocol ITest0
-  IMeta
-  IRef
-  IDeref)
-(define-type Test0 [] ITest0)
-
-(define-protocol ITest1
-  IDeref
-  (unwrap [self] (.-value self)))
-
-(define-protocol ITest2
-  "This is my third test of protocols"
-  IDeref
-  (unwrap [self] (.-value self)))
-
-(define-protocol ITest3
-  "This is my fourth test of protocols"
-  {:added "4th"}
-  IDeref
-  (unwrap [self] (.-value self)))
-
-(define-type Test1 [value] ITest1)
-
 (define-macro nodejs?
   "If `*platform*` is `:nodejs` wrap code in a `do` block
   in place otherwise return `nil`."
@@ -971,7 +799,7 @@ other tests or exprs. (cond) returns nil.
   in place otherwise return `nil`."
   {:added "1.0"}
   [&forms]
-  (if (= *target-language* :browser)
+  (if (= *target-language* :javascript)
     (cons 'do forms)))
 
 (define-function say
@@ -982,6 +810,18 @@ other tests or exprs. (cond) returns nil.
   [&vals]
   (javascript?
     (console/log (apply str vals))))
+
+(define-function broken
+  []
+  (throw "this is broken")
+  1
+  2
+  3
+  4)
+
+(define-function broken1
+  []
+  (broken))
 
 (define-function print
   "String concatenate `vals` and print to console
@@ -995,7 +835,7 @@ other tests or exprs. (cond) returns nil.
     (console/log (apply str vals))))
 
 (nodejs?
-  
+
   (define
     {:doc ""
      :platforms #{:nodejs}
@@ -1013,93 +853,28 @@ other tests or exprs. (cond) returns nil.
      :platforms #{:nodejs}
      :added "1.0"}
     *argv* (array->vector (.slice process/argv 2)))
-
-  ;; XXX: some POSIX stuff (should this go in pbnj.system or something similar?)
-
-  (define
-    {:doc "An alias for process.abort() on Node.js"
-     :platforms #{:nodejs}
-     :added "1.0"}
-    abort process/abort)
-
-  (define 
-    {:doc "An alias for process.chdir() on Node.js"
-     :arglists '([directory])
-     :platforms #{:nodejs}
-     :added "1.0"}
-    chdir process/chdir)
-
-  (define
-    {:doc "An alias for process.cwd() on Node.js"
-     :arglists '([])
-     :platforms #{:nodejs}
-     :added "1.0"}
-    cwd process/cwd)
-
-  (define
-    {:doc "An alias for process.exit() on Node.js"
-     :arglists '([] [code])
-     :platforms #{:nodejs}
-     :added "1.0"}
-    exit process/exit)
-
-  (define- *fs* (js.node/require "fs"))
-
-  ;; TODO: Make a browser version of slurp and spit
-
-  (define-function slurp
-    "Read entire contents of `file` to a string"
-    {:added "1.0"}
-    [file]
-    (-> (.readFileSync *fs* file) .toString))
-
-  (define-function spit
-    "Write `data` to `file`. Data can be a String, Buffer, or Uint8Array."
-    {:added "1.0"}
-    [file data]
-    (.writeFileSync *fs* file data) file)
-
-  (define- *path* (js.node/require "path"))
-
-  (define
-    {:doc "An alias for path.basename() on Node.js"
-     :arglists '([path] [path ext])
-     :platforms #{:nodejs}
-     :added "1.0"}
-    basename (.-basename *path*))
-
-  (define
-    {:doc "An alias for path.dirname() on Node.js"
-     :arglists '([path] [path ext])
-     :platforms #{:nodejs}
-     :added "1.0"}
-    dirname (.-dirname *path*))
-
-  (define
-    {:doc "An alias for path.extname() on Node.js"
-     :arglists '([path] [path ext])
-     :platforms #{:nodejs}
-     :added "1.0"}
-    extname (.-extname *path*))
 )
 
-(define-function lines
-  [s]
-  (-> (.split s \newline) array->list))
+(javascript?
 
-(define-function split
-  [s delim]
-  (-> (.split s delim) array->list))
-
-(define-function join
-  [col delim]
-  (let [joiner (lambda [s x] (str s delim x))]
-    (reduce joiner col)))
-
-(define-function replace
-  ([s pat]
-   (replace s pat ""))
-  ([s pat val]
-   (if (nil? s)
-     ""
-     (.replace s pat val))))
+  (define-function lines
+    [s]
+    (-> (.split s \newline) array->list))
+  
+  (define-function split
+    [s delim]
+    (-> (.split s delim) array->list))
+  
+  (define-function join
+    [col delim]
+    (let [joiner (lambda [s x] (str s delim x))]
+      (reduce joiner col)))
+  
+  (define-function replace
+    ([s pat]
+     (replace s pat ""))
+    ([s pat val]
+     (if (nil? s)
+       ""
+       (.replace s pat val))))
+)

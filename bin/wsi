@@ -16,12 +16,12 @@ function loadHistory() {
 }
 
 function appendHistory(exp) {
-  fs.appendFileSync(HISTORY_FILE, exp);
+  fs.appendFileSync(HISTORY_FILE, [exp, "\n"].join(''));
 }
   
 if (process.argv.length === 3) {
   try {
-    ws.readString('(module pbnj.user)');
+    ws.readString('(module user)');
     ws.readFile([process.cwd(), process.argv[2]].join('/'));
     process.exitCode = 0;
   }
@@ -37,7 +37,7 @@ else {
     terminal: true
   });
   
-  ws.readString('(module pbnj.user)');
+  ws.readString('(module user)');
   ws.globalEnv.define('*dir*', process.cwd());
   ws.globalEnv.define('*file*', null);
   ws.readString('(println (str "WonderScript " *version*))');
