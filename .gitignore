@@ -20,3 +20,5 @@ src/pbnj/peanutbutter.js.map
 examples/*.js
 examples/*.jwlibrary
 .wsi-history
+examples/TrueMgrAirBackup*.ndm
+examples/glucose.html

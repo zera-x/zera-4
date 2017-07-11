@@ -53,8 +53,9 @@
   (str (name (second exp)) ":"))
 
 (define-function definition? [exp]
-  (let [tag (first exp)]
-    (or (= tag 'var) (= tag 'let) (= tag 'const))))
+  (if (list? exp)
+    (let [tag (first exp)]
+      (or (= tag 'var) (= tag 'let) (= tag 'const)))))
 
 (define-function emit-definition [exp]
   (let [size (count exp)]
@@ -208,9 +209,8 @@
                  (str (if (nil? s) "" (str s ","))
                     (compile (first pair))
                     ":"
-                    (compile (second pair)))) nil)
-       "})"
-       exp))
+                    (compile (second pair)))) nil exp)
+    "})"))
 
 (define-function emit-array [exp]
   (if (empty? exp)
@@ -238,60 +238,58 @@
         exp))
     exp))
 
-(define-function compile [exp_]
-  (let [exp (macroexpand exp_)]
-    (cond (or (nil? exp) (= exp 'null)) (emit-nil exp)
-          (number? exp) (emit-number exp)
-          (boolean? exp) (emit-boolean exp)
-          (symbol? exp) (emit-symbol exp)
-          (keyword? exp) (emit-symbol exp)
-          (string? exp) (emit-string exp)
-          (map? exp) (emit-object exp)
-          (vector? exp) (emit-array exp)
-          (list? exp)
-            (let [tag (first exp)]
-              (cond (or (= tag 'if-else) (= tag 'cond)) (emit-if-else exp)
-                    (= tag 'if) (emit-if exp)
-                    (= tag '?) (emit-existential exp)
-                    (= tag 'instance?) (emit-instanceof exp)
-                    (= tag 'typeof) (emit-typeof exp)
-                    (= tag 'label) (emit-label exp)
-                    (= tag 'do) (emit-block (rest exp))
-                    (definition? exp) (emit-definition exp)
-                    (or (= tag 'function) (= tag 'function*))
-                      (emit-function exp)
-                    (= tag 'return)
-                      (apply emit-return (rest exp))
-                    (has? '#{break continue throw delete} tag)
-                      (emit-statement exp)
-                    (or (= tag 'case) (= tag 'default))
-                      (emit-colon-statment exp)
-                    (has? '#{catch while switch} tag)
-                      (emit-control-flow exp)
-                    (= tag 'for) (emit-for-loop exp)
-                    (= tag 'try) (emit-named-block exp)
-                    (= tag '.-) (emit-object-resolution exp)
-                    (= tag '.) (emit-method-call exp)
-                    (= tag 'new) (emit-class-init exp)
-                    (= tag '.-set!) (emit-property-assignment exp)
-                    (= tag 'set!) (apply emit-assignment (rest exp))
-                    (or (= tag '!) (= tag 'not)) (emit-negation exp)
-                    (has? '#{++ -- ~} tag) (emit-unary-operator exp)
-                    (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
-                      (emit-binary-operator exp)
-                    (or (= tag '%) (= tag 'mod)) (emit-binary-operator (cons '% (rest exp)))
-                    (= tag 'quote) (emit-quote exp)
-                    (= tag 'macro) (eval-macro-definition exp)
-                    (= tag 'paren) (emit-expression exp)
-                    (= tag 'comma) ","
-                    (= tag 'semi) ";"
-                    (= tag 'comment) ""
-                    :else 
-                      (do
-                        (apply emit-function-application exp) ))
-          :else
-            (do
-              (throw (str "invalid form: '" exp "'"))) ))))
+(define-function compile [exp]
+  (cond (or (nil? exp) (= exp 'null)) (emit-nil exp)
+        (number? exp) (emit-number exp)
+        (boolean? exp) (emit-boolean exp)
+        (symbol? exp) (emit-symbol exp)
+        (keyword? exp) (emit-symbol exp)
+        (string? exp) (emit-string exp)
+        (map? exp) (emit-object exp)
+        (vector? exp) (emit-array exp)
+        (list? exp)
+          (let [tag (first exp)]
+            (cond (or (= tag 'if-else) (= tag 'cond)) (emit-if-else exp)
+                  (= tag 'if) (emit-if exp)
+                  (= tag '?) (emit-existential exp)
+                  (= tag 'instance?) (emit-instanceof exp)
+                  (= tag 'typeof) (emit-typeof exp)
+                  (= tag 'label) (emit-label exp)
+                  (= tag 'do) (emit-block (rest exp))
+                  (definition? exp) (emit-definition exp)
+                  (or (= tag 'function) (= tag 'function*))
+                    (emit-function exp)
+                  (= tag 'return)
+                    (apply emit-return (rest exp))
+                  (has? '#{break continue throw delete} tag)
+                    (emit-statement exp)
+                  (or (= tag 'case) (= tag 'default))
+                    (emit-colon-statment exp)
+                  (has? '#{catch while switch} tag)
+                    (emit-control-flow exp)
+                  (= tag 'for) (emit-for-loop exp)
+                  (= tag 'try) (emit-named-block exp)
+                  (= tag '.-) (emit-object-resolution exp)
+                  (= tag '.) (emit-method-call exp)
+                  (= tag 'new) (emit-class-init exp)
+                  (= tag '.-set!) (emit-property-assignment exp)
+                  (= tag 'set!) (apply emit-assignment (rest exp))
+                  (or (= tag '!) (= tag 'not)) (emit-negation exp)
+                  (has? '#{++ -- ~} tag) (emit-unary-operator exp)
+                  (has? '#{|| && | & << >> % < > <= >= + - / * == != === !==} tag)
+                    (emit-binary-operator exp)
+                  (or (= tag '%) (= tag 'mod)) (emit-binary-operator (cons '% (rest exp)))
+                  (= tag 'quote) (emit-quote exp)
+                  (= tag 'paren) (emit-expression exp)
+                  (= tag 'comma) ","
+                  (= tag 'semi) ";"
+                  (= tag 'comment) ""
+                  :else 
+                    (do
+                      (apply emit-function-application exp) ))
+        :else
+          (do
+            (throw (str "invalid form: '" exp "'"))) )))
 
 (define-function eval [exp]
   (let [code (compile exp)]
