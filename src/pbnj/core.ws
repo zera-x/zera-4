@@ -32,8 +32,28 @@
   ([pred conse] (list 'cond pred conse))
   ([pred conse alt] (list 'cond pred conse :else alt))) 
 
+(define-macro if-not
+  ([pred conse] (list 'cond (list 'not pred) conse))
+  ([pred conse alt] (list 'cond (list 'not pred) conse :else alt)))
+
+(define-macro unless [pred &acts]
+  (list 'cond (list 'not pred) (cons 'do acts)))
+
+(define-macro not= [&values]
+  (list 'not (cons '= values)))
+
+
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
+
+(define-macro cond-with
+  "(cond-with '= a
+     5 \"a is 5\"
+     6 \"a is 6\"
+     :else \"a is not 5 or 6\")"
+  [cmp value &rules]
+  (cons 'cond (->> (partition 2 rules)
+                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list cmp value (first r))) (second r)])))))
 
 (define-macro case
   "(case a
@@ -41,8 +61,7 @@
      6 \"a is 6\"
      :else \"a is not 5 or 6\")"
   [value &rules]
-  (cons 'cond (->> (partition 2 rules)
-                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
+  (cons 'cond-with (cons '= (cons value rules))))
 
 (define-macro define-
   "define a private variable (it cannot be seen outside of the module scope)."
@@ -57,12 +76,31 @@
                      (partition 2 bindings))
                 body)))
 
+(define-macro if-let
+  ([bind x] (list 'if-let bind x nil))
+  ([bind x y]
+   (unless (= (count bind) 2)
+      (throw "Bindings must have exactly two elements"))
+   (list 'let bind
+         (list 'if (first bind) x y))))
+
+(define-macro when-let
+  [bind &forms]
+  (unless (= (count bind) 2)
+     (throw "Bindings must have exactly two elements"))
+  (list 'let bind
+        (cons 'when (cons (first bind) forms))))
+
 (define-macro or
   ([] nil)
   ([a] a)
   ([&forms]
    (let [or* (first forms)]
      (list 'if or* or* (cons 'or (rest forms))))))
+
+(define-macro or=
+  [x &forms]
+  (cons 'or (map (lambda [form] (list '= x form)) forms)))
 
 (define-macro and
   ([] true)
@@ -185,7 +223,7 @@
 
 (define-function constructor
   [x]
-  (.- (prototype x) constructor))
+  (.-constructor x))
 
 (define-function isa?
   [x klass]
@@ -197,6 +235,31 @@
 
 (define-protocol IDeref
   (deref [self] (.- self value)))
+
+(define-protocol IBlockingDeref
+  (deref
+    ([self]
+     (.deref self 3000 nil))
+    ([self timeout-ms timeout-val]
+     (let [t0 (.valueOf (js/Date.))]
+     (until (or (.-value self)
+                (<= timeout-ms (- (.valueOf (js/Date.)) t0)))
+            nil)
+     (or (.-value self) timeout-val)))))
+
+(define-function deref
+  "Dereferences (returning a hidden value) an instance of the `IDef` protocol `x`,
+  including Atoms. The reader provides a shorthand of the form:
+      
+  Example:
+      (define x (atom 1))
+      (deref x) => 1
+      @x => 1"
+  {:added "1.0"}
+  ([x]
+   (.? x deref))
+  ([x timeout-ms timeout-val]
+   (.? x (deref timeout-ms timeout-val))))
 
 (define-protocol IRef
   (setValidator
@@ -224,6 +287,34 @@
               f (x 1)]
           (f k self (.- self value) newVal))))
     self))
+
+(define-function add-watch
+  "Add watch function to the atom `x` with a key `k` (that can be used for traces).
+  The watch function will be proccessed each time the atom value changes. When
+  the watch function is proccessed it is passed 4 arguments, the key, the atom,
+  the current value, and the new value.
+
+  Example:
+      (define x (atom 1))
+      (add-watch x :times-are-a-changin
+        (lambda [k a old new]
+                (println (str \"processing \" k))
+                (println (str \"old value: \" (inspect old)))
+                (println (str \"new value: \" (inspect new)))))"
+  {:added "1.0"}
+  [x k f]
+  (.? x (addWatch k f)))
+
+(define-function remove-watch
+  "Removes a watch (set by add-watch) from a reference"
+  {:added "1.0"}
+  [x k]
+  (.? x (removeWatch k)))
+
+(define-function set-validator!
+  {:added "1.0"}
+  [x fn]
+  (.? x (setValidator fn)))
 
 (define-protocol IMeta
   (getMeta [self] (.-meta self))
@@ -277,20 +368,6 @@
   [x]
   (isa? x Atom))
 
-(define-function deref
-  "Dereferences (returning a hidden value) an instance of the `IDef` protocol `x`,
-  including Atoms. The reader provides a shorthand of the form:
-      
-  Example:
-      (define x (atom 1))
-      (deref x) => 1
-      @x => 1"
-  {:added "1.0"}
-  ([x]
-   (.? x deref))
-  ([x timeout-ms timeout-val]
-   (.? x (deref timeout-ms timeout-val))))
-
 (define-function reset!
   "Resets the value of an Atom `x` to `value`, any watches that have
   been added will be processed.
@@ -302,41 +379,6 @@
   {:added "1.0"}
   [x value]
   (.? x (reset value)))
-
-(define-function swap!
-  "Swaps the the value of `x` with the return value of the function `f`
-  which receives the current value of `x` as it's single argument.
-  
-  Example:
-      (define x (atom 1))
-      (swap! x (lambda [val] (+ 1 val)))
-      (deref x) => 2"
-  {:added "1.0"}
-  [x f]
-  (.? x (swap f)))
-
-(define-function add-watch
-  "Add watch function to the atom `x` with a key `k` (that can be used for traces).
-  The watch function will be proccessed each time the atom value changes. When
-  the watch function is proccessed it is passed 4 arguments, the key, the atom,
-  the current value, and the new value.
-
-  Example:
-      (define x (atom 1))
-      (add-watch x :times-are-a-changin
-        (lambda [k a old new]
-                (println (str \"processing \" k))
-                (println (str \"old value: \" (inspect old)))
-                (println (str \"new value: \" (inspect new)))))"
-  {:added "1.0"}
-  [x k f]
-  (.? x (addWatch k f)))
-
-(define-function remove-watch
-  "Removes a watch (set by add-watch) from a reference"
-  {:added "1.0"}
-  [x k]
-  (.? x (removeWatch k)))
 
 (define-function compare-and-set!
   "Atomically sets the value of atom to newval if and only if the
@@ -350,21 +392,96 @@
       true)
     false))
 
-(define-function set-validator!
+(define-function swap!
+  "Swaps the the value of `x` with the return value of the function `f`
+  which receives the current value of `x` as it's single argument.
+  
+  Example:
+      (define x (atom 1))
+      (swap! x (lambda [val] (+ 1 val)))
+      (deref x) => 2"
   {:added "1.0"}
-  [x fn]
-  (.? x (setValidator fn)))
+  [x f]
+  (.? x (swap f)))
 
-(define-protocol IBlockingDeref
-  (deref
-    ([self]
-     (.deref self 3000 nil))
-    ([self timeout-ms timeout-val]
-     (let [t0 (.valueOf (js/Date.))]
-     (until (or (.-value self)
-                (<= timeout-ms (- (.valueOf (js/Date.)) t0)))
-            nil)
-     (or (.-value self) timeout-val)))))
+(define-type Var
+  [value meta]
+  IMeta
+  IRef
+  IDeref
+  (deref [self] (.get self))
+  (set [self value]
+    (.-set! self value value))
+  (get [self] (.-value self))
+  (isMacro [self]
+    (-> self .getMeta :macro))
+  (isClass [self]
+    (-> self .getMeta :type)))
+
+(define-function var?
+  [x]
+  (isa? x Var))
+
+(define-function get-var
+  [x]
+  (if (var? x)
+    (.get x)))
+
+(define-function set-var
+  [x val]
+  (if (var? x)
+    (.set x val)))
+
+(define-function macro?
+  [x]
+  (if (var? x) (.isMacro x)))
+
+(define-function class?
+  [x]
+  (if (var? x) (.isClass x)))
+
+(define-type Env
+  [id vars parent]
+  (extend [self]
+    (env self))
+  (lookup [self name]
+    (let [scope self]
+      (while scope
+        (if (.hasOwnProperty (.-vars scope) name)
+          scope
+          (set! scope (.-parent scope)))
+        scope)))
+  (get-var [self name]
+    (if-let [x (get (.-vars self) name)] x))
+;  (get-all [self]
+;    (let [buffer (array)
+;          scope self]
+;      (while scope
+;        (do-each [x (.-vars scope)]
+;           (if (.call (.. Object prototype hasOwnProperty) (first x))
+;             (.push buffer (second x))))
+;        (set! scope (.-parent scope)))
+;      (into '() buffer)))
+  (get [self name]
+    (.? (.get-var self name) get))
+  (set [self name value]
+    (if-let [scope (.lookup self name)]
+      (..? self (get-var name) (set value))
+      (throw (str "Undefined variable: '" name "'")))
+    value)
+  (define [self name value meta]
+    (do
+      (.-set! self vars (assoc (.-vars self) name (Var. value {})))
+      value)))
+
+(define env
+  (do
+    (define- id (atom 0))
+    (lambda
+      ([] (env nil))
+      ([parent]
+        (let [vars (if parent (.-vars parent) {})]
+          (Env. @(swap! id add1) vars parent))))))
 
 (define-protocol IPending
   (realized?
@@ -644,16 +761,6 @@
       pbnj.core/define-method)
    :added "1.0"}
   lambda)
-
-(define-macro if-not
-  ([pred conse] (list 'cond (list 'not pred) conse))
-  ([pred conse alt] (list 'cond (list 'not pred) conse :else alt)))
-
-(define-macro unless [pred &acts]
-  (list 'cond (list 'not pred) (cons 'do acts)))
-
-(define-macro not= [&values]
-  (list 'not (cons '= values)))
 
 (define-function fraction [n]
   (- n (Math/floor n)))

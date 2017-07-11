@@ -1612,6 +1612,9 @@ namespace pbnj.wonderscript {
       if (m == null) {
         throw new Error(['method "', ws.inspect(method), '" does not exist'].join(''));
       }
+      ws.pprint(exp);
+      console.log('obj: ', obj);
+      console.log('meth: ', m);
       return m.apply(obj);
     }
   };

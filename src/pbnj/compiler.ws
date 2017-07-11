@@ -1,16 +1,16 @@
 ; vim: ft=clojure
-(require "../jess.ws")
-(module pbnj.wonderscript)
+(require "jess.ws")
+(module pbnj.compiler)
 
 ; TODO: add module definitions
 ; TODO: add require support
 
 (define *js-root-object* (if (= *platform* :nodejs) 'global 'window))
 
-(define property-accessor? isPropertyAccessor)
-(define property-assignment? isPropertyAssignment)
-(define method-application? isMethodApplication)
-(define class-instantiation? isClassInstantiation)
+(define property-accessor? pbnj.wonderscript/isPropertyAccessor)
+(define property-assignment? pbnj.wonderscript/isPropertyAssignment)
+(define method-application? pbnj.wonderscript/isMethodApplication)
+(define class-instantiation? pbnj.wonderscript/isClassInstantiation)
 
 (define-function repl-pprint [exp]
   (pprint exp)
@@ -35,7 +35,7 @@
   (cons 'new (cons (ws->jess klass env) (map (lambda [x] (ws->jess x env)) args))))
 
 (define-function compile [exp]
-  (pbnj.jess/compile (ws->jess exp (pbnj/env))))
+  (pbnj.jess/compile (ws->jess exp (pbnj.wonderscript/env))))
 
 (define-function self-evaluating? [exp]
   (or (nil? exp) (number? exp) (boolean? exp) (string? exp) (date? exp) (regexp? exp)))
