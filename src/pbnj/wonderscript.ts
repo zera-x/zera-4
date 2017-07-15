@@ -245,6 +245,19 @@ namespace pbnj.wonderscript {
     }
   };
 
+  Env.prototype.importVars = function(env) {
+    var vars = env.vars;
+    var scope;
+    for (var name in vars) {
+      if (Object.prototype.hasOwnProperty.call(vars, name)) {
+        if ((scope = this.lookup(name)) && scope.parent) {
+          console.warn(['WARNING: ', name, ' exists in ', scope.getIdent(), ' it will be shadowed in this module'].join(''));
+        }
+        this.vars[name] = vars[name];
+      }
+    }
+  };
+
   Env.prototype.define = function(name, value, meta) {
     var sname = _.str(name);
     var meta = _.merge(_.hashMap(_.keyword('name'), _.symbol(sname), _.keyword('tag'), typeTag(value)), meta || _.hashMap());
@@ -489,16 +502,11 @@ namespace pbnj.wonderscript {
         }
       }
       else {
-        if (ns === 'js') {
-          return ROOT_OBJECT;
+        var mod = findModule(_.symbol(ns));
+        if (mod == null) {
+          return lookupVariable(_.symbol(ns));
         }
-        else {
-          var mod = findModule(_.symbol(ns));
-          if (mod == null) {
-            return lookupVariable(_.symbol(ns));
-          }
-          return mod;
-        }
+        return mod;
       }
     }
     throw new Error("variable should be a symbol");
@@ -1563,9 +1571,10 @@ namespace pbnj.wonderscript {
   var evalModuleSet = function(exp, env) {
     var name = _.second(exp);
     if (_.isSymbol(name)) {
-      var mod = findModule(name);
+      var mod = evalVariable(name, env);
       ws.MODULE_SCOPE = mod;
-      env.define('*module-name*', name);
+      //env.define('*module-name*', name);
+      env.importVars(mod["@@SCOPE@@"]);
     }
     else {
       throw new Error("module name should be a symbol");
@@ -1981,6 +1990,66 @@ namespace pbnj.wonderscript {
       defineVariable(globalEnv, _.symbol('js.node', name), eval(name));
     });
   }
+  defineModule(_.symbol('js'));
+  [
+    'Array',
+    'ArrayBuffer',
+    'Boolean',
+    'DataView',
+    'Date',
+    'Error',
+    'EvalError',
+    'Float32Array',
+    'Float64Array',
+    'Function',
+    'Infinity',
+    'Int32Array',
+    //'Int64Array',
+    'Int8Array',
+    //'InternalError',
+    'Intl',
+    'Intl.Collator',
+    'Intl.DateTimeFormat',
+    'JSON',
+    'Map',
+    'Math',
+    'NaN',
+    'Number',
+    'Object',
+    'Promise',
+    'Proxy',
+    'RangeError',
+    'ReferenceError',
+    'Reflect',
+    'RegExp',
+    'Set',
+    'String',
+    'Symbol',
+    'SyntaxError',
+    'TypeError',
+    //'TypedArray',
+    'URIError',
+    'Uint16Array',
+    'Uint32Array',
+    'Uint8Array',
+    'Uint8ClampedArray',
+    'WeakMap',
+    'WeakSet',
+    'decodeURI',
+    'decodeURIComponent',
+    'encodeURI',
+    'encodeURIComponent',
+    'eval',
+    'isFinite',
+    'isNaN',
+    'null',
+    'parseFloat',
+    'parseInt',
+    'undefined',
+    //'uneval'
+  ].forEach(function(name) {
+    defineVariable(globalEnv, _.symbol('js', name), eval(name));
+  });
   ws.readFile("src/pbnj/core.ws");
 
 } // namespace pbnj.wonderscript

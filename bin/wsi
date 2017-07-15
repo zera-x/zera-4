@@ -19,7 +19,7 @@ function appendHistory(exp) {
   fs.appendFileSync(HISTORY_FILE, [exp, "\n"].join(''));
 }
   
-if (process.argv.length === 3) {
+if (process.argv.length >= 3) {
   try {
     ws.readString('(module user)');
     ws.readFile([process.cwd(), process.argv[2]].join('/'));

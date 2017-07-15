@@ -2,13 +2,19 @@
 
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
 
+(define-protocol Exception)
+
+(define-type MacroException
+  [message]
+  Exception)
+
 (define-macro define-function
   "(define-function name doc-string? meta-map? arguments body)
   (define-function name doc-string? meta-map? (arguments body))"
   [name &forms]
   (if (symbol? name)
     nil
-    (throw (js/Error. "first argument of define-function should be a symbol")))
+    (throw (MacroException. "first argument of define-function should be a symbol")))
   (let [x (first forms)
         y (second forms)]
     (cond (and (string? x) (map? y))
@@ -20,7 +26,9 @@
           (or (vector? x) (list? x))
             (list 'define name (cons 'lambda forms))
           :else
-            (throw (js/Error. "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+            (throw
+              (MacroException.
+                "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
 
 (define-macro define-function-
   [name &forms]
@@ -355,39 +363,10 @@
   [x fn]
   (.? x (setValidator fn)))
 
-(define-protocol IBlockingDeref
-  (deref
-    ([self]
-     (.deref self 3000 nil))
-    ([self timeout-ms timeout-val]
-     (let [t0 (.valueOf (js/Date.))]
-     (until (or (.-value self)
-                (<= timeout-ms (- (.valueOf (js/Date.)) t0)))
-            nil)
-     (or (.-value self) timeout-val)))))
-
 (define-protocol IPending
   (realized?
     [self]
     (.-value self)))
-
-(define-type Promise
-  [value]
-  IDeref
-  IBlockingDeref
-  IPending
-  (-invoke
-    [self x]
-    (.-set! self value (first x))
-    self))
-
-(define-function promise
-  []
-  (Promise. nil))
-
-(define-function deliver
-  [promise value]
-  (promise value))
 
 (define-function realized?
   [x]
@@ -656,16 +635,16 @@
   (list 'not (cons '= values)))
 
 (define-function fraction [n]
-  (- n (Math/floor n)))
+  (- n (.floor js/Math n)))
 
 (define-function sign [n]
-  (if (number? n) (Math/sign n) 0))
+  (if (number? n) (.sign js/Math n) 0))
 
 (define-function positive? [n]
-  (= n (Math/abs n)))
+  (= n (.abs js/Math n)))
 
 (define-function negative? [n]
-  (not= n (Math/abs n)))
+  (not= n (.abs js/Math n)))
 
 (define-function integer? [n] (and (number? n) (= 0 (fraction n))))
 
@@ -675,21 +654,21 @@
 (define-function generate-int
   ([] (generate-int -100 100))
   ([min max]
-   (let [a (Math/ceil min)
-         b (Math/ceil max)]
-     (+ a (Math/floor (* (Math/random) (- b a)))))))
+   (let [a (.ceil js/Math min)
+         b (.ceil js/Math max)]
+     (+ a (.floor js/Math (* (.random js/Math) (- b a)))))))
 
 (define-function generate-nat
   ([] (generate-int 0 100))
   ([min max]
-   (let [a (Math/abs min)]
+   (let [a (.abs js/Math min)]
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
 (define-function generate-float
   ([] (generate-float 0 100))
   ([min max]
-   (+ (generate-int min max) (* (Math/random (- max min))))))
+   (+ (generate-int min max) (* (.random js/Math (- max min))))))
 
 (define-function generate-str
   ([] (generate-str 1 20))
@@ -802,6 +781,14 @@
   (if (= *target-language* :javascript)
     (cons 'do forms)))
 
+(define-macro for-platform
+  [&forms]
+  (cons 'case (cons '*platform* forms)))
+
+(define-macro for-language
+  [&forms]
+  (cons 'case (cons '*target-language* forms)))
+
 (define-function say
   "String concatenate `vals` and print to console
   with a new line at the end (depending on platform)."
@@ -878,3 +865,19 @@
        ""
        (.replace s pat val))))
 )
+
+(define-function json
+  [x]
+  (.parse js/JSON x))
+
+(define-macro promise
+  [binds &forms]
+  (cons 'js/Promise. (cons 'lambda (cons binds forms))))
+
+(define-macro >>
+  [x &forms]
+  (cons '..
+    (cons x
+          (map
+            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            forms))))

@@ -1,6 +1,49 @@
 ; vim: ft=clojure
 (module pbnj.core.system)
 
+(define Promise
+  (for-platform
+    :nodejs (js.node/require "bluebird")
+    :browser js/Promise))
+
+(define-macro promise
+  [binds &forms]
+  (cons 'Promise. (cons 'lambda (cons binds forms))))
+
+(define-macro >>
+  [x &forms]
+  (cons '..
+    (cons x
+          (map
+            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            forms))))
+
+(define-function fulfilled?
+  [x]
+  (.? x isFulfilled))
+
+(define-function rejected?
+  [x]
+  (.? x isRejected))
+
+(define-function pending?
+  [x]
+  (.? x isPending))
+
+(define-function canceled?
+  [x]
+  (.? x isCanceled?))
+
+(browser?
+  (define-function http-get
+    [url]
+    (promise [success failure]
+      (do-to (js/XMLHttpRequest.)
+        (.addEventListener "error" failure)
+        (.addEventListener "load" success)
+        (.open "GET" url)
+        (.send nil)))))
+
 (nodejs?
 
   (define
@@ -31,6 +74,8 @@
     exit process/exit)
 
   (define- *fs* (js.node/require "fs"))
+  (define- read-file (.promisify Promise (.-readFile *fs*)))
+  (define- write-file (.promisify Promise (.-readFile *fs*)))
 
   ;; TODO: Make a browser version of slurp and spit
 
@@ -38,13 +83,13 @@
     "Read entire contents of `file` to a string"
     {:added "1.0"}
     [file]
-    (-> (.readFileSync *fs* file) .toString))
+    (>> (read-file file) .toString))
 
   (define-function spit
     "Write `data` to `file`. Data can be a String, Buffer, or Uint8Array."
     {:added "1.0"}
     [file data]
-    (.writeFileSync *fs* file data) file)
+    (write-file file data))
 
   (define- *path* (js.node/require "path"))
 
