@@ -82,8 +82,10 @@
   (define-function slurp
     "Read entire contents of `file` to a string"
     {:added "1.0"}
-    [file]
-    (>> (read-file file) .toString))
+    [file &opts]
+    (if (= :sync (first opts))
+      (.readFileSync *fs* file)
+      (>> (read-file file) .toString)))
 
   (define-function spit
     "Write `data` to `file`. Data can be a String, Buffer, or Uint8Array."

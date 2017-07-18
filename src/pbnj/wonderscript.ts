@@ -1967,6 +1967,77 @@ namespace pbnj.wonderscript {
     }
   }
 
+  defineModule(_.symbol('js'));
+  [
+    'Array',
+    'ArrayBuffer',
+    'AsyncFunction',
+    'Atomics',
+    'Boolean',
+    'DataView',
+    'Date',
+    'Error',
+    'EvalError',
+    'Float32Array',
+    'Float64Array',
+    'Function',
+    'Generator',
+    'GeneratorFunction',
+    'Infinity',
+    'Int32Array',
+    'Int64Array',
+    'Int8Array',
+    'InternalError',
+    'Intl',
+    'Intl.Collator',
+    'Intl.DateTimeFormat',
+    'Intl.NumberFormat',
+    'JSON',
+    'Map',
+    'Math',
+    'NaN',
+    'Number',
+    'Object',
+    'Promise',
+    'Proxy',
+    'RangeError',
+    'ReferenceError',
+    'Reflect',
+    'RegExp',
+    'Set',
+    'String',
+    'Symbol',
+    'SyntaxError',
+    'TypeError',
+    'TypedArray',
+    'URIError',
+    'Uint16Array',
+    'Uint32Array',
+    'Uint8Array',
+    'Uint8ClampedArray',
+    'WeakMap',
+    'WeakSet',
+    'decodeURI',
+    'decodeURIComponent',
+    'encodeURI',
+    'encodeURIComponent',
+    'eval',
+    'isFinite',
+    'isNaN',
+    'null',
+    'parseFloat',
+    'parseInt',
+    'undefined',
+    'uneval',
+    'SIMD',
+    'WebAssembly',
+    'window'
+  ].forEach(function(name) {
+    if (ROOT_OBJECT[name]) {
+      defineVariable(globalEnv, _.symbol('js', name), eval(name));
+    }
+  });
+
   if (typeof exports !== 'undefined') {
     module.exports = ws;
     var mod = defineModule(_.symbol('js.node'));
@@ -1990,66 +2061,7 @@ namespace pbnj.wonderscript {
       defineVariable(globalEnv, _.symbol('js.node', name), eval(name));
     });
   }
-  defineModule(_.symbol('js'));
-  [
-    'Array',
-    'ArrayBuffer',
-    'Boolean',
-    'DataView',
-    'Date',
-    'Error',
-    'EvalError',
-    'Float32Array',
-    'Float64Array',
-    'Function',
-    'Infinity',
-    'Int32Array',
-    //'Int64Array',
-    'Int8Array',
-    //'InternalError',
-    'Intl',
-    'Intl.Collator',
-    'Intl.DateTimeFormat',
-    'JSON',
-    'Map',
-    'Math',
-    'NaN',
-    'Number',
-    'Object',
-    'Promise',
-    'Proxy',
-    'RangeError',
-    'ReferenceError',
-    'Reflect',
-    'RegExp',
-    'Set',
-    'String',
-    'Symbol',
-    'SyntaxError',
-    'TypeError',
-    //'TypedArray',
-    'URIError',
-    'Uint16Array',
-    'Uint32Array',
-    'Uint8Array',
-    'Uint8ClampedArray',
-    'WeakMap',
-    'WeakSet',
-    'decodeURI',
-    'decodeURIComponent',
-    'encodeURI',
-    'encodeURIComponent',
-    'eval',
-    'isFinite',
-    'isNaN',
-    'null',
-    'parseFloat',
-    'parseInt',
-    'undefined',
-    //'uneval'
-  ].forEach(function(name) {
-    defineVariable(globalEnv, _.symbol('js', name), eval(name));
-  });
+  
   ws.readFile("src/pbnj/core.ws");
 
 } // namespace pbnj.wonderscript

@@ -881,3 +881,11 @@
           (map
             (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
             forms))))
+
+(define-macro >>>
+  [x &forms]
+  (cons '..
+    (cons x
+          (map
+            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            forms))))

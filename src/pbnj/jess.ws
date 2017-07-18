@@ -57,6 +57,7 @@
     (let [tag (first exp)]
       (or (= tag 'var) (= tag 'let) (= tag 'const)))))
 
+; TODO: add declarator vector
 (define-function emit-definition [exp]
   (let [size (count exp)]
     (cond (= size 2)
