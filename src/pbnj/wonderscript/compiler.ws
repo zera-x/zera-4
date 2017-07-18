@@ -35,7 +35,7 @@
   (cons 'new (cons (ws->jess klass env) (map (lambda [x] (ws->jess x env)) args))))
 
 (define-function compile [exp]
-  (pbnj.jess/compile (ws->jess exp (pbnj/env))))
+  (pbnj.jess/compile (ws->jess exp (pbnj.wonderscript/env))))
 
 (define-function self-evaluating? [exp]
   (or (nil? exp) (number? exp) (boolean? exp) (string? exp) (date? exp) (regexp? exp)))

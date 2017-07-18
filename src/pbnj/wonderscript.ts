@@ -38,15 +38,15 @@ namespace pbnj.wonderscript {
   };
 
   ws.Atom = Atom;
-
+  
   /**
    * @constructor
    * @final
    */
-  function Var(name, value, meta) {
-    this.name = name;
+  function Var(value, meta) {
     this.value = value;
-    this.meta = meta;
+    this.meta = meta || _.hashMap();
+    this.notset = value == null ? true : false;
   }
 
   Var.prototype.getMeta = function() {
@@ -54,7 +54,13 @@ namespace pbnj.wonderscript {
   };
 
   Var.prototype.setValue = function(value) {
-    this.value = value;
+    if (this.notset || this.isDynamic()) {
+      this.value = value;
+      this.notset = false;
+    }
+    else {
+      console.warn("A Var can only be set once unless it has been tagged :dynamic");
+    }
     return this;
   };
   Var.prototype.set = Var.prototype.setValue;
@@ -64,10 +70,6 @@ namespace pbnj.wonderscript {
   };
   Var.prototype.get = Var.prototype.getValue;
   Var.prototype.deref = Var.prototype.getValue;
-
-  Var.prototype.getName = function() {
-    return this.value;
-  };
 
   Var.prototype.withMeta = function(meta) {
     this.meta = meta;
@@ -97,6 +99,10 @@ namespace pbnj.wonderscript {
 
   Var.prototype.isClass = function() {
     return this.meta && _.get(this.meta, _.keyword('type'));
+  };
+
+  Var.prototype.isDynamic = function() {
+    return this.meta && _.get(this.meta, _.keyword('dynamic'));
   };
 
   var VarMeta = _.hashMap(_.keyword('type'), true);
@@ -300,7 +306,7 @@ namespace pbnj.wonderscript {
       }
     }
 
-    this.vars[sname] = new Var(_.symbol(sname), value, _.merge(m, meta));
+    this.vars[sname] = new Var(value, _.merge(m, meta));
     return value;
   };
 
@@ -402,8 +408,8 @@ namespace pbnj.wonderscript {
     return new Env(parent);
   };
 
-  ws['var'] = function(name, value, meta) {
-    return new Var(name, value, meta);
+  ws['var'] = function(value, meta) {
+    return new Var(value, meta);
   };
 
   ws.isEnv = function(val) {
@@ -1174,9 +1180,13 @@ namespace pbnj.wonderscript {
       else if (args.length === 1) return eval(['-', args[0]].join(''));
       return eval(['(', args.join(')-('), ')'].join(''));
     }
-    else if (_.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
+    else if (_.equals(op, _.symbol('*'))) {
       if (args.length === 0) return 1;
       return eval(['(', args.join(')*('), ')'].join(''));
+    }
+    else if (_.equals(op, _.symbol('/'))) {
+      if (args.length === 0) return 1;
+      return eval(['(', args.join(')/('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('str'))) {
       if (args.length === 0) return '';
@@ -1266,7 +1276,7 @@ namespace pbnj.wonderscript {
       return evalClassInstantiation(newExp, env);
     }
     else if (_.isAssociative(op) || _.isKeyword(op) || _.isSet(op) || (isQuoted(op) && _.isSymbol(op_ = evalQuote(op)))) {
-      return op_.apply(null, args);
+      return (op_ || op).apply(null, args);
     }
 
     func = ws.eval(op, env, callstack);
@@ -1967,6 +1977,14 @@ namespace pbnj.wonderscript {
     }
   }
 
+  function symbolImporter(mod) {
+    return function(name) {
+      if (typeof ROOT_OBJECT[name] !== 'undefined') {
+        defineVariable(globalEnv, _.symbol(mod, name), eval(name));
+      }
+    }
+  }
+
   defineModule(_.symbol('js'));
   [
     'Array',
@@ -1989,9 +2007,6 @@ namespace pbnj.wonderscript {
     'Int8Array',
     'InternalError',
     'Intl',
-    'Intl.Collator',
-    'Intl.DateTimeFormat',
-    'Intl.NumberFormat',
     'JSON',
     'Map',
     'Math',
@@ -2031,16 +2046,15 @@ namespace pbnj.wonderscript {
     'uneval',
     'SIMD',
     'WebAssembly',
-    'window'
-  ].forEach(function(name) {
-    if (ROOT_OBJECT[name]) {
-      defineVariable(globalEnv, _.symbol('js', name), eval(name));
-    }
-  });
+    'window',
+    'document',
+    'location',
+    'localStorage'
+  ].forEach(symbolImporter('js'));
 
   if (typeof exports !== 'undefined') {
     module.exports = ws;
-    var mod = defineModule(_.symbol('js.node'));
+    defineModule(_.symbol('js.node'));
     [
       'Buffer',
       '__dirname',
@@ -2057,11 +2071,138 @@ namespace pbnj.wonderscript {
       'setImmediate',
       'setInterval',
       'setTimeout'
-    ].forEach(function(name) {
-      defineVariable(globalEnv, _.symbol('js.node', name), eval(name));
+    ].forEach(symbolImporter('js.node'))
+    ws.readFile("src/pbnj/core.ws");
+  }
+
+  if (typeof document !== 'undefined') {
+    defineModule(_.symbol('js.dom'));
+    [
+      'Attr',
+      'ByteString',
+      'CDATASection',
+      'CharacterData',
+      'ChildNode',
+      'CSSPrimitiveValue',
+      'CSSValue',
+      'CSSValueList',
+      'Comment',
+      'CustomEvent',
+      'Document',
+      'DocumentFragment',
+      'DocumentType',
+      'DOMError',
+      'DOMException',
+      'DOMImplmentation',
+      'DOMString',
+      'DOMTimeStamp',
+      'DOMStringList',
+      'DOMTokenList',
+      'Element',
+      'Event',
+      'EventTarget',
+      'MutationObserver',
+      'MutationRecord',
+      'Node',
+      'NodeFilter',
+      'NodeIterator',
+      'NodeList',
+      'ParentNode',
+      'ProcessingInstruction',
+      'Range',
+      'Text',
+      'TreeWalker',
+      'URL',
+      'Window',
+      'Worker',
+      'XMLDocument',
+      'HTMLAnchorElement',
+      'HTMLAreaElement',
+      'HTMLAudioElement',
+      'HTMLBaseElement',
+      'HTMLBodyElement',
+      'HTMLBREElement',
+      'HTMLButtonElement',
+      'HTMLCanvasElement',
+      'HTMLDataElement',
+      'HTMLDataListElement',
+      'HTMLDialogElement',
+      'HTMLDivElement',
+      'HTMLDListElement',
+      'HTMLEmbedElement',
+      'HTMLFieldSetElement',
+      'HTMLFontElement',
+      'HTMLFormElement',
+      'HTMLFrameSetElement',
+      'HTMLHeadElement',
+      'HTMLHtmlElement',
+      'HTMLHRElement',
+      'HTMLIFrameElement',
+      'HTMLImageElement',
+      'HTMLInputElement',
+      'HTMLKeygenElement',
+      'HTMLLabelElement',
+      'HTMLLIElement',
+      'HTMLLinkElement',
+      'HTMLMapElement',
+      'HTMLMediaElement',
+      'HTMLMetaElement',
+      'HTMLMeterElement',
+      'HTMLModElement',
+      'HTMLObjectElement',
+      'HTMLOListElement',
+      'HTMLOptGroupElement',
+      'HTMLOptionElement',
+      'HTMLOutputElement',
+      'HTMLParagraphElement',
+      'HTMLParamElement',
+      'HTMLPreElement',
+      'HTMLProgressElement',
+      'HTMLQuoteElement',
+      'HTMLScriptElement',
+      'HTMLSelectElement',
+      'HTMLSourceElement',
+      'HTMLSpanElement',
+      'HTMLStyleElement',
+      'HTMLTableElement',
+      'HTMLTableCaptionElement',
+      'HTMLTableCellElement',
+      'HTMLTableDataCellElement',
+      'HTMLTableHeaderCellElement',
+      'HTMLTableColElement',
+      'HTMLTableRowElement',
+      'HTMLTableSectionElement',
+      'HTMLTextAreaElement',
+      'HTMLTimeElement',
+      'HTMLTitleElement',
+      'HTMLTrackElement',
+      'HTMLUListElement',
+      'HTMLUnknownElement',
+      'HTMLVideoElement',
+      'CanvasRenderingContext2D',
+      'CanvasGradient',
+      'CanvasPattern',
+      'TextMetrics',
+      'ImageData',
+      'CanvasPixelArray',
+      'NotifyAudioAvailableEvent',
+      'HTMLFormControlsCollection',
+      'HTMLOptionsCollection',
+      'DOMStringMap',
+      'RadioNodeList',
+      'MediaError'
+    ].forEach(symbolImporter('js.dom'));
+
+    var scripts = document.getElementsByTagName('script');
+    var wscode  = [];
+    for (var i = 0; i < scripts.length; i++) {
+      if (scripts[i].type == "text/wonderscript") {
+        wscode.push(scripts[i].text);
+      }
+    }
+    wscode.forEach(function(code) {
+      ws.readString(code);
     });
   }
-  
-  ws.readFile("src/pbnj/core.ws");
 
 } // namespace pbnj.wonderscript

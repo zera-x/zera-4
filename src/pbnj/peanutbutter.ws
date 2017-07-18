@@ -85,9 +85,7 @@
 (define-function get-component
   {:memoize true}
   [exp]
-  (let [v    (eval (list 'var exp))
-        meta (.? v getMeta)]
-    (if (meta :peanutbutter/component) (.getValue v) nil)))
+  (-> exp var .getMeta :peanutbutter/component))
 
 (define-function component?
   [exp]
@@ -112,7 +110,7 @@
 (define-function block? [exp]
   (and (list? exp) (= (first exp) 'do)))
 
-(define *top-scope* (pbnj/env))
+(define *top-scope* (pbnj.wonderscript/env))
 (define-function eval-block [&body]
   (let [ret nil]
     (do-each [x body]
