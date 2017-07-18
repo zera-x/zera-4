@@ -56,7 +56,7 @@
   "define a private variable (it cannot be seen outside of the module scope)."
   ([nm] (list 'define :private nm))
   ([nm value] (list 'define :private nm value))
-  ([meta nm value] (list 'define (assoc meta :private true) nm value)))
+  ([meta nm value] (list 'define (if (keyword? meta) {meta true :private true} (assoc meta :private true)) nm value)))
 
 (define-macro let [bindings &body]
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
@@ -390,14 +390,14 @@
 (define-function sub1 [n] (- 1 n))
 
 (do
-  (define- sym-count (atom 0))
+  (define- :dynamic sym-count 0)
   (define-function gen-sym 
     "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
     {:added "1.0"}
     ([] (pbnj.core/gen-sym "$sym")) ;; FIXME: this should work without fully qualified name
     ([prefix]
-     (let [sym (symbol (str prefix "-" @sym-count))]
-       (swap! sym-count add1)
+     (let [sym (symbol (str prefix "-" sym-count))]
+       (set! sym-count (add1 sym-count))
        sym))))
 
 ;; ---------------------------- meta data ------------------------------ ;;
@@ -406,27 +406,27 @@
   (lambda [] pbnj.wonderscript/MODULE_SCOPE))
 
 (define current-module-name
-  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@NAME@@"))))
+  (lambda [] (module-name pbnj.wonderscript/MODULE_SCOPE)))
 
 (define current-module-scope
-  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@SCOPE@@"))))
+  (lambda [] (module-scope pbnj.wonderscript/MODULE_SCOPE)))
 
-(define-macro var
-  "Return the named Variable object"
-  ([nm]
-   (let [ns (namespace nm)
-         sname (name nm)]
-    (if ns
-      (list 'var (symbol sname) (list '.- (symbol ns) "@@SCOPE@@"))
-      (list 'or
-            (list 'var nm '*scope*)
-            (list 'var nm (list '.- (current-module-name) "@@SCOPE@@"))
-            (list 'var nm (list '.- 'pbnj.core "@@SCOPE@@"))))))
-  ([nm scope]
-   (list '..?
-         scope
-         (list 'lookup (list 'str (list 'quote nm)))
-         (list 'getObject (list 'str (list 'quote nm))))))
+;(define-macro var
+;  "Return the named Variable object"
+;  ([nm]
+;   (let [ns (namespace nm)
+;         sname (name nm)]
+;    (if ns
+;      (list 'var (symbol sname) (list '.- (symbol ns) "@@SCOPE@@"))
+;      (list 'or
+;            (list 'var nm '*scope*)
+;            (list 'var nm (list '.- (current-module-name) "@@SCOPE@@"))
+;            (list 'var nm (list '.- 'pbnj.core "@@SCOPE@@"))))))
+;  ([nm scope]
+;   (list '..?
+;         scope
+;         (list 'lookup (list 'str (list 'quote nm)))
+;         (list 'getObject (list 'str (list 'quote nm))))))
 
 (define-function var-set
   [x value]
@@ -796,7 +796,7 @@
    :added "1.0"}
   [&vals]
   (javascript?
-    (console/log (apply str vals))))
+    (.log js/console (apply str vals))))
 
 (define-function broken
   []
@@ -817,9 +817,9 @@
    :added "1.0"}
   [&vals]
   (nodejs?
-    (.write process/stdout (apply str vals)))
+    (.write (.-stdout js.node/process) (apply str vals)))
   (browser?
-    (console/log (apply str vals))))
+    (.log js/console (apply str vals))))
 
 (nodejs?
 
@@ -827,19 +827,19 @@
     {:doc ""
      :platforms #{:nodejs}
      :added "1.0"}
-    *operating-system* process/platform)
+    *operating-system* (.-platform js.node/process))
   
   (define 
     {:doc "A map of environment variables"
      :platforms #{:nodejs}
      :added "1.0"}
-    *env* (object->map process/env))
+    *env* (object->map (.-env js.node/process)))
 
   (define
     {:doc "A vector of command line arguments"
      :platforms #{:nodejs}
      :added "1.0"}
-    *argv* (array->vector (.slice process/argv 2)))
+    *argv* (array->vector (.slice (.-argv js.node/process) 2)))
 )
 
 (javascript?

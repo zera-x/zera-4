@@ -8,7 +8,7 @@ const ws = require('../src/pbnj/wonderscript.js');
 const HISTORY_FILE = process.cwd() + '/.wsi-history';
 
 function currentModuleName() {
-  return ws.MODULE_SCOPE["@@NAME@@"];
+  return ws.MODULE_SCOPE.getName();
 }
 
 function loadHistory() {
