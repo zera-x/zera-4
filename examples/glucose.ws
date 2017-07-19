@@ -1,8 +1,10 @@
 ; vim: ft=clojure
+(module examples.glucose)
+
 (require "../src/pbnj/honey.ws")
 (require "../src/pbnj/http-service.ws")
 (require "../src/pbnj/peanutbutter.ws")
-(module glucose)
+
 (use pbnj.honey)
 
 (define- html pbnj.peanutbutter/compile)

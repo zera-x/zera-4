@@ -390,14 +390,14 @@
 (define-function sub1 [n] (- 1 n))
 
 (do
-  (define- :dynamic sym-count 0)
+  (define- sym-count (atom 0))
   (define-function gen-sym 
     "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
     {:added "1.0"}
-    ([] (pbnj.core/gen-sym "$sym")) ;; FIXME: this should work without fully qualified name
+    ([] (gen-sym "$sym"))
     ([prefix]
-     (let [sym (symbol (str prefix "-" sym-count))]
-       (set! sym-count (add1 sym-count))
+     (let [sym (symbol (str prefix "-" @sym-count))]
+       (swap! sym-count add1)
        sym))))
 
 ;; ---------------------------- meta data ------------------------------ ;;
@@ -410,23 +410,6 @@
 
 (define current-module-scope
   (lambda [] (module-scope pbnj.wonderscript/MODULE_SCOPE)))
-
-;(define-macro var
-;  "Return the named Variable object"
-;  ([nm]
-;   (let [ns (namespace nm)
-;         sname (name nm)]
-;    (if ns
-;      (list 'var (symbol sname) (list '.- (symbol ns) "@@SCOPE@@"))
-;      (list 'or
-;            (list 'var nm '*scope*)
-;            (list 'var nm (list '.- (current-module-name) "@@SCOPE@@"))
-;            (list 'var nm (list '.- 'pbnj.core "@@SCOPE@@"))))))
-;  ([nm scope]
-;   (list '..?
-;         scope
-;         (list 'lookup (list 'str (list 'quote nm)))
-;         (list 'getObject (list 'str (list 'quote nm))))))
 
 (define-function var-set
   [x value]
@@ -553,16 +536,16 @@
   "Return the scope of the named module."
   [mod]
   (if (symbol? mod)
-    (.- (eval mod) (symbol "@@SCOPE@@"))
-    (.- mod (symbol "@@SCOPE@@"))))
+    (-> (eval mod) .getScope)
+    (.getScope mod)))
 
 (define-function tests
   "Collect all the tests in the given module, if no module us specified
   the tests from the current module are returned."
-  ([] (tests (current-module)))
+  ([] (tests *module*))
   ([mod]
-   (->> (module-scope mod)
-        .getObjects
+   (->> (module-vars mod)
+        (map second)
         (map meta)
         (filter :test)
         (map :test))))

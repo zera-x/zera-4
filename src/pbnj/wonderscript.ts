@@ -511,9 +511,9 @@ namespace pbnj.wonderscript {
     if (_.isSymbol(sym)) {
       var name = _.name(sym);
       var ns = _.namespace(sym);
+      var scope;
       if (ns === null) {
-        scope = env.lookup(name);
-        if (scope === null) {
+        if ((scope = env.lookup(name)) == null) {
           if ((scope = ws.MODULE_SCOPE.lookup(name)) == null) {
             if ((scope = ws.DEFAULT_MODULE.lookup(name)) == null) {
               return null;
@@ -555,8 +555,9 @@ namespace pbnj.wonderscript {
       // define value in module scope
       var mod = ns == null ? ws.MODULE_SCOPE : Module.get(_.symbol(ns));
       if (!mod) throw new Error(["module ", ns ," is undefined"].join(''));
-      meta = _.assoc(meta, _.keyword('module'), mod.getName());
+      meta = _.assoc(meta, _.keyword('module-name'), mod.getName());
       mod.define(name, value, meta);
+      env.define(name, value, meta);
     }
     return env;
   };
@@ -1285,6 +1286,8 @@ namespace pbnj.wonderscript {
       return func['-invoke'](args);
     }
     else {
+      console.log('exp: ', ws.inspect(exp));
+      console.log('env: ', env.toString());
       console.log('func value: ', func);
       throw new Error(["'", ws.inspect(op), "' is not a function"].join(''));
     }
@@ -1292,6 +1295,7 @@ namespace pbnj.wonderscript {
 
   var isBlock = ws.isBlock = makeTagPredicate(_.symbol('do'));
 
+  // FIXME: module scoped vars defined within a block are not accessible within a block unless they are fully qualified
   var evalBlock = function(exp, env) {
     var body = _.rest(exp);
     var scope = env.extend().setIdent('do');
@@ -1505,7 +1509,7 @@ namespace pbnj.wonderscript {
   ws.Module = Module;
 
   Module.cache = {};
-  Module.create = function(name) {
+  Module.intern = function(name) {
     if (!Module.cache[name]) {
       var mod = new Module(name);
       mod.importJSModule(mod.extern(ROOT_OBJECT));
@@ -1603,7 +1607,7 @@ namespace pbnj.wonderscript {
   };
 
   var defineModule = function(name) {
-    var mod = Module.create(name);
+    var mod = Module.intern(name);
     mod.export(ROOT_OBJECT);
     ws.MODULE_SCOPE = mod;
     globalEnv.define(name, mod, _.hashMap(_.keyword('module'), true));
@@ -2141,8 +2145,12 @@ namespace pbnj.wonderscript {
       'require',
       'setImmediate',
       'setInterval',
-      'setTimeout'
+      'setTimeout',
+      'require',
+      'module',
+      'exports',
     ].forEach(symbolImporter(node))
+    node.define('require', require, _.hashMap(_.keyword('imported'), true));
     ws.readFile("src/pbnj/core.ws");
   }
 
