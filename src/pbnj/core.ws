@@ -8,32 +8,6 @@
   [message]
   Exception)
 
-(define-macro define-function
-  "(define-function name doc-string? meta-map? arguments body)
-  (define-function name doc-string? meta-map? (arguments body))"
-  [name &forms]
-  (if (symbol? name)
-    nil
-    (throw (MacroException. "first argument of define-function should be a symbol")))
-  (let [x (first forms)
-        y (second forms)]
-    (cond (and (string? x) (map? y))
-            (list 'define (assoc y :doc x) name (cons 'lambda (rest (rest forms))))
-          (string? x)
-            (list 'define {:doc x} name (cons 'lambda (rest forms)))
-          (map? x)
-            (list 'define x name (cons 'lambda (rest forms)))
-          (or (vector? x) (list? x))
-            (list 'define name (cons 'lambda forms))
-          :else
-            (throw
-              (MacroException.
-                "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
-
-(define-macro define-function-
-  [name &forms]
-  (list 'define :private name (cons 'lambda forms)))
-
 (define-macro comment [&forms] nil)
 
 (define-macro if
@@ -42,15 +16,6 @@
 
 (define-macro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
-
-(define-macro case
-  "(case a
-     5 \"a is 5\"
-     6 \"a is 6\"
-     :else \"a is not 5 or 6\")"
-  [value &rules]
-  (cons 'cond (->> (partition 2 rules)
-                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
 (define-macro define-
   "define a private variable (it cannot be seen outside of the module scope)."
@@ -79,6 +44,34 @@
    (let [and* (first forms)]
      (list 'if and* (cons 'and (rest forms)) and*))))
 
+(define-macro define-function
+  "(define-function name doc-string? meta-map? arguments body)
+  (define-function name doc-string? meta-map? (arguments body))"
+  [name &forms]
+  (if (symbol? name)
+    nil
+    (do
+      (println *scope*)
+      (throw (MacroException. (str "first argument of define-function should be a symbol, got: " (inspect name))))))
+  (let [x (first forms)
+        y (second forms)]
+    (cond (and (string? x) (map? y))
+            (list 'define (assoc y :doc x) name (cons 'lambda (rest (rest forms))))
+          (string? x)
+            (list 'define {:doc x} name (cons 'lambda (rest forms)))
+          (map? x)
+            (list 'define x name (cons 'lambda (rest forms)))
+          (or (vector? x) (list? x))
+            (list 'define name (cons 'lambda forms))
+          :else
+            (throw
+              (MacroException.
+                "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+
+(define-macro define-function-
+  [name &forms]
+  (list 'define :private name (cons 'lambda forms)))
+
 (define-macro .?
   ([obj method]
    (list '.? obj method nil))
@@ -99,14 +92,6 @@
   ([x form] (list '.- x form))
   ([x form &more] (cons '..- (cons (list '.- x form) more))))
 
-(define-macro defined?
-  [sym]
-    (let [ns (namespace sym)
-                nm (name sym)]
-          (list 'if ns
-                (list '.- (list 'symbol ns) (list 'symbol nm))
-                (list '.? (list 'current-module-scope) (list 'lookup (list 'symbol nm))))))
-
 (define-macro do-to
   "Take an object `x` and perform (presumably) mutation operations `forms` on it.
   The expression evaluates to the object.
@@ -121,12 +106,12 @@
   (let [obj (gen-sym "$obj")]
     (cons 'let
             (cons [obj x]
-                  (concat (map (lambda [form] (cons (first form) (cons obj (rest form)))) forms)
+                  (concat (map (lambda [x] (cons (first x) (cons obj (rest x)))) forms)
                           (list obj))))))
 
 (define-macro do-times
   [bindings &body]
-  (if-not (and (vector? bindings) (= (count bindings) 2))
+  (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
   (let [var (bindings 0)
         init (bindings 1)]
@@ -138,18 +123,16 @@
 
 (define-macro do-each
   [bindings &body]
-  (if-not (and (vector? bindings) (= (count bindings) 2))
+  (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
   (let [var (bindings 0)
-        col (bindings 1)
-        init (gen-sym "$init")
-        col-nm (gen-sym "$col")]
-    (list 'let [init col]
-    (list 'loop [var (list 'first init) col-nm (list 'rest init)]
+        col (bindings 1)]
+    (list 'let ['init col]
+      (list 'loop [var '(first init) 'col-nm '(rest init)]
           (cons 'when
                 (cons var
-                      (concat body [(list 'again (list 'first col-nm) (list 'rest col-nm))])))
-          init))))
+                      (concat body ['(again (first col-nm) (rest col-nm))])))
+          'init))))
 
 (define-macro while
   [pred &body]
@@ -182,6 +165,15 @@
                        (list (first form) (first (rest form)) x*)
                        (list form x*))]
         (again threaded (rest forms*))))))
+
+(define-macro case
+  "(case a
+     5 \"a is 5\"
+     6 \"a is 6\"
+     :else \"a is not 5 or 6\")"
+  [value &rules]
+  (cons 'cond (->> (partition 2 rules)
+                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
 (define-function prototype
   [x]
@@ -410,6 +402,14 @@
 
 (define current-module-scope
   (lambda [] (module-scope pbnj.wonderscript/MODULE_SCOPE)))
+
+(define-macro defined?
+  [sym]
+    (let [ns (namespace sym)
+                nm (name sym)]
+          (list 'if ns
+                (list '.- (list 'symbol ns) (list 'symbol nm))
+                (list '.? (list 'current-module-scope) (list 'lookup (list 'symbol nm))))))
 
 (define-function var-set
   [x value]

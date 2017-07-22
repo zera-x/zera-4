@@ -527,7 +527,18 @@ namespace pbnj.wonderscript {
         }
       }
       else {
-        return Module.get(_.symbol(ns)).getScope();
+        if (scope = lookupVariable(_.symbol(ns), env)) {
+          var val = scope.get(ns);
+          if (ws.isModule(val)) {
+            return val.getScope();
+          }
+          else {
+            return null;
+          }
+        }
+        else {
+          return Module.get(_.symbol(ns)).getScope();
+        }
       }
     }
     throw new Error("variable should be a symbol");
@@ -538,7 +549,9 @@ namespace pbnj.wonderscript {
     var name = _.name(exp);
     var scope = lookupVariable(exp, env);
     if (scope === null) throw new Error(["Undefined variable: '", exp, "'"].join(''));
-    return scope.getObject(name).getValue();
+    var v = scope.getObject(name)
+    //if (v.isMacro()) throw new Error(["Can't take macro as a value: (var ", exp, ")"].join(''));
+    return v.getValue();
   };
 
   var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('define'));
@@ -783,6 +796,9 @@ namespace pbnj.wonderscript {
       var that = this;
       var vars = _.reduce(function(s, x) { return [s, ', ', x].join('') },
                     _.map(function(x) { return [x, ': ', ws.inspect(that[x])].join('') }, names));
+      if (names.length === 0) {
+        return ["#<", name, ">"].join('');
+      }
       return ["#<", name, " ",  vars, ">"].join('');
     };
 
@@ -856,6 +872,62 @@ namespace pbnj.wonderscript {
 
   var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
 
+  var validateVariables = function(body, scope) {
+    var exp_, exp, list = body;
+    while(exp = _.first(list)) {
+      var sexp = '' + exp;
+      if (_.isSymbol(exp) && !(_.has(ws.TAGGED_SPECIAL_FORMS, exp) || sexp.endsWith('.') || sexp.startsWith('.') || sexp.startsWith('.-'))) {
+        var val = evalVariable(exp, scope);
+        scope.define(exp, val, _.hashMap(_.keyword('dynamic'), true));
+      }
+      else if (_.isList(exp)) {
+        exp_ = macroexpand(exp);
+        if (isDefinition(exp_)) {
+          //console.log('def');
+          scope.define(_.second(_.rest(exp_)), null, _.hashMap(_.keyword('dynamic'), true));
+        }
+        else if (isBlock(exp_)) {
+          //console.log('block');
+          validateVariables(_.rest(exp_), scope);
+        }
+        else if (isLoop(exp_)) {
+          //console.log('loop');
+          var names = _.map(_.first, _.partition(2, _.second(exp_)));
+          _.each(names, function(name) {
+            scope.extend().define(name, null, _.hashMap(_.keyword('dynamic'), true));
+          });
+        }
+        else if (isLambda(exp_)) {
+          var names = _.second(exp_);
+          if (_.isList(names)) {
+            names = _.mapcat(_.first, _.rest(exp_));
+          }
+          _.each(names, function(name) {
+            scope.extend().define(name, null, _.hashMap(_.keyword('dynamic'), true));
+          });
+        }
+        else if (isPropertyAccessor(exp_)) {
+          // skip
+        }
+        else if (isPropertyAssignment(exp_)) {
+          // skip
+        }
+        else {
+          //validateVariables(exp_, scope);
+        }
+      }
+      else if (_.isVector(exp) || _.isSet(exp)) {
+        validateVariables(exp, scope);
+      }
+      else if (_.isMap(exp)) {
+        validateVariables(_.keys(exp), scope);
+        validateVariables(_.vals(exp), scope);
+      }
+      list = _.rest(list);
+    }
+    return body;
+  };
+
   var lambdaID = 0;
   var Lambda = makeType('Lambda', _.hashMap(), function Lambda(exp, env, callstack) {
     var id, rest, names, argCount, bodies, i, fn, exprs, args, body, sum, keys, arities;
@@ -874,16 +946,23 @@ namespace pbnj.wonderscript {
     argCount = 0;
     bodies = {};
 
+    this.scope = env.extend().setIdent(id).initStash();
+
     if (_.isVector(names)) {
       argCount = _.count(names);
       for (var i = 0; i < argCount; i++) {
-        var sname = '' + _.nth(names, i);
+        var name  = _.nth(names, i);
+        var sname = '' + name;
         if (sname[0] === '&') {
           argCount = (argCount - 1) * -1;
+          //this.scope.define(_.symbol(sname.slice(1)));
+        }
+        else {
+          //this.scope.define(name);
         }
       }
       bodies[argCount] = {arity: argCount, args: names, code: _.rest(rest)};
-      var body = bodies[argCount].body;
+      var body = bodies[argCount].code;
     }
     else if (_.isList(names)) {
       exprs = rest;
@@ -892,11 +971,15 @@ namespace pbnj.wonderscript {
         body = _.rest(fn);
         sum = 0;
         for (i = 0; i < args.length; i++) {
-          if (('' + args[i])[0] === '&') {
-            sum = (sum + 1) * -1
+          var name = args[i];
+          var sname = '' + name;
+          if (sname[0] === '&') {
+            sum = (sum + 1) * -1;
+            //this.scope.define(_.symbol(sname.slice(1)));
           }
           else {
             sum++;
+            //this.scope.define(name);
           }
         }
         bodies[sum] = {arity: sum, args: args, code: body};
@@ -925,7 +1008,6 @@ namespace pbnj.wonderscript {
       return argCount;
     };
     this.length = argCount;
-    this.scope = env.extend().setIdent(id).initStash();
     this.toString = function() {
       return ws.inspect(exp);
     };
@@ -1343,6 +1425,7 @@ namespace pbnj.wonderscript {
     _.symbol('new'),
     _.symbol('module'),
     _.symbol('require'),
+    _.symbol('loop'),
     _.symbol('use')
   ]);
 
@@ -1409,6 +1492,8 @@ namespace pbnj.wonderscript {
   };
 
   var isMacro = ws.isMacro = ws['macro?'] = function(name) {
+    var sname = ('' + name);
+    if (sname.endsWith('.') || sname.startsWith('.')) return null;
     var scope = lookupVariable(name);
     return getMacro(scope, name);
   };
@@ -1521,7 +1606,6 @@ namespace pbnj.wonderscript {
   Module.get = function(name) {
     if (Module.cache[name]) return Module.cache[name];
     var obj = globalEnv.getObject(name);
-    console.log(obj);
     var meta = obj.getMeta();
     if (meta && _.get(meta, _.keyword('module')) === true) {
       Module.cache[name] = obj.getValue();
@@ -1591,6 +1675,13 @@ namespace pbnj.wonderscript {
         }
       }
       return true;
+    }
+  };
+
+  ws.isModule = ws['module?'] = function(mod) {
+    if (mod == null) return false;
+    else {
+      return mod instanceof Module;
     }
   };
 
