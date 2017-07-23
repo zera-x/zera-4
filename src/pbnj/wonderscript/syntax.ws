@@ -196,19 +196,29 @@
 (define-type Lambda
   [arglists bodies]
   Syntax
-  (toJS
-    [self]
-    (let [xs (zipmap (.-arglists self) (.-bodies self))]
-      (join
-        (concat
-          (map-indexed
-            (lambda [i x]
-               (let [args (x 0)
-                     body (x 1)
-                     kw (if (= i 0) "if" "else if")]
-                 (str kw " (arguments.length === " (count args) "){ return " (.toJS body) "; }"))) xs)
-          ["else { throw new Error('wrong number of arguments') }"])
-        "\n"))))
+  (toJS [self] (lambda->js (.-arglists self) (.-bodies self))))
+
+(define-function lambda-bodies->js
+  [args body]
+  (p args)
+  (p body)
+  (str (.toJS args) " " (.toJS body)))
+
+
+(define-function lambda->js
+  [arglists bodies]
+  (->> (zipmap arglists bodies)
+       (map (lambda [x] (apply lambda-bodies->js x)))))
+;    (join
+;      (concat
+;        (map-indexed
+;          (lambda [i x]
+;            (let [args (x 0)
+;                  body (x 1)
+;                  kw (if (= i 0) "if" "else if")]
+;              (str kw " (arguments.length === " (count args) "){ return " (.toJS body) "; }"))) xs)
+;        ["else { throw new Error('wrong number of arguments') }"])
+;      "\n")))
 
 ;(define-function lambda?
 ;  [x]

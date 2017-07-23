@@ -24,6 +24,13 @@ namespace pbnj.wonderscript {
   ROOT_OBJECT.pbnj.core = _;
   ROOT_OBJECT.pbnj.reader = pbnj.reader;
 
+  // Exceptions
+  //
+
+  function UndefinedVariableException(ident) {
+    this.message = ["Undefined variable: '", ident, "'"].join('');
+  }
+
   // types
   //
 
@@ -189,7 +196,7 @@ namespace pbnj.wonderscript {
     if (name in this.vars) {
       return this.vars[name];
     }
-    throw new Error(_.str("Undefined variable: '", name, "'"));
+    throw new Error(_.str("Undefined variable: '", name, "' in Env: ", this.id));
   };
 
   Env.prototype.getObjects = function() {
@@ -428,8 +435,8 @@ namespace pbnj.wonderscript {
   };
 
   ws['var'] = function(name, env) {
-    var env = env || lookupVariable(name, env);
-    return env.getObject(name);
+    var env = env || globalEnv;
+    return ws.lookupVar(name, env);
   };
 
   ws.isEnv = function(val) {
@@ -545,12 +552,35 @@ namespace pbnj.wonderscript {
   };
   ws.lookupVariable = lookupVariable;
 
+  ws.lookupVar = function(ident, env) {
+    var scope, sym;
+    if (isFullyQualified(ident)) {
+      scope = globalEnv.lookup(ident);
+      sym = ident;
+    }
+    else {
+      if (scope = env.lookup(ident)) {
+        sym = ident;
+      }
+      else {
+        sym = qualifySymbol(ident);
+        scope = globalEnv.lookup(sym);
+        if (scope === null) {
+          sym = _.symbol("pbnj.core", ident)
+          scope = globalEnv.lookup(sym);
+        }
+      }
+    }
+
+    if (scope === null) throw new UndefinedVariableException(ident);
+    else {
+      return scope.getObject(sym);
+    }
+  };
+
   var evalVariable = function(exp, env) {
-    var name = _.name(exp);
-    var scope = lookupVariable(exp, env);
-    if (scope === null) throw new Error(["Undefined variable: '", exp, "'"].join(''));
-    var v = scope.getObject(name)
-    //if (v.isMacro()) throw new Error(["Can't take macro as a value: (var ", exp, ")"].join(''));
+    var v = ws.lookupVar(exp, env);
+    if (v.isMacro()) throw new Error(["Can't take macro as a value: (var '", exp, ")"].join(''));
     return v.getValue();
   };
 
@@ -568,13 +598,33 @@ namespace pbnj.wonderscript {
       // define value in module scope
       var mod = ns == null ? ws.MODULE_SCOPE : Module.get(_.symbol(ns));
       if (!mod) throw new Error(["module ", ns ," is undefined"].join(''));
-      meta = _.assoc(meta, _.keyword('module-name'), mod.getName());
-      mod.define(name, value, meta);
-      env.define(name, value, meta);
+      //mod.define(name, value, meta);
+      //env.define(name, value, meta);
+      var qualified = qualifySymbol(ident);
+      ws.pprint(qualified);
+      meta = _.assoc(meta, _.keyword('namespace'), Module.get(_.symbol(_.namespace(qualified))));
+      globalEnv.define(qualified, value, meta);
     }
     return env;
   };
   ws.defineVariable = defineVariable;
+
+  var qualifySymbol = function(sym) {
+    var ns   = _.namespace(sym);
+    var name = _.name(sym);
+    if (ns) {
+      return sym;
+    }
+    else {
+      return _.symbol(ws.MODULE_SCOPE.getName(), name);
+    }
+  };
+  ws.qualifySymbol = ws['qualify-symbol'] = qualifySymbol;
+
+  var isFullyQualified = function(sym) {
+    return _.namespace(sym);
+  };
+  ws.isFullyQualified = ws['fully-qualified?'] = isFullyQualified;
 
   var evalDefinition = function(exp, env) {
     var rest  = _.rest(exp);
@@ -1492,18 +1542,44 @@ namespace pbnj.wonderscript {
   };
 
   var isMacro = ws.isMacro = ws['macro?'] = function(name) {
-    var sname = ('' + name);
-    if (sname.endsWith('.') || sname.startsWith('.')) return null;
-    var scope = lookupVariable(name);
-    return getMacro(scope, name);
+    try {
+      var v = ws.lookupVar(name, globalEnv);
+    }
+    catch (e) {
+      if (e instanceof UndefinedVariableException) {
+        return null;
+      }
+      else {
+        throw e;
+      }
+    }
+    var meta = v.getMeta();
+    if (_.get(meta, _.keyword('macro')) === true) {
+      return v.getValue();
+    }
+    return null;
+  };
+
+  var isTaggedList = ws['tagged-list?'] = function(exp, tag) {
+    if (tag) {
+      return _.isList(exp) && _.equals(_.first(exp), tag);
+    }
+    else {
+      return _.isList(exp) && _.isSymbol(_.first(exp));
+    }
   };
 
   var macroexpand = ws.macroexpand = function(exp) {
     var macro, name;
-    if (!(_.isList(exp) && _.isSymbol(name = _.first(exp)))) {
+    if (!isTaggedList(exp)) {
       return exp;
     }
+    name = _.first(exp);
     if (_.hasKey(ws.TAGGED_SPECIAL_FORMS, name)) {
+      return exp;
+    }
+    var sname = ('' + name);
+    if (sname.endsWith('.') || sname.startsWith('.')) {
       return exp;
     }
     if (macro = isMacro(name)) {
@@ -1653,7 +1729,7 @@ namespace pbnj.wonderscript {
   };
 
   Module.prototype.define = function(name, value, meta) {
-    return this.scope.define(name, value, meta);
+    return globalEnv.define(_.symbol(this.name, name), value, meta);
   };
 
   Module.prototype.export = function(root) {
@@ -1671,11 +1747,15 @@ namespace pbnj.wonderscript {
       for (var prop in jsmod) {
         if (prop === "@@SELF@@") continue;
         if (jsmod.hasOwnProperty(prop)) {
-          this.scope.define(prop, jsmod[prop], _.hashMap(_.keyword('imported'), true));
+          globalEnv.define(_.symbol(this.name, prop), jsmod[prop], _.hashMap(_.keyword('imported'), true));
         }
       }
       return true;
     }
+  };
+
+  Module.prototype.toString = function() {
+    return _.str("#<Module name: ", this.name, ">");
   };
 
   ws.isModule = ws['module?'] = function(mod) {
