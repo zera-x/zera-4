@@ -1,4 +1,4 @@
-(module pbnj.core)
+(ns pbnj.core)
 
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
 
@@ -394,22 +394,13 @@
 
 ;; ---------------------------- meta data ------------------------------ ;;
 
-(define current-module
-  (lambda [] pbnj.wonderscript/MODULE_SCOPE))
-
-(define current-module-name
-  (lambda [] (module-name pbnj.wonderscript/MODULE_SCOPE)))
-
-(define current-module-scope
-  (lambda [] (module-scope pbnj.wonderscript/MODULE_SCOPE)))
-
-(define-macro defined?
+(define-function defined?
   [sym]
-    (let [ns (namespace sym)
-                nm (name sym)]
-          (list 'if ns
-                (list '.- (list 'symbol ns) (list 'symbol nm))
-                (list '.? (list 'current-module-scope) (list 'lookup (list 'symbol nm))))))
+  (try
+    (var sym)
+    true
+    (catch [e pbnj.wonderscript/UndefinedVariableException]
+      false)))
 
 (define-function var-set
   [x value]
@@ -532,7 +523,7 @@
 (define-macro is-not [body &args]
   (cons 'is (cons (list 'not body) args)))
 
-(define-function module-scope
+(define-function namespace-scope
   "Return the scope of the named module."
   [mod]
   (if (symbol? mod)
@@ -542,9 +533,9 @@
 (define-function tests
   "Collect all the tests in the given module, if no module us specified
   the tests from the current module are returned."
-  ([] (tests *module*))
+  ([] (tests *namespace*))
   ([mod]
-   (->> (module-vars mod)
+   (->> (namespace-vars mod)
         (map second)
         (map meta)
         (filter :test)
@@ -559,8 +550,8 @@
                 f (list 'if v (list '-> (list '.getMeta v) :test))]
          (list 'if f (list 'apply f)))))
 
-(define-function prove-module [module]
-  (map apply (tests module)))
+(define-function prove-ns [ns]
+  (map apply (tests ns)))
 
 ;; Special Forms
 

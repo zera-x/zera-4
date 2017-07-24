@@ -8,7 +8,7 @@ const ws = require('../src/pbnj/wonderscript.js');
 const HISTORY_FILE = process.cwd() + '/.wsi-history';
 
 function currentModuleName() {
-  return ws.MODULE_SCOPE.getName();
+  return ws.NS_SCOPE.getName();
 }
 
 function loadHistory() {
@@ -38,7 +38,7 @@ else {
     terminal: true
   });
   
-  ws.readString('(module user)');
+  ws.readString('(ns user)');
   ws.globalEnv.define('*dir*', process.cwd());
   ws.globalEnv.define('*file*', null);
   ws.readString('(println (str "WonderScript " *version*))');

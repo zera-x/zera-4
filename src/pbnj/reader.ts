@@ -93,7 +93,21 @@ namespace pbnj.reader {
     mori: {
       string: function (rep) { return rep },
       char: function (rep) { return rep },
-      symbol: function (rep) { return mori.symbol.apply(mori, rep === '/' ? [rep] : rep.split('/')) },
+      symbol: function (rep) {
+        if (rep === '/') return _.symbol('/');
+        else {
+          var parts = rep.split('/');
+          if (parts.length === 1) {
+            return _.symbol(null, parts[0]);
+          }
+          else if (parts.length === 2) {
+            return _.symbol(parts[0], parts[1]);
+          }
+          else {
+            return _.symbol(parts[0], parts.slice(1).join('/'));
+          }
+        }
+      },
       boolean: function (rep) { return rep === 'true' ? true : false; },
       nil: function (rep) { return null },
       number: function (rep) { return parseFloat(rep) },
@@ -537,7 +551,8 @@ namespace pbnj.reader {
     readJS: readJS,
     readJSON: readJSON,
     readFile: typeof exports !== 'undefined' ? readFileNode : readFileBrowser,
-    TYPE_DISPATCH: TYPE_DISPATCH
+    TYPE_DISPATCH: TYPE_DISPATCH,
+    readSymbol: TYPE_DISPATCH.mori.symbol
   };
 
   if (typeof exports !== 'undefined') {
