@@ -2,7 +2,6 @@
 (ns pbnj.phay)
 
 ; compile PHP code
-(define join pbnj.core/join)
 
 (define-function emit-nil [exp] "null")
 (define-function emit-number [exp] (str exp))
@@ -17,7 +16,7 @@
 
 (define-function emit-expression [exp] (str "(" (compile (second exp)) ")"))
 
-(define-function emit-block [exp] (str (join (map compile exp) ";") ";"))
+(define-function emit-block [exp] (str (join ";" (map compile exp)) ";"))
 
 (define-function emit-if-else [exp]
   (let [size (count exp)]
@@ -45,7 +44,7 @@
     (str "isset(" value ")")))
 
 (define-function emit-escape [exp]
-  (str "<?php " (str (join (map compile (rest exp)) ";") ";") " ?>"))
+  (str "<?php " (str (join ";" (map compile (rest exp))) ";") " ?>"))
 
 (define-function emit-cast [t exp]
   (str "(" t ")" (compile exp)))
@@ -65,7 +64,7 @@
 
 (define-function emit-argument-list [args]
   (if (empty? args) "()"
-      (str "(" (join (map compile args) ",") ")")))
+      (str "(" (join "," (map compile args)) ")")))
 
 (define-function emit-function [exp]
   (let [ident (second exp)]
@@ -122,7 +121,7 @@
   (let [size (count exp)
         terms (second exp)]
     (cond (>= size 3)
-            (str "for(" (join (map compile terms) ";")  "){" (emit-block (rest (rest exp))) "}")
+            (str "for(" (join ";" (map compile terms))  "){" (emit-block (rest (rest exp))) "}")
           :else
             (throw "a for loop should be a list of at least 3 elements"))))
 
@@ -132,7 +131,7 @@
         prop (second (rest exp))]
     (cond (= size 3)
             (if (vector? prop)
-              (str (compile obj) "['" (join prop "']['") "']")
+              (str (compile obj) "['" (join "']['" prop) "']")
               (str (compile obj) "[" (if (number? prop) prop (str "'" prop "'")) "]"))
           :else
             (throw "property access should be a list of 3 elements"))))
@@ -152,7 +151,7 @@
     (cond (= size 2)
             (str "new " (compile (second exp)) "()")
           (> size 2)
-            (str "new " (compile (second exp)) "(" (join (map compile (rest (rest exp))) ",") ")"))))
+            (str "new " (compile (second exp)) "(" (join "," (map compile (rest (rest exp)))) ")"))))
 
 (define-function emit-property-assignment [exp]
   (let [size (count exp)
@@ -161,7 +160,7 @@
         value (second (rest (rest exp)))]
     (cond (= size 4)
             (if (vector? prop)
-              (str (compile obj) "['" (join prop "']['") "']=" (compile value))
+              (str (compile obj) "['" (join "']['" prop) "']=" (compile value))
               (str (compile obj) "['" prop "']=" (compile value)))
           :else
             (throw "property assignment should be a list of 4 elements"))))
@@ -180,7 +179,7 @@
 (define-function emit-binary-operator [exp]
   (let [size (count exp)]
     (cond (>= size 3)
-            (join (map compile (rest exp)) (str (first exp)))
+            (join (str (first exp)) (map compile (rest exp)))
           :else
             (throw "a binary operator should be a list of at least 3 elements"))))
 
@@ -197,7 +196,7 @@
   ([fn]
    (str (compile fn) "()"))
   ([fn &args]
-   (str (compile fn) "(" (join (map compile args) ",") ")")))
+   (str (compile fn) "(" (join "," (map compile args)) ")")))
 
 (define-function emit-assoc-array [exp]
   (str "["

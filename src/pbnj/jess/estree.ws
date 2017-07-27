@@ -315,7 +315,7 @@
 (define-function unary-expression->jess
   [x]
   (if-not (*unary-operator* (.-operator x))
-    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join *unary-operator* ", "))))
+    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join ", " *unary-operator*))))
   (list (symbol (.-operator x)) (expression->jess (.-argument x))))
 
 (define *update-operator* #{"++" "--"})
@@ -327,7 +327,7 @@
 (define-function update-expression->jess
   [x]
   (if-not (*update-operator* (.-operator x))
-    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join *update-operator* ", "))))
+    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join ", " *update-operator*))))
   (list (symbol (.-operator x)) (expression->jess (.-argument x))))
 
 (define *binary-operator* #{"==" "!=" "===" "!==" "<" "<=" ">" ">=" "<<" ">>" ">>>" "+" "-" "*" "/" "%" "|" "^" "&" "in" "instanceof"})
@@ -339,7 +339,7 @@
 (define-function binary-expression->jess
   [x]
   (if-not (*binary-operator* (.-operator x))
-    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join *binary-operator* ", "))))
+    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join ", " *binary-operator*))))
   (list (symbol (.-operator x)) (expression->jess (.-left x)) (expression->jess (.-right x))))
 
 (define *assignment-operator*
@@ -376,7 +376,7 @@
 (define-function logical-expression->jess
   [x]
   (if-not (*logical-operator* (.-operator x))
-    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join *logical-operator* ", "))))
+    (throw (str "invalid unary operator, got: " (.-operator x) ", expected one of: " (join ", " *logical-operator*))))
   (list (symbol (.-operator x)) (expression->jess (.-left x)) (expression->jess (.-right x))))
 
 (define-function member-expression?

@@ -6,9 +6,72 @@
 (ns pbnj.peanutbutter)
 
 (define render-declaration pbnj.jelly/render-declaration)
-(define join pbnj.core/join)
 
-(define *components* (atom {}))
+(define-protocol Expression)
+
+(define-protocol HTML
+  (toHTML [self]))
+
+(define-protocol HTMLNode HTML)
+
+(define-type Nothing
+  []
+  Expression
+  HTMLNode
+  (toHTML [self] ""))
+
+(define nothing (Nothing.))
+
+(define-type Atom
+  [value]
+  Expression
+  HTMLNode
+  (toHTML [self] (str (.-value self))))
+
+(define-protocol HTMLTag HTML)
+
+(define-type SimpleTag
+  [name]
+  Expression
+  HTMLTag
+  (toHTML [self] (str "<" (render-tag-name (.-name self)) ">")))
+
+(define-type ContentTag
+  [name children]
+  Expression
+  HTMLTag
+  (toHTML [self]
+    (let [nm (render-tag-name (.-name self))]
+      (str "<" nm ">"
+           (.toHTML (.-children self))
+           "</" nm ">"))))
+
+(define-type AttributeContentTag
+  [name attrs children]
+  Expression
+  HTMLTag
+  (toHTML [self]
+    (let [nm (render-tag-name (.-name self))
+          sattrs (render-attrs (.-attrs self))]
+      (str "<" nm " " sattrs ">"
+           (.toHTML (.-children self))
+           "</" nm ">"))))
+
+(define-type AttributeTag
+  [name attrs]
+  Expression
+  HTMLTag
+  (toHTML [self]
+    (str "<" (render-tag-name (.-name self)) " " (render-attrs (.-attrs self)) ">")))
+
+(define-type ExpressionList
+  [expressions]
+  Expression
+  HTML
+  (toHTML [self]
+    (->> (.-expressions self)
+         (map (& (.toHTML %)))
+         (reduce str))))
 
 (define-function nil? [exp]
   (or (pbnj.core/nil? exp) (and (collection? exp) (empty? exp))))
@@ -16,9 +79,19 @@
 (define render-nil (constantly ""))
 
 (define-function tag? [exp]
-  (and (sequential? exp)
-       (let [nm (first exp)]
-         (or (symbol? nm) (keyword? nm)))))
+  (and (list? exp) (symbol? (first exp))))
+
+(define-function tag
+  [exp]
+  (case (count exp)
+    1 (SimpleTag. (first exp))
+    2 (if (attrs? (second exp))
+        (AttributeTag. (first exp) (second exp))
+        (ContentTag. (first exp) (ExpressionList. (map analyze (rest exp)))))
+    :else
+      (if (attrs? (second exp))
+        (AttributeContentTag. (first exp) (second exp) (ExpressionList. (map analyze (rest (rest exp)))))
+        (ContentTag. (first exp) (ExpressionList. (map analyze (rest exp)))))))
 
 (define-function- render-tag-name [tname]
   (let [ns (namespace tname)
@@ -42,6 +115,8 @@
         v (pair 1)
         value (cond (and (= kattr :style) (map? v)) (render-declaration v)
                     (EVENTS kattr) (.replace (pbnj.wonderscript/compile v) (js/RegExp. "\"" "g") "\\\"")
+                    (= kattr :class)
+                      (if (sequential? v) (join " " v) v)
                     :else
                       (str v))]
     (str (name attr) "=\"" value "\"")))
@@ -77,19 +152,19 @@
 
 (define-function eval-definition
   ([nm value]
-   (define-component nm (always value)))
+   (define-component nm [] value))
   ([nm args &body]
    (unless (vector? args) (throw "argument list should be a vector"))
-   (define-component nm (eval (cons 'lambda (cons args body))))))
+   (define-component )))
 
 (define-function get-component
   {:memoize true}
   [exp]
-  (-> exp var .getMeta :peanutbutter/component))
+  (-> exp var .get))
 
 (define-function component?
   [exp]
-  (and (tag? exp) (get-component (first exp))))
+  (-> (first exp) var .getMeta :peanutbutter/component))
 
 (define-function render-component
   [exp]
@@ -112,23 +187,27 @@
 
 (define *top-scope* (pbnj.wonderscript/env))
 (define-function eval-block [&body]
-  (let [ret nil]
+  (do
+    (define {:private true :dynamic true} ret)
     (do-each [x body]
       (set! ret (eval x *top-scope*)))
     ret))
 
-(define-function html
+(define-function analyze
   [exp]
-  (cond (nil? exp) (render-nil)
-        (atom? exp) (render-atom exp)
+  (cond (nil? exp) nothing
+        (atom? exp) (Atom. exp)
         (block? exp) (apply eval-block (rest exp))
-        (definition? exp) (apply eval-definition (rest exp))
-        (component? exp) (render-component exp)
-        (tag? exp) (render-tag exp)
-        (expression-list? exp) (render-expression-list exp)
+        ;(definition? exp) (apply eval-definition (rest exp))
+        (tag? exp) (tag exp)
+        (expression-list? exp) (ExpressionList. (map analyze exp))
         :else
           (do
             (throw (new js/Error (str "invalid expression: " exp))))))
+
+(define-function html
+  [exp]
+  (.toHTML (analyze exp)))
 
 (define compile html)
 

@@ -832,7 +832,7 @@
     (-> (.split s delim) array->list))
   
   (define-function join
-    [col delim]
+    [delim col]
     (let [joiner (lambda [s x] (str s delim x))]
       (reduce joiner col)))
   
