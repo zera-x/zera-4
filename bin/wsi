@@ -21,7 +21,6 @@ function appendHistory(exp) {
   
 if (process.argv.length >= 3) {
   try {
-    ws.readString('(module user)');
     ws.readFile([process.cwd(), process.argv[2]].join('/'));
     process.exitCode = 0;
   }
@@ -38,15 +37,16 @@ else {
     terminal: true
   });
   
-  ws.readString('(ns user)');
   ws.globalEnv.define('*dir*', process.cwd());
   ws.globalEnv.define('*file*', null);
-  ws.readString('(println (str "WonderScript " *version*))');
-  ws.readString('(println *platform-version*)');
-  ws.readString('(println (str "Running in " *mode* " mode"))');
-  ws.readString('(println "   Exit: Control+D or exit")');
-  ws.readString('(println "   Help: (doc function-name-here)")');
-  ws.readString('(println "         (source function-name-here)")');
+  ws.readJS(
+    ['do',
+      ['say', ['str', '"WonderScript "', '*version*']],
+      ['say', '*platform-version*'],
+      ['say', ['str', '"Running in "', '*mode*', '" mode"']],
+      ['say', '"   Exit: Control+D or exit"'],
+      ['say', '"   Help: (doc function-name-here"'],
+      ['say', '"         (source function-name-here"']]);
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
 

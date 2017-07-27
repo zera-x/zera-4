@@ -1,6 +1,6 @@
 ; vim: ft=clojure
 (require "../jess.ws")
-(module pbnj.wonderscript)
+(ns pbnj.wonderscript)
 
 ; TODO: add module definitions
 ; TODO: add require support

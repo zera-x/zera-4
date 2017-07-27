@@ -18,7 +18,14 @@ namespace pbnj.reader {
 
   // TODO: add support for dispatching for #(), #{}, #inst, #"", etc.
 
+  var STREAM_META = new _.Atom(_.hashMap(), _.hashMap(), _.isMap);
+  /*STREAM_META.addWatch('STREAM_META update', function(key, ref, old, knew) {
+    console.log(_.str(key, ":"), _.inspect(old), _.inspect(knew));
+  });*/
+
+
   function inputStream(input, sourceName) {
+    STREAM_META.swap(_.assoc, _.keyword('source'), sourceName);
     var pos = 0, line = 1, col = 0;
     return {
       next: next,
@@ -38,10 +45,12 @@ namespace pbnj.reader {
       if (ch === "\n") {
         line++;
         col = 0;
+        //STREAM_META.swap(_.assoc, _.keyword('line'), line);
       }
       else {
         col++;
       }
+      //STREAM_META.swap(_.assoc, _.keyword('column'), col);
       return ch;
     }
     function peekAhead() {
@@ -144,13 +153,12 @@ namespace pbnj.reader {
 
 
   var ESCAPE_CHARS = {
-    n: true,
-    r: true,
-    t: true,
-    v: true,
-    b: true,
-    f: true,
-    u: true
+    n: "\n",
+    r: "\r",
+    t: "\t",
+    v: "\v",
+    b: "\b",
+    f: "\f"
   };
 
   function buildSet(rep) {
@@ -222,13 +230,13 @@ namespace pbnj.reader {
     }
 
     function readEscaped(end) {
-      var escaped = false, buffer = [];
+      var escaped = false, buffer = [], xf;
       input.next();
       while (!input.eof()) {
         var ch = input.next();
         if (escaped) {
-          if (ESCAPE_CHARS[ch]) {
-            buffer.push(_.str('\\', ch));
+          if (xf = ESCAPE_CHARS[ch]) {
+            buffer.push(xf);
           }
           else {
             buffer.push(ch);
@@ -322,7 +330,8 @@ namespace pbnj.reader {
           ch = "\b";
         }
         else if (ch.startsWith('u')) {
-          ch = _.str('\\', ch);
+          var u = ['0x', ch.slice(1)].join('');
+          ch = String.fromCharCode(1*u);
         }
         else {
           throw new Error(_.str('invalid character: "', ch, '"'));
@@ -403,26 +412,26 @@ namespace pbnj.reader {
     function readNext() {
       readWhile(isWhitespace);
       if (input.eof()) return null;
-
       var ch = input.peek();
+      var exp;
       if (ch === ";") {
         skipComment();
-        return readNext();
+        exp = readNext();
       }
       else if (ch === '"') {
-        return readString();
+        exp = readString();
       }
       else if (/[0-9]/.test(ch) || (ch === '-' || ch === '+') && isDigit(input.peekAhead())) {
-        return readNumber(ch === '-' || ch === '+');
+        exp = readNumber(ch === '-' || ch === '+');
       }
       else if (isSymbol(ch)) {
-        return readSymbol();
+        exp = readSymbol();
       }
       else if (ch === ':') {
-        return readKeyword();
+        exp = readKeyword();
       }
       else if (ch === "'") {
-        return readQuotedForm();
+        exp = readQuotedForm();
       }
       /*else if (ch === '~') {
         return readUnquoted();
@@ -431,20 +440,26 @@ namespace pbnj.reader {
         return readSyntaxQuotedForm();
       }*/
       else if (ch === "@") {
-        return readDerefForm();
+        exp = readDerefForm();
       }
       else if (ch === '\\') {
-        return readChar();
+        exp = readChar();
       }
       else if (isCollStart(ch)) {
-        return readCollection(COLLECTION_START[ch], COLLECTION_END[ch]);
+        exp = readCollection(COLLECTION_START[ch], COLLECTION_END[ch]);
       }
       else if (!!COLLECTION_END_NAME[ch]) {
         input.next();
-        return readNext();
+        exp = readNext();
+      }
+
+      STREAM_META.swap(_.assoc, _.keyword('line'), input.line(), _.keyword('column'), input.column());
+      if (_.isUndefined(exp)) {
+        input.croak("Can't handle character: '" + ch + "'");
       }
       else {
-        input.croak("Can't handle character: '" + ch + "'");
+        STREAM_META.swap(_.assoc, _.keyword('expression'), exp);
+        return exp;
       }
     }
 
@@ -512,13 +527,14 @@ namespace pbnj.reader {
   var readJS = function(exp) {
     if (exp === null || exp === void 0) return null;
     var type = typeof exp;
+    var buffer, i, props;
     switch (type) {
       case 'boolean':
       case 'number':
         return exp;
       case 'string':
         if (exp.startsWith('"') && exp.endsWith('"')) {
-          return exp;
+          return exp.replace(/^"/, '').replace(/"$/, '');
         }
         else if (exp.startsWith(':')) {
           return _.keyword(exp.slice(1));
@@ -527,13 +543,22 @@ namespace pbnj.reader {
           return _.symbol(exp);
         }
       case 'object':
-        if (_.isArray(exp)) {
-          return _.list.apply(null, _.map(exp, readJS));
+        if (_.isDate(exp)) return exp;
+        else if (_.isRegExp(exp)) return exp;
+        else if (_.isArray(exp)) {
+          buffer = [];
+          for (i = 0; i < exp.length; i++) {
+            buffer.push(readJS(exp[i]));
+          }
+          return _.list.apply(null, buffer);
         }
         else {
-          return _.reduce(exp,
-                     function (hmap, value, key) {
-                       return _.assoc(hmap, _.keyword(key), readJS(value)) }, _.hashMap());
+          buffer = [];
+          props  = Object.getOwnPropertyNames(exp);
+          for (i = 0; i < props.length; i++) {
+            buffer.push(_.vector(_.keyword(props[i]), readJS(exp[props[i]])));
+          }
+          return _.into(_.hashMap(), buffer);
         }
       default:
         throw new Error(_.str("'", exp, "' is an invalid expression"));
@@ -552,7 +577,8 @@ namespace pbnj.reader {
     readJSON: readJSON,
     readFile: typeof exports !== 'undefined' ? readFileNode : readFileBrowser,
     TYPE_DISPATCH: TYPE_DISPATCH,
-    readSymbol: TYPE_DISPATCH.mori.symbol
+    readSymbol: TYPE_DISPATCH.mori.symbol,
+    STREAM_META: STREAM_META
   };
 
   if (typeof exports !== 'undefined') {

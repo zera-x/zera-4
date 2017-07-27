@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // vim: set ft=javascript
 
-const pb = require("../src/pbnj/peanutbutter.js");
+const ws = require("../src/pbnj/wonderscript.js");
+ws.readFile(__dirname + "/../src/pbnj/peanutbutter.ws");
 
 if (process.argv.length === 3) {
   try {
-    var out = pb.compileFile([process.cwd(), process.argv[2]].join('/'));
+    var file = [process.cwd(), process.argv[2]].join('/');
+    var out  = ws.readJS(['pbnj.peanutbutter/compile-file', ['"', file, '"'].join('')]);
     console.log(out);
     process.exitCode = 0;
   }

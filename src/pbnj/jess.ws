@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(module pbnj.jess)
+(ns pbnj.jess)
 
 (define join pbnj.core/join)
 

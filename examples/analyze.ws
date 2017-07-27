@@ -1,5 +1,5 @@
 (require "../src/pbnj/wonderscript/analyzer.ws")
-(module examples.analyze)
+(ns examples.analyze)
 
 (define a pbnj.wonderscript.analyzer)
 

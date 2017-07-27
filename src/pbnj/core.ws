@@ -1,4 +1,4 @@
-(ns pbnj.core)
+(ns* pbnj.core)
 
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
 
@@ -246,13 +246,9 @@
     (.-set! self value val)
     self)
   (swap
-    [self f]
-    (let [newVal (f (.- self value))]
-      (if (.-validator self)
-        (if-not (.validator self newVal)
-          (throw (js/Error. (str "'" (inspect newVal) "' is not a valid value")))))
-      (. self (processWatches newVal))
-      (.-set! self value newVal)
+    [self f &args]
+    (let [newVal (apply f (cons (.-value self) args))]
+      (.reset self newVal)
       self)))
 
 (define-function atom
@@ -731,6 +727,15 @@
                           'fn (cons 'lambda (cons args body))]
                     (list 'assoc 'm :methods (list 'assoc 'meths val 'fn))))))
 
+(define-macro refer
+  [ns prefix]
+  (list 'do-each ['x (list 'ns-vars (list 'eval (list 'quote ns)))]
+     (list 'let ['nm (list 'name (list 'x 0))
+                 'v  (list 'x 1)
+                 'alias (list 'symbol (list 'name (list 'quote prefix)) 'nm)]
+           '(println alias)
+           (list 'define {:private true :refered true} 'alias (list '.getValue 'v)))))
+
 (define-macro nodejs?
   "If `*platform*` is `:nodejs` wrap code in a `do` block
   in place otherwise return `nil`."
@@ -863,3 +868,37 @@
           (map
             (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
             forms))))
+
+(define-function position-vars
+  [exp]
+  (cond (and (symbol? exp) (.startsWith (str exp) "%"))
+          [exp]
+        (list? exp)
+          (if (= (first exp) '&)
+            (throw "& expressions cannot be nested")
+            (into (vector) (mapcat position-vars exp)))
+        (vector? exp)
+          (into (vector) (mapcat position-vars exp))
+        (map? exp)
+          (into (vector) (mapcat position-vars exp))
+        :else
+          []))
+
+(define-macro &
+  [exp]
+  (list 'lambda (position-vars exp) exp))
+
+(define-function alias
+  [alias ns-sym]
+  (let [ns (var ns-sym)]
+    (.alias *namespace* alias (.get ns)))
+  nil)
+
+(define-macro ns
+  [sym]
+  (list 'ns* sym))
+
+(define-function fn-opts
+  ([args k] (fn-opts args k nil))
+  ([args k alt]
+   (or (second (first (filter (& (= k (first %))) (partition 2 args)))) alt)))

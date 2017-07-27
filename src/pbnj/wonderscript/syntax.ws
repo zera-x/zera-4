@@ -1,4 +1,4 @@
-(module pbnj.wonderscript.syntax)
+(ns pbnj.wonderscript.syntax)
 
 (define-protocol Syntax
   (toJS [self]))

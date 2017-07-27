@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(module pbnj.phay)
+(ns pbnj.phay)
 
 ; compile PHP code
 (define join pbnj.core/join)

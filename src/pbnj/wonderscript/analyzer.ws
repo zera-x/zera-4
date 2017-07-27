@@ -1,6 +1,6 @@
 ; vim: ft=clojure
 (require "syntax.ws")
-(module pbnj.wonderscript.analyzer)
+(ns pbnj.wonderscript.analyzer)
 
 (define ws pbnj.wonderscript)
 (define s pbnj.wonderscript.syntax)

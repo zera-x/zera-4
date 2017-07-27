@@ -3,7 +3,7 @@
 (require "jess.ws")
 (require "phay.ws")
 (require "wonderscript/compiler.ws")
-(module pbnj.peanutbutter)
+(ns pbnj.peanutbutter)
 
 (define render-declaration pbnj.jelly/render-declaration)
 (define join pbnj.core/join)
