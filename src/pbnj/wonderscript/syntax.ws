@@ -69,7 +69,12 @@
   Atomic
   Symbolic
   (toJS [self]
-        (str "_.keyword(" (.toJS (.-ns self)) ", " (.toJS (.-name self)) ")")))
+    (let [ns (.-ns self)]
+      (str "_.keyword("
+           (if ns (str "\"" ns "\"") "null")
+           ", "
+           (str "\"" (.-name self)) "\")"))))
+
 
 ;(define-function keyword?
 ;  [x]
@@ -78,7 +83,12 @@
 (define-type Symbol
   [ns name]
   Atomic
-  Symbolic)
+  Symbolic
+  (toJS [self]
+    (let [ns (.-ns self)]
+      (if ns
+        (str ns "." (.-name self))
+        (.-name self)))))
 
 ;(define-function symbol?
 ;  [x]
@@ -86,13 +96,18 @@
 
 (define-type Instant
   [value]
-  Atomic)
+  Atomic
+  (toJS [self]
+    (str "(new Date(" (.valueOf (.-value self)) "))")))
 
 ;(define instant? (lambda [x] (isa? x Instant)))
 
-(define-type RegExp
+(define-type Regex
   [value]
-  Atomic)
+  Atomic
+  (toJS [self]
+    (let [regex (.-value self)]
+      (str "(new RegExp(\"" (.-source regex) "\", \"" (.-flags regex) "\"))"))))
 
 ;(define regexp?
 ;  (lambda

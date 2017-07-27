@@ -2,8 +2,8 @@
 (require "syntax.ws")
 (ns pbnj.wonderscript.analyzer)
 
-(define ws pbnj.wonderscript)
-(define s pbnj.wonderscript.syntax)
+(alias 'ws 'pbnj.wonderscript)
+(alias 's 'pbnj.wonderscript.syntax)
 
 (define property-accessor? ws/isPropertyAccessor)
 (define property-assignment? ws/isPropertyAssignment)
@@ -54,7 +54,7 @@
 
 (define-function analyze-date
   [x]
-  (s/Date. x))
+  (s/Instant. x))
 
 (define-function analyze-regexp
   [x]
@@ -62,7 +62,7 @@
 
 (define-function analyze-keyword
   [x]
-  (s/Keyword. (analyze (namespace x)) (analyze (name x))))
+  (s/Keyword. (namespace x) (name x)))
 
 (define-function analyze-symbol
   [x]
