@@ -727,15 +727,6 @@
                           'fn (cons 'lambda (cons args body))]
                     (list 'assoc 'm :methods (list 'assoc 'meths val 'fn))))))
 
-(define-macro refer
-  [ns prefix]
-  (list 'do-each ['x (list 'ns-vars (list 'eval (list 'quote ns)))]
-     (list 'let ['nm (list 'name (list 'x 0))
-                 'v  (list 'x 1)
-                 'alias (list 'symbol (list 'name (list 'quote prefix)) 'nm)]
-           '(println alias)
-           (list 'define {:private true :refered true} 'alias (list '.getValue 'v)))))
-
 (define-macro nodejs?
   "If `*platform*` is `:nodejs` wrap code in a `do` block
   in place otherwise return `nil`."
