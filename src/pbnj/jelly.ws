@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(module pbnj.jelly)
+(ns pbnj.jelly)
 
 (define-function nil? [exp]
   (or (pbnj.core/nil? exp)

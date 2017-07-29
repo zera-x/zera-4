@@ -2,13 +2,13 @@
 
 const fs = require('fs');
 const readline = require('readline');
-const _  = require('../src/pbnj/core.js');
-const ws = require('../src/pbnj/wonderscript.js');
+const _  = require(__dirname + '/../src/pbnj/core.js');
+const ws = require(__dirname + '/../src/pbnj/wonderscript.js');
 
 const HISTORY_FILE = process.cwd() + '/.wsi-history';
 
 function currentModuleName() {
-  return ws.MODULE_SCOPE["@@NAME@@"];
+  return ws.NS_SCOPE.getName();
 }
 
 function loadHistory() {
@@ -19,9 +19,8 @@ function appendHistory(exp) {
   fs.appendFileSync(HISTORY_FILE, [exp, "\n"].join(''));
 }
   
-if (process.argv.length === 3) {
+if (process.argv.length >= 3) {
   try {
-    ws.readString('(module user)');
     ws.readFile([process.cwd(), process.argv[2]].join('/'));
     process.exitCode = 0;
   }
@@ -34,18 +33,20 @@ else {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    removeHistoryDuplicates: true,
     terminal: true
   });
   
-  ws.readString('(module user)');
   ws.globalEnv.define('*dir*', process.cwd());
   ws.globalEnv.define('*file*', null);
-  ws.readString('(println (str "WonderScript " *version*))');
-  ws.readString('(println *platform-version*)');
-  ws.readString('(println (str "Running in " *mode* " mode"))');
-  ws.readString('(println "   Exit: Control+D or exit")');
-  ws.readString('(println "   Help: (doc function-name-here)")');
-  ws.readString('(println "         (source function-name-here)")');
+  ws.readJS(
+    ['do',
+      ['say', ['str', '"WonderScript "', '*version*']],
+      ['say', '*platform-version*'],
+      ['say', ['str', '"Running in "', '*mode*', '" mode"']],
+      ['say', '"   Exit: Control+D or exit"'],
+      ['say', '"   Help: (doc function-name-here"'],
+      ['say', '"         (source function-name-here"']]);
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
 

@@ -1,30 +1,12 @@
-(module pbnj.core)
+(ns* pbnj.core)
 
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
 
-(define-macro define-function
-  "(define-function name doc-string? meta-map? arguments body)
-  (define-function name doc-string? meta-map? (arguments body))"
-  [name &forms]
-  (if (symbol? name)
-    nil
-    (throw (js/Error. "first argument of define-function should be a symbol")))
-  (let [x (first forms)
-        y (second forms)]
-    (cond (and (string? x) (map? y))
-            (list 'define (assoc y :doc x) name (cons 'lambda (rest (rest forms))))
-          (string? x)
-            (list 'define {:doc x} name (cons 'lambda (rest forms)))
-          (map? x)
-            (list 'define x name (cons 'lambda (rest forms)))
-          (or (vector? x) (list? x))
-            (list 'define name (cons 'lambda forms))
-          :else
-            (throw (js/Error. "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+(define-protocol Exception)
 
-(define-macro define-function-
-  [name &forms]
-  (list 'define :private name (cons 'lambda forms)))
+(define-type MacroException
+  [message]
+  Exception)
 
 (define-macro comment [&forms] nil)
 
@@ -67,7 +49,7 @@
   "define a private variable (it cannot be seen outside of the module scope)."
   ([nm] (list 'define :private nm))
   ([nm value] (list 'define :private nm value))
-  ([meta nm value] (list 'define (assoc meta :private true) nm value)))
+  ([meta nm value] (list 'define (if (keyword? meta) {meta true :private true} (assoc meta :private true)) nm value)))
 
 (define-macro let [bindings &body]
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
@@ -109,6 +91,34 @@
    (let [and* (first forms)]
      (list 'if and* (cons 'and (rest forms)) and*))))
 
+(define-macro define-function
+  "(define-function name doc-string? meta-map? arguments body)
+  (define-function name doc-string? meta-map? (arguments body))"
+  [name &forms]
+  (if (symbol? name)
+    nil
+    (do
+      (println *scope*)
+      (throw (MacroException. (str "first argument of define-function should be a symbol, got: " (inspect name))))))
+  (let [x (first forms)
+        y (second forms)]
+    (cond (and (string? x) (map? y))
+            (list 'define (assoc y :doc x) name (cons 'lambda (rest (rest forms))))
+          (string? x)
+            (list 'define {:doc x} name (cons 'lambda (rest forms)))
+          (map? x)
+            (list 'define x name (cons 'lambda (rest forms)))
+          (or (vector? x) (list? x))
+            (list 'define name (cons 'lambda forms))
+          :else
+            (throw
+              (MacroException.
+                "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+
+(define-macro define-function-
+  [name &forms]
+  (list 'define :private name (cons 'lambda forms)))
+
 (define-macro .?
   ([obj method]
    (list '.? obj method nil))
@@ -129,14 +139,6 @@
   ([x form] (list '.- x form))
   ([x form &more] (cons '..- (cons (list '.- x form) more))))
 
-(define-macro defined?
-  [sym]
-    (let [ns (namespace sym)
-                nm (name sym)]
-          (list 'if ns
-                (list '.- (list 'symbol ns) (list 'symbol nm))
-                (list '.? (list 'current-module-scope) (list 'lookup (list 'symbol nm))))))
-
 (define-macro do-to
   "Take an object `x` and perform (presumably) mutation operations `forms` on it.
   The expression evaluates to the object.
@@ -151,12 +153,12 @@
   (let [obj (gen-sym "$obj")]
     (cons 'let
             (cons [obj x]
-                  (concat (map (lambda [form] (cons (first form) (cons obj (rest form)))) forms)
+                  (concat (map (lambda [x] (cons (first x) (cons obj (rest x)))) forms)
                           (list obj))))))
 
 (define-macro do-times
   [bindings &body]
-  (if-not (and (vector? bindings) (= (count bindings) 2))
+  (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
   (let [var (bindings 0)
         init (bindings 1)]
@@ -168,18 +170,16 @@
 
 (define-macro do-each
   [bindings &body]
-  (if-not (and (vector? bindings) (= (count bindings) 2))
+  (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
   (let [var (bindings 0)
-        col (bindings 1)
-        init (gen-sym "$init")
-        col-nm (gen-sym "$col")]
-    (list 'let [init col]
-    (list 'loop [var (list 'first init) col-nm (list 'rest init)]
+        col (bindings 1)]
+    (list 'let ['init col]
+      (list 'loop [var '(first init) 'col-nm '(rest init)]
           (cons 'when
                 (cons var
-                      (concat body [(list 'again (list 'first col-nm) (list 'rest col-nm))])))
-          init))))
+                      (concat body ['(again (first col-nm) (rest col-nm))])))
+          'init))))
 
 (define-macro while
   [pred &body]
@@ -212,6 +212,15 @@
                        (list (first form) (first (rest form)) x*)
                        (list form x*))]
         (again threaded (rest forms*))))))
+
+(define-macro case
+  "(case a
+     5 \"a is 5\"
+     6 \"a is 6\"
+     :else \"a is not 5 or 6\")"
+  [value &rules]
+  (cons 'cond (->> (partition 2 rules)
+                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
 (define-function prototype
   [x]
@@ -337,13 +346,9 @@
     (.-set! self value val)
     self)
   (swap
-    [self f]
-    (let [newVal (f (.- self value))]
-      (if (.-validator self)
-        (if-not (.validator self newVal)
-          (throw (js/Error. (str "'" (inspect newVal) "' is not a valid value")))))
-      (. self (processWatches newVal))
-      (.-set! self value newVal)
+    [self f &args]
+    (let [newVal (apply f (cons (.-value self) args))]
+      (.reset self newVal)
       self)))
 
 (define-function atom
@@ -488,24 +493,6 @@
     [self]
     (.-value self)))
 
-(define-type Promise
-  [value]
-  IDeref
-  IBlockingDeref
-  IPending
-  (-invoke
-    [self x]
-    (.-set! self value (first x))
-    self))
-
-(define-function promise
-  []
-  (Promise. nil))
-
-(define-function deliver
-  [promise value]
-  (promise value))
-
 (define-function realized?
   [x]
   (.? x realized?))
@@ -532,7 +519,7 @@
   (define-function gen-sym 
     "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
     {:added "1.0"}
-    ([] (pbnj.core/gen-sym "$sym")) ;; FIXME: this should work without fully qualified name
+    ([] (gen-sym "$sym"))
     ([prefix]
      (let [sym (symbol (str prefix "-" @sym-count))]
        (swap! sym-count add1)
@@ -540,31 +527,13 @@
 
 ;; ---------------------------- meta data ------------------------------ ;;
 
-(define current-module
-  (lambda [] pbnj.wonderscript/MODULE_SCOPE))
-
-(define current-module-name
-  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@NAME@@"))))
-
-(define current-module-scope
-  (lambda [] (.- pbnj.wonderscript/MODULE_SCOPE (symbol "@@SCOPE@@"))))
-
-(define-macro var
-  "Return the named Variable object"
-  ([nm]
-   (let [ns (namespace nm)
-         sname (name nm)]
-    (if ns
-      (list 'var (symbol sname) (list '.- (symbol ns) "@@SCOPE@@"))
-      (list 'or
-            (list 'var nm '*scope*)
-            (list 'var nm (list '.- (current-module-name) "@@SCOPE@@"))
-            (list 'var nm (list '.- 'pbnj.core "@@SCOPE@@"))))))
-  ([nm scope]
-   (list '..?
-         scope
-         (list 'lookup (list 'str (list 'quote nm)))
-         (list 'getObject (list 'str (list 'quote nm))))))
+(define-function defined?
+  [sym]
+  (try
+    (var sym)
+    true
+    (catch [e pbnj.wonderscript/UndefinedVariableException]
+      false)))
 
 (define-function var-set
   [x value]
@@ -687,20 +656,20 @@
 (define-macro is-not [body &args]
   (cons 'is (cons (list 'not body) args)))
 
-(define-function module-scope
+(define-function namespace-scope
   "Return the scope of the named module."
   [mod]
   (if (symbol? mod)
-    (.- (eval mod) (symbol "@@SCOPE@@"))
-    (.- mod (symbol "@@SCOPE@@"))))
+    (-> (eval mod) .getScope)
+    (.getScope mod)))
 
 (define-function tests
   "Collect all the tests in the given module, if no module us specified
   the tests from the current module are returned."
-  ([] (tests (current-module)))
+  ([] (tests *namespace*))
   ([mod]
-   (->> (module-scope mod)
-        .getObjects
+   (->> (namespace-vars mod)
+        (map second)
         (map meta)
         (filter :test)
         (map :test))))
@@ -714,8 +683,8 @@
                 f (list 'if v (list '-> (list '.getMeta v) :test))]
          (list 'if f (list 'apply f)))))
 
-(define-function prove-module [module]
-  (map apply (tests module)))
+(define-function prove-ns [ns]
+  (map apply (tests ns)))
 
 ;; Special Forms
 
@@ -763,16 +732,16 @@
   lambda)
 
 (define-function fraction [n]
-  (- n (Math/floor n)))
+  (- n (.floor js/Math n)))
 
 (define-function sign [n]
-  (if (number? n) (Math/sign n) 0))
+  (if (number? n) (.sign js/Math n) 0))
 
 (define-function positive? [n]
-  (= n (Math/abs n)))
+  (= n (.abs js/Math n)))
 
 (define-function negative? [n]
-  (not= n (Math/abs n)))
+  (not= n (.abs js/Math n)))
 
 (define-function integer? [n] (and (number? n) (= 0 (fraction n))))
 
@@ -782,21 +751,21 @@
 (define-function generate-int
   ([] (generate-int -100 100))
   ([min max]
-   (let [a (Math/ceil min)
-         b (Math/ceil max)]
-     (+ a (Math/floor (* (Math/random) (- b a)))))))
+   (let [a (.ceil js/Math min)
+         b (.ceil js/Math max)]
+     (+ a (.floor js/Math (* (.random js/Math) (- b a)))))))
 
 (define-function generate-nat
   ([] (generate-int 0 100))
   ([min max]
-   (let [a (Math/abs min)]
+   (let [a (.abs js/Math min)]
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
 (define-function generate-float
   ([] (generate-float 0 100))
   ([min max]
-   (+ (generate-int min max) (* (Math/random (- max min))))))
+   (+ (generate-int min max) (* (.random js/Math (- max min))))))
 
 (define-function generate-str
   ([] (generate-str 1 20))
@@ -909,6 +878,14 @@
   (if (= *target-language* :javascript)
     (cons 'do forms)))
 
+(define-macro for-platform
+  [&forms]
+  (cons 'case (cons '*platform* forms)))
+
+(define-macro for-language
+  [&forms]
+  (cons 'case (cons '*target-language* forms)))
+
 (define-function say
   "String concatenate `vals` and print to console
   with a new line at the end (depending on platform)."
@@ -916,7 +893,7 @@
    :added "1.0"}
   [&vals]
   (javascript?
-    (console/log (apply str vals))))
+    (.log js/console (apply str vals))))
 
 (define-function broken
   []
@@ -937,9 +914,9 @@
    :added "1.0"}
   [&vals]
   (nodejs?
-    (.write process/stdout (apply str vals)))
+    (.write (.-stdout js.node/process) (apply str vals)))
   (browser?
-    (console/log (apply str vals))))
+    (.log js/console (apply str vals))))
 
 (nodejs?
 
@@ -947,19 +924,19 @@
     {:doc ""
      :platforms #{:nodejs}
      :added "1.0"}
-    *operating-system* process/platform)
+    *operating-system* (.-platform js.node/process))
   
   (define 
     {:doc "A map of environment variables"
      :platforms #{:nodejs}
      :added "1.0"}
-    *env* (object->map process/env))
+    *env* (object->map (.-env js.node/process)))
 
   (define
     {:doc "A vector of command line arguments"
      :platforms #{:nodejs}
      :added "1.0"}
-    *argv* (array->vector (.slice process/argv 2)))
+    *argv* (array->vector (.slice (.-argv js.node/process) 2)))
 )
 
 (javascript?
@@ -973,7 +950,7 @@
     (-> (.split s delim) array->list))
   
   (define-function join
-    [col delim]
+    [delim col]
     (let [joiner (lambda [s x] (str s delim x))]
       (reduce joiner col)))
   
@@ -985,3 +962,61 @@
        ""
        (.replace s pat val))))
 )
+
+(define-function json
+  [x]
+  (.parse js/JSON x))
+
+(define-macro promise
+  [binds &forms]
+  (cons 'js/Promise. (cons 'lambda (cons binds forms))))
+
+(define-macro >>
+  [x &forms]
+  (cons '..
+    (cons x
+          (map
+            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            forms))))
+
+(define-macro >>>
+  [x &forms]
+  (cons '..
+    (cons x
+          (map
+            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            forms))))
+
+(define-function position-vars
+  [exp]
+  (cond (and (symbol? exp) (.startsWith (str exp) "%"))
+          [exp]
+        (list? exp)
+          (if (= (first exp) '&)
+            (throw "& expressions cannot be nested")
+            (into (vector) (mapcat position-vars exp)))
+        (vector? exp)
+          (into (vector) (mapcat position-vars exp))
+        (map? exp)
+          (into (vector) (mapcat position-vars exp))
+        :else
+          []))
+
+(define-macro &
+  [exp]
+  (list 'lambda (position-vars exp) exp))
+
+(define-function alias
+  [alias ns-sym]
+  (let [ns (var ns-sym)]
+    (.alias *namespace* alias (.get ns)))
+  nil)
+
+(define-macro ns
+  [sym]
+  (list 'ns* sym))
+
+(define-function fn-opts
+  ([args k] (fn-opts args k nil))
+  ([args k alt]
+   (or (second (first (filter (& (= k (first %))) (partition 2 args)))) alt)))

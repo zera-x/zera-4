@@ -3,13 +3,19 @@ namespace pbnj.wonderscript {
 
   var _, ROOT_OBJECT;
   if (typeof exports !== 'undefined') {
+    // node.js
     mori = require('mori');
     _    = require('./core.js');
     pbnj.core = _;
     pbnj.reader = require('./reader.js');
     ROOT_OBJECT = global;
   }
+  else if (typeof java !== 'undefined') {
+    // nashorn
+    throw new Error('nashorn support is coming!');
+  }
   else {
+    // browser
     ROOT_OBJECT = window;
     _ = ROOT_OBJECT.pbnj.core;
   }
@@ -18,97 +24,66 @@ namespace pbnj.wonderscript {
   ROOT_OBJECT.pbnj.core = _;
   ROOT_OBJECT.pbnj.reader = pbnj.reader;
 
+  ws.STREAM_META = pbnj.reader.STREAM_META.swap(_.assoc, _.keyword('source'), "src/pbnj/wonderscript.js");
+  ws.inspect = _.inspect;
+
+  // Exceptions
+  //
+
+  function UndefinedVariableException(ident) {
+    this.message = ["Undefined variable: '", ident, "'"].join('');
+  }
+  ws.UndefinedVariableException = UndefinedVariableException;
+
   // types
   //
 
-  function Atom(value) {
-    this.value = value;
-  }
+  ws.Protocol = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Protocol'),
+    _.hashMap(),
+    function(methods, protocols) {
+      this.methods   = methods;
+      this.protocols = protocols;
+    }
+  );
 
-  Atom.prototype.deref = function() {
-    return this.value;
+  ws.Type = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Type'),
+    _.hashMap(),
+    function(attrs, methods, protocols) {
+      this.attrs     = attrs;
+      this.methods   = methods;
+      this.protocols = protocols;
+    }
+  );
+
+  ws.Function = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Function'),
+    _.hashMap(_.keyword('types'), _.set([ws.Protocol])),
+    function() {}
+  );
+
+  ws.Block = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Block'),
+    _.hashMap(_.keyword('types'), _.set([ws.Protocol])),
+    function() {}
+  );
+
+  ws.Object = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Object'),
+    _.hashMap(_.keyword('types'), _.set([ws.Protocol])),
+    function() {}
+  );
+
+  ws.Ref = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Ref'),
+    _.hashMap(_.keyword('types'), _.set([ws.Protocol, ws.Object])),
+    function() {}
+  );
+
+  ws.env = function(parent) {
+    return new Env(parent);
   };
-
-  Atom.prototype.reset = function(val) {
-    this.value = val;
-  };
-
-  Atom.prototype.swap = function(fn) {
-    this.value = fn.apply(null, [this.value].concat(Array.prototype.slice.call(arguments, 1)));
-  };
-
-  ws.Atom = Atom;
-
-  /**
-   * @constructor
-   * @final
-   */
-  function Var(name, value, meta) {
-    this.name = name;
-    this.value = value;
-    this.meta = meta;
-  }
-
-  Var.prototype.getMeta = function() {
-    return this.meta;
-  };
-
-  Var.prototype.setValue = function(value) {
-    this.value = value;
-    return this;
-  };
-  Var.prototype.set = Var.prototype.setValue;
-
-  Var.prototype.getValue = function() {
-    return this.value;
-  };
-  Var.prototype.get = Var.prototype.getValue;
-  Var.prototype.deref = Var.prototype.getValue;
-
-  Var.prototype.getName = function() {
-    return this.value;
-  };
-
-  Var.prototype.withMeta = function(meta) {
-    this.meta = meta;
-    return this;
-  };
-
-  Var.prototype.varyMeta = function(f, args) {
-    this.meta = f.apply(null, [this.meta].concat(_.intoArray(args)));
-    return this;
-  };
-
-  Var.prototype.toString = function() {
-    return _.str('#<v name: ', this.name, ' meta: ', this.meta, ' value: ', this.value, '>');
-  };
-
-  Var.prototype['class'] = function() {
-    return Var;
-  };
-
-  Var.prototype.isa = function(klass) {
-    return viable === klass;
-  };
-
-  Var.prototype.isMacro = function() {
-    return this.meta && _.get(this.meta, _.keyword('macro'));
-  };
-
-  Var.prototype.isClass = function() {
-    return this.meta && _.get(this.meta, _.keyword('type'));
-  };
-
-  var VarMeta = _.hashMap(_.keyword('type'), true);
-  Var.getMeta = function() {
-    return VarMeta;
-  };
-
-  Var.toString = function() {
-    return "Var";
-  };
-
-  _.Var = ws.Var = Var;
 
   var ENV_ID = 0;
 
@@ -116,41 +91,38 @@ namespace pbnj.wonderscript {
    * @constructor
    * @final
    */
-  function Env(parent) {
-    this.vars = Object.create(parent ? parent.vars : null);
-    this.parent = parent;
-    this.define('*scope*', this);
-    this.id = ENV_ID++;
+  var Env = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Env'),
+    _.hashMap(_.keyword('type'), _.set([ws.Object])),
+    function Env(parent, meta) {
+      this.meta  = meta || _.hashMap(); 
+      this.vars = Object.create(parent ? parent.vars : null);
+      this.parent = parent;
+      this.define('*scope*', this);
+      this.id = ENV_ID++;
+    }
+  );
+
+  Env.prototype.getID = function() {
+    return this.id;
+  };
+
+  Env.prototype.getMeta = function() {
+    return this.meta;
+  };
+
+  Env.prototype.withMeta = function(meta) {
+    this.meta = meta;
+    return this;
   }
 
-  Env.prototype.maybeSetCallstack = function() {
-    if (!this._callstack) this._callstack = _.list();
-    return this;
+  Env.prototype.varyMeta = function(f, args) {
+    var args_ = args || _.list();
+    return this.withMeta(ws.apply(f, _.cons(this.meta, args_)));
   };
 
-  Env.prototype.updateCallstack = function(opts) {
-    if (this._callstack) {
-      this._callstack = _.conj(this._callstack, this.trace(opts));
-    }
-    return this;
-  };
-
-  Env.prototype.callstack = function() {
-    return this._callstack;
-  };
-
-  Env.prototype.trace = function(opts) {
-    var opts = opts || {};
-    return _.vector(
-      opts.ident || this.getIdent(),
-      opts.source || this.getSource(),
-      opts.line || this.getLine(),
-      opts.column || this.getColumn()
-    );
-  };
-
-  Env.prototype.extend = function() {
-    return new Env(this);
+  Env.prototype.extend = function(meta) {
+    return new Env(this, meta);
   };
 
   Env.prototype.lookup = function(name) {
@@ -168,33 +140,50 @@ namespace pbnj.wonderscript {
     if (name in this.vars) {
       return this.vars[name];
     }
-    throw new Error(_.str("Undefined variable: '", name, "'"));
+    throw new Error(_.str("Undefined variable: '", name, "' in Env: ", this.id));
+  };
+
+  Env.prototype.getScopeObjects = function() {
+    var buffer = [];
+    var scope = this;
+    var props, prop, i;
+    while (scope) {
+      props = Object.getOwnPropertyNames(scope.vars);
+      for (i = 0; i < props.length; i++) {
+        prop = props[i];
+        buffer.push(_.vector(_.symbol(prop), scope.vars[prop]));
+      }
+      scope = scope.parent;
+    }
+    return mori.into(_.hashMap(), buffer);
   };
 
   Env.prototype.getObjects = function() {
     var buffer = [];
-    var scope = this;
-    while (scope) {
-      for (var prop in scope.vars) {
-        if (Object.prototype.hasOwnProperty.call(scope.vars, prop)) {
-          buffer.push(scope.vars[prop]);
-        }
-      }
-      scope = scope.parent;
+    var props, prop, i;
+    props = Object.getOwnPropertyNames(this.vars);
+    for (i = 0; i < props.length; i++) {
+      prop = props[i];
+      buffer.push(_.vector(_.symbol(prop), this.vars[prop]));
     }
-    return mori.list.apply(null, buffer);
+    return mori.into(_.hashMap(), buffer);
+  };
+
+  Env.prototype.toString = function() {
+    return _.str("#<Env id: ", this.id, ", ident: ", this.ident, ", vars: ",
+      _.reduce(function(s, x) { return _.str(s, ', ', x) }, _.sort(_.map(_.first, this.getObjects()))), ">");
   };
 
   Env.prototype.get = function(name) {
     var obj = this.getObject(name);
-    return obj.getValue();
+    return obj.get();
   };
 
   Env.prototype.set = function(name, value) {
     var scope = this.lookup(name);
     // cannot define globals from a nested environment
     if (!scope && this.parent) throw new Error(_.str("Undefined variable: '", name, "'"));
-    (scope || this).vars[name].setValue(value);
+    (scope || this).vars[name].set(value);
     return value;
   };
 
@@ -245,23 +234,23 @@ namespace pbnj.wonderscript {
     }
   };
 
+  Env.prototype.importVars = function(env) {
+    var vars = env.vars;
+    var scope;
+    for (var name in vars) {
+      if (Object.prototype.hasOwnProperty.call(vars, name)) {
+        if ((scope = this.lookup(name)) && scope.parent) {
+          console.warn(['WARNING: ', name, ' exists in ', scope.getIdent(), ' it will be shadowed in this module'].join(''));
+        }
+        this.vars[name] = vars[name];
+      }
+    }
+  };
+
   Env.prototype.define = function(name, value, meta) {
     var sname = _.str(name);
-    var meta = _.merge(_.hashMap(_.keyword('name'), _.symbol(sname), _.keyword('tag'), typeTag(value)), meta || _.hashMap());
-
-    var scope, m = _.hashMap();
-    if (scope = this.lookup('*scope-name*')) {
-      m = _.assoc(m, _.keyword('scope-name'), scope.get('*scope-name*'));
-    }
-    if (scope = this.lookup('*line*')) {
-      m = _.assoc(m, _.keyword('line'), scope.get('*line*'));
-    }
-    if (scope = this.lookup('*column*')) {
-      m = _.assoc(m, _.keyword('column'), scope.get('*column*'));
-    }
-    if (scope = this.lookup('*source*')) {
-      m = _.assoc(m, _.keyword('source'), scope.get('*source*'));
-    }
+    var meta  = _.merge(_.hashMap(_.keyword('name'), _.symbol(sname), _.keyword('tag'), typeTag(value)), meta || _.hashMap());
+    var m     = _.hashMap();
 
     if (_.isFunction(value)) {
       if (value.arglists) {
@@ -287,117 +276,20 @@ namespace pbnj.wonderscript {
       }
     }
 
-    this.vars[sname] = new Var(_.symbol(sname), value, _.merge(m, meta));
+    this.vars[sname] = new _.Var(value, _.merge(m, meta));
     return value;
   };
 
-  Env.prototype.setLocation = function(line, column) {
-    this.define('*line*', line);
-    this.define('*column*', column);
-    return this;
-  };
-
-  Env.prototype.getLine = function() {
-    if (scope = this.lookup('*line*')) {
-      return scope.get('*line*');
-    }
-    return null;
-  };
-
-  Env.prototype.getColumn = function() {
-    if (scope = this.lookup('*column*')) {
-      return scope.get('*column*');
-    }
-    return null;
-  };
-
-  Env.prototype.getSource = function() {
-    if (scope = this.lookup('*source*')) {
-      return scope.get('*source*');
-    }
-    return null;
-  }
-
-  Env.prototype.setSource = function(source) {
-    this.define('*source*', source);
-    return this;
-  };
-
-  Env.prototype.setIdent = function(ident) {
-    this.define('*scope-name*', _.symbol(_.str(ident)));
-    return this;
-  };
-
-  Env.prototype.getIdent = function() {
-    try {
-      return this.lookup('*scope-name*').get('*scope-name*');
-    }
-    catch (e) {
-      return null;
-    }
-  };
-
-  Env.prototype.stash = function() {
-    var scope = this.lookup('*stash*');
-    if (scope) {
-      return scope.get('*stash*');
-    }
-    return null;
-  };
-
-  Env.prototype.initStash = function() {
-    var stash = new Env();
-    this.define('*stash*', stash);
-    return this;
-  };
-
-  Env.prototype.setStashValue = function(key, value) {
-    var stash = this.stash();
-    if (stash) {
-      stash.define(key, value);
-    }
-    else {
-      throw new Error("could not find stash");
-    }
-    return this;
-  };
-
-  Env.prototype.getStashValue = function(key) {
-    var stash = this.stash();
-    if (stash) {
-      try {
-        return stash.get(key);
-      }
-      catch (e) {
-        return null;
-      }
-    }
-    return null;
-  };
-
-  Env.prototype.stacktrace = function() {
-    var trace = _.list();
-    var scope = this;
-    while (scope) {
-      if (scope.trace) trace = _.conj(trace, scope.trace);
-      scope = scope.parent;
-    }
-    return trace;
-  };
-
-  ws.env = function(parent) {
-    return new Env(parent);
-  };
-
-  ws['var'] = function(name, value, meta) {
-    return new Var(name, value, meta);
+  ws['var'] = function(name, env) {
+    var env = env || globalEnv;
+    return ws.lookupVar(name, env);
   };
 
   ws.isEnv = function(val) {
     return val instanceof Env;
   };
 
-  _.Env = ws.Env = Env;
+  ws.Env = Env;
 
   // Exceptions
   ws.ArgumentException = function() {
@@ -425,9 +317,7 @@ namespace pbnj.wonderscript {
   var evalKeyword = function(exp, env) {
     var sexp = '' + exp;
     if (sexp.startsWith('::')) {
-      var modname = env.lookup('*module-name*')
-                        ? env.lookup('*module-name*').get('*module-name*')
-                        : ws.MODULE_SCOPE["@@NAME@@"];
+      var modname = ws.NS_SCOPE.getName();
       return _.keyword('' + modname, sexp.replace(/^::/, ''));
     }
     return exp;
@@ -467,63 +357,44 @@ namespace pbnj.wonderscript {
 
   var isVariable = ws.isVariable = _.isSymbol;
 
-  var lookupVariable = function(sym, env) {
-    var env = env || globalEnv;
-    if (_.isSymbol(sym)) {
-      var name = _.name(sym);
-      var ns = _.namespace(sym);
-      if (ns === null) {
-        // find local scope
-        scope = env.lookup(name);
-        if (scope === null) {
-          if (ws.MODULE_SCOPE[name] == null) {
-            if (pbnj.core[name] == null) {
-              return null;
-            }
-            return pbnj.core;
-          }
-          return ws.MODULE_SCOPE;
-        }
-        else {
-          return scope;
-        }
+  ws.lookupVar = function(ident, env) {
+    var scope, sym, ns, nm;
+    if (isFullyQualified(ident)) {
+      /*ns = ws.Namespace.get(_.symbol(_.namespace(ident)));
+      nm = _.name(ident);
+      sym = ident;
+      return ns.getVar(_.symbol(nm));*/
+      var nsvar = ws.lookupVar(_.namespace(ident), env);
+      if (nsvar.isNamespace() || nsvar.isAlias()) {
+        return nsvar.get().getVar(_.name(ident));
       }
       else {
-        if (ns === 'js') {
-          return ROOT_OBJECT;
-        }
-        else {
-          var mod = findModule(_.symbol(ns));
-          if (mod == null) {
-            return lookupVariable(_.symbol(ns));
-          }
-          return mod;
+        throw new Error(_.str('invalid namespace: ', _.namespace(ident)));
+      }
+    }
+    else {
+      if (scope = env.lookup(ident)) {
+        sym = ident;
+      }
+      else {
+        scope = ws.NS_SCOPE.lookup(ident);
+        sym = ident;
+        if (scope === null) {
+          scope = ws.DEFAULT_NS.lookup(sym);
         }
       }
     }
-    throw new Error("variable should be a symbol");
-  };
-  ws.lookupVariable = lookupVariable;
 
-  var getVariable = function(env, name) {
-    var env_ = ws.isEnv(env) ? env : env["@@SCOPE@@"];
-    if (env_) {
-      var obj = env_.getObject(name)
-      if (_.get(obj.getMeta(), _.keyword('macro')) === true) {
-        throw new Error(["Cannot use a macro in this context: ", name].join(''));
-      }
-      return obj.getValue();
+    if (scope === null) throw new UndefinedVariableException(ident);
+    else {
+      return scope.getObject(sym);
     }
-    if (env[name]) return env[name];
-    throw new Error(['cannot find variable: ', name].join(''));
   };
 
   var evalVariable = function(exp, env) {
-    var name = _.name(exp);
-    var mod = lookupVariable(exp, env);
-    if (mod === null) throw new Error(["Undefined variable: '", exp, "'"].join(''));
-    var val = getVariable(mod, name);
-    return val;
+    var v = ws.lookupVar(exp, env);
+    if (v.isMacro()) throw new Error(["Can't take macro as a value: (var '", exp, ")"].join(''));
+    return v.get();
   };
 
   var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('define'));
@@ -531,25 +402,34 @@ namespace pbnj.wonderscript {
   var defineVariable = function(env, ident, value, meta) {
     var meta = meta || _.hashMap();
     var isPrivate = _.get(meta, _.keyword('private'), false);
-    var name = _.name(ident);
-    var ns   = _.namespace(ident);
-    if (isPrivate) {
-      env.define(name, value, _.assoc(meta, _.keyword('private'), true));
-    }
-    else {
+    if (!isPrivate) {
       // define value in module scope
-      var mod = ns == null ? ws.MODULE_SCOPE : findModule(_.symbol(ns));
-      if (!mod) throw new Error(["module ", ns ," is undefined"].join(''));
-      if (!mod["@@SCOPE@@"]) {
-        mod["@@SCOPE@@"] = globalEnv.extend();
-      }
-      meta = _.assoc(meta, _.keyword('module'), mod["@@NAME@@"]);
-      mod["@@SCOPE@@"].define(name, value, meta);
-      mod[name] = value;
+      var qualified = isFullyQualified(ident) ? ident : qualifySymbol(ident);
+      var ns        = ws.Namespace.get(_.symbol(_.namespace(qualified)));
+      meta = _.assoc(meta, _.keyword('namespace'), ns);
+      ns.define(_.symbol(_.name(qualified)), value, meta);
     }
+    env.define(ident, value, meta);
     return env;
   };
   ws.defineVariable = defineVariable;
+
+  var qualifySymbol = function(sym) {
+    var ns   = _.namespace(sym);
+    var name = _.name(sym);
+    if (ns) {
+      return sym;
+    }
+    else {
+      return _.symbol(ws.NS_SCOPE.getName(), name);
+    }
+  };
+  ws.qualifySymbol = ws['qualify-symbol'] = qualifySymbol;
+
+  var isFullyQualified = function(sym) {
+    return _.namespace(sym);
+  };
+  ws['fully-qualified?'] = isFullyQualified;
 
   var evalDefinition = function(exp, env) {
     var rest  = _.rest(exp);
@@ -771,6 +651,9 @@ namespace pbnj.wonderscript {
       var that = this;
       var vars = _.reduce(function(s, x) { return [s, ', ', x].join('') },
                     _.map(function(x) { return [x, ': ', ws.inspect(that[x])].join('') }, names));
+      if (names.length === 0) {
+        return ["#<", name, ">"].join('');
+      }
       return ["#<", name, " ",  vars, ">"].join('');
     };
 
@@ -844,8 +727,64 @@ namespace pbnj.wonderscript {
 
   var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
 
+  var validateVariables = function(body, scope) {
+    var exp_, exp, list = body;
+    while(exp = _.first(list)) {
+      var sexp = '' + exp;
+      if (_.isSymbol(exp) && !(_.has(ws.TAGGED_SPECIAL_FORMS, exp) || sexp.endsWith('.') || sexp.startsWith('.') || sexp.startsWith('.-'))) {
+        var val = evalVariable(exp, scope);
+        scope.define(exp, val, _.hashMap(_.keyword('dynamic'), true));
+      }
+      else if (_.isList(exp)) {
+        exp_ = macroexpand(exp);
+        if (isDefinition(exp_)) {
+          //console.log('def');
+          scope.define(_.second(_.rest(exp_)), null, _.hashMap(_.keyword('dynamic'), true));
+        }
+        else if (isBlock(exp_)) {
+          //console.log('block');
+          validateVariables(_.rest(exp_), scope);
+        }
+        else if (isLoop(exp_)) {
+          //console.log('loop');
+          var names = _.map(_.first, _.partition(2, _.second(exp_)));
+          _.each(names, function(name) {
+            scope.extend().define(name, null, _.hashMap(_.keyword('dynamic'), true));
+          });
+        }
+        else if (isLambda(exp_)) {
+          var names = _.second(exp_);
+          if (_.isList(names)) {
+            names = _.mapcat(_.first, _.rest(exp_));
+          }
+          _.each(names, function(name) {
+            scope.extend().define(name, null, _.hashMap(_.keyword('dynamic'), true));
+          });
+        }
+        else if (isPropertyAccessor(exp_)) {
+          // skip
+        }
+        else if (isPropertyAssignment(exp_)) {
+          // skip
+        }
+        else {
+          //validateVariables(exp_, scope);
+        }
+      }
+      else if (_.isVector(exp) || _.isSet(exp)) {
+        validateVariables(exp, scope);
+      }
+      else if (_.isMap(exp)) {
+        validateVariables(_.keys(exp), scope);
+        validateVariables(_.vals(exp), scope);
+      }
+      list = _.rest(list);
+    }
+    return body;
+  };
+
   var lambdaID = 0;
-  function Lambda(exp, env, callstack) {
+  var Lambda = _.makeType('Lambda', _.hashMap(), function Lambda(exp, env, callstack) {
     var id, rest, names, argCount, bodies, i, fn, exprs, args, body, sum, keys, arities;
 
     if (arguments.length < 2) {
@@ -854,24 +793,31 @@ namespace pbnj.wonderscript {
 
     id = ['lambda-', lambdaID++].join('');
 
-    this.callstack = callstack || new Atom(_.list());
-    this.callstack.swap(_.conj, env.trace({ident: _.symbol(id)}));
+    this.callstack = callstack || ws.stack();
+    this.callstack.swap(_.conj, trace(_.symbol(id)));
 
     rest = _.rest(exp);
     names = _.first(rest);
     argCount = 0;
     bodies = {};
 
+    this.scope = env.extend()
+
     if (_.isVector(names)) {
       argCount = _.count(names);
       for (var i = 0; i < argCount; i++) {
-        var sname = '' + _.nth(names, i);
+        var name  = _.nth(names, i);
+        var sname = '' + name;
         if (sname[0] === '&') {
           argCount = (argCount - 1) * -1;
+          //this.scope.define(_.symbol(sname.slice(1)));
+        }
+        else {
+          //this.scope.define(name);
         }
       }
       bodies[argCount] = {arity: argCount, args: names, code: _.rest(rest)};
-      var body = bodies[argCount].body;
+      var body = bodies[argCount].code;
     }
     else if (_.isList(names)) {
       exprs = rest;
@@ -880,11 +826,15 @@ namespace pbnj.wonderscript {
         body = _.rest(fn);
         sum = 0;
         for (i = 0; i < args.length; i++) {
-          if (('' + args[i])[0] === '&') {
-            sum = (sum + 1) * -1
+          var name = args[i];
+          var sname = '' + name;
+          if (sname[0] === '&') {
+            sum = (sum + 1) * -1;
+            //this.scope.define(_.symbol(sname.slice(1)));
           }
           else {
             sum++;
+            //this.scope.define(name);
           }
         }
         bodies[sum] = {arity: sum, args: args, code: body};
@@ -913,11 +863,10 @@ namespace pbnj.wonderscript {
       return argCount;
     };
     this.length = argCount;
-    this.scope = env.extend().setIdent(id).initStash();
     this.toString = function() {
       return ws.inspect(exp);
     };
-  }
+  });
 
   Lambda.prototype.bind = function(values) {
     var bodies = this.bodies();
@@ -1021,7 +970,7 @@ namespace pbnj.wonderscript {
   var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
   var isRecursionPoint = ws.isRecursionPoint = makeTagPredicate(_.symbol('again'));
 
-  function Loop(bindings, body, env) {
+  var Loop = _.makeType('Loop', _.hashMap(), function Loop(bindings, body, env) {
     if (arguments.length !== 3) {
       throw new Error(['3 arguments expected got: ', arguments.length].join(''));
     }
@@ -1031,8 +980,7 @@ namespace pbnj.wonderscript {
     this.body = function() {
       return body;
     };
-    this.scope = env.extend().setIdent('loop').initStash();
-    this.scope.define('*recursion-point*', this);
+    this.scope = env.extend();
     var names = [];
     for (var i = 0; i < _.count(bindings); i += 2) {
       var name = _.nth(bindings, i);
@@ -1045,7 +993,7 @@ namespace pbnj.wonderscript {
     this.names = function() {
       return names;
     };
-  }
+  });
 
   Loop.prototype.bind = function(values) {
     var names = this.names();
@@ -1142,6 +1090,16 @@ namespace pbnj.wonderscript {
     return _.isList(exp);
   };
 
+  var trace = function(ident) {
+    var meta = ws.STREAM_META.deref();
+    return _.vector(
+      _.get(meta, _.keyword('expression')),
+      _.get(meta, _.keyword('source')),
+      _.get(meta, _.keyword('line')),
+      _.get(meta, _.keyword('column'))
+    );
+  };
+
   var evalApplication = ws.evalApplication = function(exp, env, callstack) {
     var func, args, rawargs, buffer, op, op_, sop, newExp, obj, meth, ctr, i;
 
@@ -1154,8 +1112,8 @@ namespace pbnj.wonderscript {
     // Primitive operators are inlined for performance
     op = _.first(exp);
 
-    var callstack = callstack || new Atom(_.list());
-    callstack.swap(_.conj, env.trace({ident: op}));
+    var callstack = callstack || ws.stack();
+    callstack.swap(_.conj, trace(op));
 
     if (_.equals(op, _.symbol('+'))) {
       if (args.length === 0) return 0;
@@ -1166,9 +1124,13 @@ namespace pbnj.wonderscript {
       else if (args.length === 1) return eval(['-', args[0]].join(''));
       return eval(['(', args.join(')-('), ')'].join(''));
     }
-    else if (_.equals(op, _.symbol('*')) || _.equals(op, _.symbol('/'))) {
+    else if (_.equals(op, _.symbol('*'))) {
       if (args.length === 0) return 1;
       return eval(['(', args.join(')*('), ')'].join(''));
+    }
+    else if (_.equals(op, _.symbol('/'))) {
+      if (args.length === 0) return 1;
+      return eval(['(', args.join(')/('), ')'].join(''));
     }
     else if (_.equals(op, _.symbol('str'))) {
       if (args.length === 0) return '';
@@ -1258,7 +1220,7 @@ namespace pbnj.wonderscript {
       return evalClassInstantiation(newExp, env);
     }
     else if (_.isAssociative(op) || _.isKeyword(op) || _.isSet(op) || (isQuoted(op) && _.isSymbol(op_ = evalQuote(op)))) {
-      return op_.apply(null, args);
+      return (op_ || op).apply(null, args);
     }
 
     func = ws.eval(op, env, callstack);
@@ -1270,6 +1232,8 @@ namespace pbnj.wonderscript {
       return func['-invoke'](args);
     }
     else {
+      console.log('exp: ', ws.inspect(exp));
+      console.log('env: ', env.toString());
       console.log('func value: ', func);
       throw new Error(["'", ws.inspect(op), "' is not a function"].join(''));
     }
@@ -1277,10 +1241,10 @@ namespace pbnj.wonderscript {
 
   var isBlock = ws.isBlock = makeTagPredicate(_.symbol('do'));
 
+  // FIXME: module scoped vars defined within a block are not accessible within a block unless they are fully qualified
   var evalBlock = function(exp, env) {
     var body = _.rest(exp);
     var scope = env.extend();
-    scope.setIdent('do');
     var value = null;
     _.each(body, function(exp) {
       value = ws.eval(exp, scope);
@@ -1325,6 +1289,7 @@ namespace pbnj.wonderscript {
     _.symbol('new'),
     _.symbol('module'),
     _.symbol('require'),
+    _.symbol('loop'),
     _.symbol('use')
   ]);
 
@@ -1371,10 +1336,15 @@ namespace pbnj.wonderscript {
     if (scope === null) return null;
     var env = ws.isEnv(scope) ? scope : scope["@@SCOPE@@"];
     if (env) {
-      var obj = env.getObject(_.name(name));
+      try {
+        var obj = env.getObject(_.name(name));
+      }
+      catch (e) {
+        return null;
+      }
       var meta = obj.getMeta();
       if (_.get(meta, _.keyword('macro')) === true) {
-        return obj.getValue();
+        return obj.get();
       }
     }
     else {
@@ -1386,16 +1356,44 @@ namespace pbnj.wonderscript {
   };
 
   var isMacro = ws.isMacro = ws['macro?'] = function(name) {
-    var scope = lookupVariable(name);
-    return getMacro(scope, name);
+    try {
+      var v = ws.lookupVar(name, globalEnv);
+    }
+    catch (e) {
+      if (e instanceof UndefinedVariableException) {
+        return null;
+      }
+      else {
+        throw e;
+      }
+    }
+    var meta = v.getMeta();
+    if (_.get(meta, _.keyword('macro')) === true) {
+      return v.get();
+    }
+    return null;
+  };
+
+  var isTaggedList = ws['tagged-list?'] = function(exp, tag) {
+    if (tag) {
+      return _.isList(exp) && _.equals(_.first(exp), tag);
+    }
+    else {
+      return _.isList(exp) && _.isSymbol(_.first(exp));
+    }
   };
 
   var macroexpand = ws.macroexpand = function(exp) {
     var macro, name;
-    if (!(_.isList(exp) && _.isSymbol(name = _.first(exp)))) {
+    if (!isTaggedList(exp)) {
       return exp;
     }
+    name = _.first(exp);
     if (_.hasKey(ws.TAGGED_SPECIAL_FORMS, name)) {
+      return exp;
+    }
+    var sname = ('' + name);
+    if (sname.endsWith('.') || sname.startsWith('.')) {
       return exp;
     }
     if (macro = isMacro(name)) {
@@ -1407,28 +1405,15 @@ namespace pbnj.wonderscript {
   var isAssignment = ws.isAssignment = makeTagPredicate(_.symbol('set!'));
 
   var evalAssignment = function(exp, env) {
-    var name = _.second(exp);
-    var scope = lookupVariable(name, env);
-    if (scope === null) throw new Error(["Undefined variable '", name, "'"].join(''));
+    var name  = _.second(exp);
     var value = ws.eval(_.second(_.rest(exp)), env);
-    var ns = _.namespace(name);
-    var sname = '' + name;
-    if (ws.isEnv(scope)) {
-      scope.set(sname, value);
-    }
-    else {
-      scope[sname] = value;
-      if (env = env.lookup(sname)) {
-        env.set(sname, value);
-      }
-    }
+    ws.lookupVar(name, env).set(value);
     return value;
   };
 
   var isThrownException = ws.isThrownException = makeTagPredicate(_.symbol('throw'));
 
   var evalThrownException = function(exp, env) {
-    env.updateCallstack({ident: _.symbol('throw')});
     var error = ws.eval(_.second(exp), env);
     if (_.isString(error)) {
       throw new Error(error); //wsError(error, env.stacktrace()));
@@ -1476,85 +1461,193 @@ namespace pbnj.wonderscript {
     return new (ctr.bind.apply(ctr, args));
   };
 
-  var evalModuleName = function(name, root) {
+  ws.Namespace = _.makeType(
+    _.symbol('pbnj.wonderscript', 'Namespace'),
+    _.hashMap(),
+    function(name) {
+      if (!_.isSymbol(name)) throw new Error("module name should be a symbol");
+      this.name  = name;
+      this.scope = globalEnv.extend();
+      this.scope.define('*namespace*', this, _.hashMap(_.keyword('dynamic'), true));
+    }
+  );
+
+  ws.Namespace.cache = {};
+  ws.Namespace.intern = function(name) {
+    var cache = ws.Namespace.cache;
+    if (!cache[name]) {
+      var ns = new ws.Namespace(name);
+      //ns.importJSModule(ns.extern(ROOT_OBJECT));
+      cache[name] = ns;
+      globalEnv.define(name, ns, _.hashMap(_.keyword('tag'), _.symbol('pbnj.wonderscript', 'Namespace')));
+    }
+    return cache[name];
+  };
+
+  ws.Namespace.get = function(name) {
+    var cache = ws.Namespace.cache;
+    if (cache[name]) return cache[name];
+    var obj = globalEnv.getObject(name);
+    var meta = obj.getMeta();
+    if (meta && _.get(meta, _.keyword('module')) === true) {
+      cache[name] = obj.get();
+      return cache[name];
+    }
+    throw new Error(_.str("'", name, "' doesn't seem to be a module"));
+  };
+
+  ws.Namespace.prototype.getScope = function() {
+    return this.scope;
+  };
+
+  ws.Namespace.prototype.getVars = function() {
+    return this.scope.getObjects();
+  };
+
+  ws.Namespace.prototype.getVar = function(name) {
+    return this.scope.getObject(name);
+  };
+
+  ws.Namespace.prototype.lookup = function(name) {
+    return this.scope.lookup(name);
+  };
+
+  ws.Namespace.prototype.getName = function() {
+    return this.name;
+  };
+
+  ws.Namespace.prototype.extern = function(root) {
+    var name = this.name;
     if (!_.isSymbol(name)) throw new Error('symbol expected');
     if (!root) throw new Error('root object is required');
     var path = ('' + name).split('/')[0].split('.');
     var mod = root;
+    var name;
     for (var i = 0; i < path.length; i++) {
-      var name = path[i];
+      name = path[i];
       if (!_.isObject(mod[name])) {
         mod[name] = {};
       }
       mod = mod[name];
     }
+    if (!mod["@@SELF@@"]) mod["@@SELF@@"] = this;
+    this.jsmod = mod;
     return mod;
+  };
+
+  ws.Namespace.prototype.define = function(name, value, meta) {
+    //this.jsmod[name] = value;
+    return this.scope.define(name, value, meta);
+  };
+
+  ws.Namespace.prototype.intern = function(name, value, meta) {
+    var scope = this.scope.lookup(name);
+    if (scope !== null) {
+      return scope.getObject(name);
+    }
+    else {
+      this.scope.define(name, value, meta);
+      return this.scope.getObject(name);
+    }
+  };
+
+  ws.Namespace.prototype.alias = function(alias, ns) {
+    return this.define(alias, ns, _.hashMap(_.keyword('ns', 'alias'), true));
+  };
+
+  ws.Namespace.prototype.refer = function(ns, f) {
+    var that = this;
+    _.each(this.getVars(), function(x) {
+      if (!f || ws.apply(f, x)) {
+        that.define(_.name(_.nth(x, 0)), _.nth(x, 1), _.hashMap(_.keyword('ns', 'ref'), true));
+      }
+    });
+    return this;
+  };
+
+  ws.Namespace.prototype.export = function(root) {
+    var jsmod = this.extern(root);
+    var vars = this.getVars();
+    _.each(vars, function(v) {
+      jsmod[_.nth(v, 0)] = _.nth(v, 1).get();
+    });
+    return true;
+  };
+
+  ws.Namespace.prototype.importJSModule = function(jsmod, ex) {
+    if (jsmod === null) return null;
+    else {
+      var props = Object.getOwnPropertyNames(jsmod);
+      var props, i;
+      for (i = 0; i < props.length; i++) {
+        prop = props[i];
+        if (prop === "@@SELF@@" || _.has(ex, prop)) continue;
+        var name = _.name(pbnj.reader.readSymbol(prop));
+        this.scope.define(name, jsmod[prop], _.hashMap(_.keyword('imported'), true));
+      }
+      return true;
+    }
+  };
+
+  ws.Namespace.prototype.toString = function() {
+    return _.str("#<Namespace name: ", this.name, ">");
+  };
+
+  ws['ns?'] = function(val) {
+    if (val == null) return false;
+    else {
+      return val instanceof ws.Namespace;
+    }
+  };
+
+  ws['ns-scope'] = function(mod) {
+    return mod.getScope();
+  };
+
+  ws['ns-name'] = function(mod) {
+    return mod.getName();
+  };
+
+  ws['ns-vars'] = function(mod) {
+    return mod.getVars();
   };
 
   var defineModule = function(name) {
-    var mod = evalModuleName(name, ROOT_OBJECT);
-    if (mod) {
-      var scope = globalEnv.extend().setIdent('' + name);
-      scope.define('*module-name*', name);
-      mod.$lang$ws$type = 'module';
-      ws.MODULE_SCOPE = mod;
-      globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
-    }
-    else {
-      throw new Error(['There was an error defining module "', name, '"'].join(''));
-    }
-    return mod;
+    var ns = ws.Namespace.intern(name);
+    ws.NS_SCOPE = ns;
+    return ns;
   };
   ws.defineModule = defineModule;
 
-  var isModuleDefinition = ws.isModuleDefinition = makeTagPredicate(_.symbol('module'));
+  var isModuleDefinition = ws.isModuleDefinition = makeTagPredicate(_.symbol('ns*'));
 
   var evalModuleDefinition = function(exp, env) {
     var name = _.second(exp); 
-    var mod = defineModule(name);
-    if (mod) {
-      var scope = env.extend().setIdent('' + name);
-      scope.define('*module-name*', name);
-      if (!mod["@@SCOPE@@"]) mod["@@SCOPE@@"] = scope;
-      if (!mod["@@NAME@@"]) mod["@@NAME@@"] = name;
-      mod.$lang$ws$type = 'module';
-      ws.MODULE_SCOPE = mod;
-      globalEnv.define(name, mod, _.hashMap(_.keyword('tag'), _.keyword('module')));
-    }
-    else {
-      throw new Error(['There was an error defining module "', name, '"'].join(''));
-    }
-    return mod;
+    return defineModule(name);
   };
 
   var isModuleRequire = ws.isModuleRequire = makeTagPredicate(_.symbol('require'));
 
   var evalModuleRequire = function(exp, env) {
     var name = _.second(exp);
-    var mod = ws.MODULE_SCOPE;
     var dir = typeof exports !== 'undefined' ? env.lookup('*dir*').get('*dir*') : '/';
+
+    if (_.isSymbol(name)) {
+      name = [('' + name).split('.').join('/'), ".ws"].join('');
+    }
 
     if (_.isString(name)) {
       var full = dir ? [dir, name].join('/') : name;
       try {
-        ws.readFile(full, env.extend().setIdent('require'));
+        ws.readFile(full, env.extend());
       }
       catch (e) {
         throw new Error(["Reading file: \"", full, "\": ", e.message ? e.message : e].join(''));
       }
     }
-    else if (_.isSymbol(name)) {
-      var path = ["src/", ('' + name).split('.').join('/'), ".ws"].join('');
-      ws.readFile(dir ? [dir, path].join('/') : path, env.extend().setIdent('require'));
-      var mod = findModule(name);
-      if (mod == null) {
-        throw new Error(['module ', name, ' does not exist'].join(''));
-      }
-    }
     else {
       throw new Error("module name should be a symbol or string");
     }
-    ws.MODULE_SCOPE = mod;
     return true;
   };
 
@@ -1563,25 +1656,13 @@ namespace pbnj.wonderscript {
   var evalModuleSet = function(exp, env) {
     var name = _.second(exp);
     if (_.isSymbol(name)) {
-      var mod = findModule(name);
-      ws.MODULE_SCOPE = mod;
-      env.define('*module-name*', name);
+      var mod = evalVariable(name, globalEnv);
+      ws.NS_SCOPE = mod;
     }
     else {
-      throw new Error("module name should be a symbol");
+      throw new Error("namespace name should be a symbol");
     }
     return null;
-  };
-
-  var findModule = ws.findModule = function(name) {
-    if (!_.isSymbol(name)) throw new Error('symbol expected');
-    var path = ('' + name).split('/')[0].split('.');
-    var mod = ROOT_OBJECT;
-    for (var i = 0; i < path.length; i++) {
-      mod = mod[path[i]];
-      if (mod == null) break; //throw new Error(_.str('module ', name, ' is undefined'));
-    }
-    return mod;
   };
 
   var importModule = function(mod) {
@@ -1627,7 +1708,7 @@ namespace pbnj.wonderscript {
     var binds = _.second(exp);
     var body = _.rest(_.rest(exp));
     var expr, value = null;
-    var scope = env.extend().setIdent('catch');
+    var scope = env.extend();
 
     if (!_.isVector(binds) || _.count(binds) !== 2) {
       console.log('binds', ws.inspect(binds));
@@ -1638,8 +1719,8 @@ namespace pbnj.wonderscript {
     var klass = ws.eval(_.second(binds), scope);
 
     if (e instanceof klass) {
-      scope.define('' + vari, e);
-      while (expr = _.first(body)) {
+      scope.define(vari, e);
+      while ((expr = _.first(body)) !== null) {
         value = ws.eval(expr, scope);
         body = _.rest(body);
       }
@@ -1661,7 +1742,7 @@ namespace pbnj.wonderscript {
     var catchBlock = mori.filter(isCatchBlock, body);
     var finallyBlock = _.first(mori.filter(isFinallyBlock, body));
     body = mori.remove(function(exp) { return isFinallyBlock(exp) || isCatchBlock(exp) }, body);
-    var scope = env.extend().setIdent('try');
+    var scope = env.extend();
     if (!catchBlock && !finallyBlock) throw new Error("A try block should have a catch block or a finally block");
     if (catchBlock) {
       try {
@@ -1685,59 +1766,55 @@ namespace pbnj.wonderscript {
     return value;
   };
 
-  ws.MODULE_SCOPE = pbnj.core; // default scope
-  pbnj.core["@@NAME@@"] = _.symbol('pbnj.core');
-
-  var globalEnv = pbnj.core['@@SCOPE@@'] = ws.env().setIdent(_.symbol('global')).setSource('src/pbnj/wonderscript.js');
-  //globalEnv.define('*module-name*', _.symbol('pbnj.core'));
-  importModule(pbnj.core);
+  var globalEnv = ws.env(); //.withMeta(_.hashMap(_.keyword('ident'), _.symbol('global'), _.keyword('source'), 'src/pbnj/wonderscript.js'));
+  ws.DEFAULT_NS = defineModule(_.symbol('pbnj.core'));
+  ws.DEFAULT_NS.importJSModule(pbnj.core);
+  ws.NS_SCOPE = ws.DEFAULT_NS;
   ws.globalEnv = globalEnv;
   
-  globalEnv.define('*source*', null);
-  globalEnv.define('macroexpand', macroexpand);
-  globalEnv.define('arity', arity);
+  globalEnv.define('*source*', null, _.hashMap(_.keyword('dynamic'), true));
+
+  var readerNS = defineModule(_.symbol('pbnj.reader'));
+  readerNS.importJSModule(pbnj.reader);
+
+  ws.DEFAULT_NS.define('macroexpand', macroexpand);
+  ws.DEFAULT_NS.define('arity', arity);
+  ws.DEFAULT_NS.define('var', ws['var']);
+
+  ws.DEFAULT_NS.define('ns-name', ws['ns-name']);
+  ws.DEFAULT_NS.define('ns-scope', ws['ns-scope']);
+  ws.DEFAULT_NS.define('ns-vars', ws['ns-vars']);
+  ws.DEFAULT_NS.define('ns?', ws['ns?']);
   
-  ws.inspect = function(exp) {
-    if (exp == null) {
-      return 'nil';
-    }
-    else if (_.isBoolean(exp)) {
-      return exp === true ? 'true' : 'false';
-    }
-    else if (_.isString(exp)) {
-      return ['"', exp, '"'].join('');
-    }
-    else if (isQuoted(exp)) {
-      return ["'", ws.inspect(_.second(exp))].join('');
-    }
-    else if (_.isArray(exp)) {
-      var buffer = [];
-      for (var i = 0; i < exp.length; i++) {
-        buffer.push(ws.inspect(exp[i]));
-      }
-      return ["(array ", buffer.join(' '), ")"].join('');
-    }
-    else {
-      return '' + exp;
-    }
-  };
-  globalEnv.define('inspect', ws.inspect);
+  ws.DEFAULT_NS.define('inspect', ws.inspect);
 
   ws.pprint = function(exp) {
     console.log(ws.inspect(exp));
   }
-  globalEnv.define('pprint', ws.pprint);
-  globalEnv.define('p', ws.pprint);
+    
+  ws.DEFAULT_NS.define('pprint', ws.pprint);
+  ws.DEFAULT_NS.define('p', ws.pprint);
 
   ws.RESTORE = {frames: []};
   ws.RESTORE.popFrame = function() {
     return this.frames.pop();
   };
 
+  var STACK_ID = 0;
+  ws.stack = function() {
+    var id = STACK_ID++;
+    var ref = new _.Atom(_.list(), _.hashMap(), _.isList);
+    /*ref.addWatch(_.str('STACK ', id, ' update'), function(key, ref, old, knew) {
+      console.log(_.str(key, ":"), ws.inspect(old), ws.inspect(knew));
+    });*/
+    return ref;
+  };
+
   ws.eval = function(exp, env, callstack) {
     var env = env || globalEnv;
+    var callstack = callstack || ws.stack();
+    //ws.STREAM_META.swap(_.assoc, _.keyword('exp'), exp);
     var exp = macroexpand(exp);
-    var callstack = callstack || new Atom(_.list());
 
     try {
       if (isSelfEvaluating(exp)) {
@@ -1837,13 +1914,17 @@ namespace pbnj.wonderscript {
         ws.RESTORE.frames = e.frames;
       }
       else {
+        if (_.isEmpty(callstack.deref())) {
+          callstack.swap(_.conj, trace(null));
+        }
         console.log('callstack: ', ws.inspect(callstack.deref()));
         throw e;
       }
     }
   };
-  globalEnv.define('eval', ws.eval);
-  globalEnv.define('apply', ws.apply);
+  
+  ws.DEFAULT_NS.define('eval', ws.eval);
+  ws.DEFAULT_NS.define('apply', ws.apply);
 
   var wsError = function(e, trace) {
     var wsStack = ''; //_.str(ws.pprint(exp), ' @ ', stream.source(), ':', stream.line(), ':', stream.column(), '\n');
@@ -1862,22 +1943,24 @@ namespace pbnj.wonderscript {
     return buffer.join('\n');
   }
 
+  ws.withLocation = function(meta, source, line, column) {
+    return _.assoc(
+      meta,
+      _.keyword('source'), source,
+      _.keyword('line'), line,
+      _.keyword('column'), column
+    );
+  };
+
   ws.readStream = function(stream, env) {
-    var env = (env || globalEnv).extend().setSource(stream.source()).setLocation(stream.line(), stream.column());
-    var callstack = new Atom(_.list());
+    var env = (env || globalEnv).extend(); //.varyMeta(withLocation(stream.source(), stream.line(), stream.column()));
+    var callstack = ws.stack();
     try {
       var value = null;
       while (!stream.eof()) {
         var exp = stream.peek();
         value = ws.eval(exp, env, callstack);
-        // FIXME: for some reason if this first clause in the if/else in not here we get an error when defining
-        // *sym-count* in core.ws saying that 'atom' is not a function
-        if (value && value["@@SCOPE@@"]) {
-          env = value["@@SCOPE@@"].setSource(stream.source()).setLocation(stream.line(), stream.column());
-        }
-        else {
-          env.setSource(stream.source()).setLocation(stream.line(), stream.column());
-        }
+        //ws.STREAM_META.swap(ws.withLocation, stream.source(), stream.line(), stream.column());
         stream.next();
       }
       return value;
@@ -1890,7 +1973,8 @@ namespace pbnj.wonderscript {
       //throw e; //new Error(wsError(e, env.stacktrace()));
     }
   };
-  globalEnv.define('read-stream', ws.readStream);
+  
+  ws.DEFAULT_NS.define('read-stream', ws.readStream);
 
   ws.compileStream = function(stream) {
     var env = globalEnv.setSource(stream.source());
@@ -1907,63 +1991,182 @@ namespace pbnj.wonderscript {
       throw new Error(wsError(e, env.stacktrace()));
     }
   };
-  globalEnv.define('compile-stream', ws.compileStream);
+  
+  ws.DEFAULT_NS.define('compile-stream', ws.compileStream);
 
   ws.readString = function(str, input) {
     //console.log(str);
     var stream = pbnj.reader.readString(str, input);
     return ws.readStream(stream);
   };
-  globalEnv.define('read-string', ws.readString);
+
+  ws.readJS = function(str) {
+    return ws.eval(pbnj.reader.readJS(str));
+  };
+  
+  ws.DEFAULT_NS.define('read-string', ws.readString);
 
   ws.evalJS = function(exp) {
     //console.log(str);
     var data = pbnj.reader.readJS(exp);
     return ws.eval(data);
   };
-  globalEnv.define('eval-js', ws.evalJS);
+
+  ws.DEFAULT_NS.define('eval-js', ws.evalJS);
 
   ws.compileString = function(str, input) {
     var stream = pbnj.reader.readString(str, input);
     return ws.compileStream(stream);
   };
-  globalEnv.define('compile-string', ws.compileString);
+
+  ws.DEFAULT_NS.define('compile-string', ws.compileString);
 
   ws.readFile = function(file, env) {
     var env = env || globalEnv;
-    scope = env.extend().setIdent('read-file');
+    scope = env.extend();
     scope.define('*file*', file);
     var path = file.split('/');
     scope.define('*dir*', path.slice(0, path.length - 1).join('/'));
     var stream = pbnj.reader.readFile(file);
     return ws.readStream(stream, scope);
   };
-  globalEnv.define('read-file', ws.readFile);
+
+  ws.DEFAULT_NS.define('read-file', ws.readFile);
 
   ws.compileFile = function(file) {
     var stream = pbnj.reader.readFile(file);
     return ws.compileStream(stream);
   };
-  globalEnv.define('compile-file', ws.compileFile);
+
+  ws.DEFAULT_NS.define('compile-file', ws.compileFile);
   
   globalEnv.define('*version*', '0.0.1-alpha');
-  globalEnv.define('*mode*', _.keyword('production'));
+  globalEnv.define('*mode*', _.keyword('production'), _.hashMap(_.keyword('dynamic'), true));
   globalEnv.define('*platform*', typeof exports !== 'undefined' ? _.keyword('nodejs') : _.keyword('browser'));
   // TODO: add browser detection
   globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.versions.v8) : "Unknown Browser");
-  globalEnv.define('*target-language*', _.keyword('javascript'));
+  globalEnv.define('*target-language*', _.keyword('javascript'), _.hashMap(_.keyword('dynamic'), true));
 
-  ws["@@SCOPE@@"] = globalEnv.extend().setIdent(_.symbol('pbnj.wonderscript'));
+  var wsMod = defineModule(_.symbol('pbnj.wonderscript'))
+  wsMod.importJSModule(ws);
 
-  for (var prop in ws) {
-    if (ws.hasOwnProperty(prop)) {
-      ws["@@SCOPE@@"].define(prop, ws[prop]);
+  function symbolImporter(mod) {
+    return function(name) {
+      if (typeof ROOT_OBJECT[name] !== 'undefined') {
+        mod.define(name, eval(name), _.hashMap(_.keyword('imported'), true));
+      }
     }
   }
 
+  var js = defineModule(_.symbol('js'));
+  [
+    'Array',
+    'ArrayBuffer',
+    'AsyncFunction',
+    'Atomics',
+    'Boolean',
+    'DataView',
+    'Date',
+    'Error',
+    'EvalError',
+    'Float32Array',
+    'Float64Array',
+    'Function',
+    'Generator',
+    'GeneratorFunction',
+    'Infinity',
+    'Int32Array',
+    'Int64Array',
+    'Int8Array',
+    'InternalError',
+    'Intl',
+    'JSON',
+    'Map',
+    'Math',
+    'NaN',
+    'Number',
+    'Object',
+    'Promise',
+    'Proxy',
+    'RangeError',
+    'ReferenceError',
+    'Reflect',
+    'RegExp',
+    'Set',
+    'String',
+    'Symbol',
+    'SyntaxError',
+    'TypeError',
+    'TypedArray',
+    'URIError',
+    'Uint16Array',
+    'Uint32Array',
+    'Uint8Array',
+    'Uint8ClampedArray',
+    'WeakMap',
+    'WeakSet',
+    'decodeURI',
+    'decodeURIComponent',
+    'encodeURI',
+    'encodeURIComponent',
+    'eval',
+    'isFinite',
+    'isNaN',
+    'parseFloat',
+    'parseInt',
+    'uneval',
+    'SIMD',
+    'WebAssembly',
+    'window',
+    'document',
+    'location',
+    'localStorage',
+    'console'
+  ].forEach(symbolImporter(js));
+
+  // TODO: it'd be interesting to figure out how to give this the local scope
+  function jsFunction(args) {
+    var args_ = _.intoArray(args);
+    var body = Array.prototype.slice.call(arguments, 1).reverse();
+    var scope = globalEnv.extend(); //.setIdent('jsFunction');
+    return function() {
+      scope.define(_.symbol('this'), this);
+      scope.define(_.symbol('arguments'), arguments);
+      var i;
+      for (i = 0; i < args_.length; i++) {
+        scope.define(args_[i], arguments[i]);
+      }
+      var value;
+      for (i = 0; i < body.length; i++) {
+        value = ws.eval(body[i], scope);
+      }
+      return value;
+    };
+  }
+
+  js.define(_.symbol('null'), null)
+  js.define(_.symbol('undefined'), undefined)
+  js.define(_.symbol('function'), jsFunction);
+  js.define(_.symbol('null?'), _.isNull);
+  js.define(_.symbol('undefined?'), _.isUndefined);
+  js.define(_.symbol('number?'), _.isNumber);
+  js.define(_.symbol('boolean?'), _.isBoolean);
+  js.define(_.symbol('string?'), _.isString);
+  js.define(_.symbol('date?'), _.isDate);
+  js.define(_.symbol('error?'), _.isError);
+  js.define(_.symbol('array?'), _.isArray);
+  js.define(_.symbol('object?'), _.isObject);
+  js.define(_.symbol('regexp?'), _.isRegExp);
+  js.define(_.symbol('function?'), _.isFunction);
+  js.define(_.symbol('arguments?'), _.isArguments);
+  js.define(_.symbol('element?'), _.isElement);
+  js.define(_.symbol('identical?'), function(a, b) { return a === b });
+  js.define(_.symbol('equiv?'), function(a, b) { return a == b });
+  js.define(_.symbol('array'), function() { return Array.prototype.slice.call(arguments) });
+
   if (typeof exports !== 'undefined') {
     module.exports = ws;
-    var mod = defineModule(_.symbol('js.node'));
+    var node = defineModule(_.symbol('js.node'));
     [
       'Buffer',
       '__dirname',
@@ -1979,11 +2182,147 @@ namespace pbnj.wonderscript {
       'require',
       'setImmediate',
       'setInterval',
-      'setTimeout'
-    ].forEach(function(name) {
-      defineVariable(globalEnv, _.symbol('js.node', name), eval(name));
+      'setTimeout',
+      'require',
+      'module',
+      'exports',
+    ].forEach(symbolImporter(node))
+    node.define('require', require);
+    node.define('__dirname', __dirname);
+    node.define('__filename', __filename);
+    ws.readFile("src/pbnj/core.ws");
+    ws.readFile("src/pbnj/js.ws");
+    ws.readFile("src/pbnj/js/node.ws");
+  }
+
+  if (typeof document !== 'undefined') {
+    var dom = defineModule(_.symbol('js.dom'));
+    [
+      'Attr',
+      'ByteString',
+      'CDATASection',
+      'CharacterData',
+      'ChildNode',
+      'CSSPrimitiveValue',
+      'CSSValue',
+      'CSSValueList',
+      'Comment',
+      'CustomEvent',
+      'Document',
+      'DocumentFragment',
+      'DocumentType',
+      'DOMError',
+      'DOMException',
+      'DOMImplmentation',
+      'DOMString',
+      'DOMTimeStamp',
+      'DOMStringList',
+      'DOMTokenList',
+      'Element',
+      'Event',
+      'EventTarget',
+      'MutationObserver',
+      'MutationRecord',
+      'Node',
+      'NodeFilter',
+      'NodeIterator',
+      'NodeList',
+      'ParentNode',
+      'ProcessingInstruction',
+      'Range',
+      'Text',
+      'TreeWalker',
+      'URL',
+      'Window',
+      'Worker',
+      'XMLDocument',
+      'HTMLAnchorElement',
+      'HTMLAreaElement',
+      'HTMLAudioElement',
+      'HTMLBaseElement',
+      'HTMLBodyElement',
+      'HTMLBREElement',
+      'HTMLButtonElement',
+      'HTMLCanvasElement',
+      'HTMLDataElement',
+      'HTMLDataListElement',
+      'HTMLDialogElement',
+      'HTMLDivElement',
+      'HTMLDListElement',
+      'HTMLEmbedElement',
+      'HTMLFieldSetElement',
+      'HTMLFontElement',
+      'HTMLFormElement',
+      'HTMLFrameSetElement',
+      'HTMLHeadElement',
+      'HTMLHtmlElement',
+      'HTMLHRElement',
+      'HTMLIFrameElement',
+      'HTMLImageElement',
+      'HTMLInputElement',
+      'HTMLKeygenElement',
+      'HTMLLabelElement',
+      'HTMLLIElement',
+      'HTMLLinkElement',
+      'HTMLMapElement',
+      'HTMLMediaElement',
+      'HTMLMetaElement',
+      'HTMLMeterElement',
+      'HTMLModElement',
+      'HTMLObjectElement',
+      'HTMLOListElement',
+      'HTMLOptGroupElement',
+      'HTMLOptionElement',
+      'HTMLOutputElement',
+      'HTMLParagraphElement',
+      'HTMLParamElement',
+      'HTMLPreElement',
+      'HTMLProgressElement',
+      'HTMLQuoteElement',
+      'HTMLScriptElement',
+      'HTMLSelectElement',
+      'HTMLSourceElement',
+      'HTMLSpanElement',
+      'HTMLStyleElement',
+      'HTMLTableElement',
+      'HTMLTableCaptionElement',
+      'HTMLTableCellElement',
+      'HTMLTableDataCellElement',
+      'HTMLTableHeaderCellElement',
+      'HTMLTableColElement',
+      'HTMLTableRowElement',
+      'HTMLTableSectionElement',
+      'HTMLTextAreaElement',
+      'HTMLTimeElement',
+      'HTMLTitleElement',
+      'HTMLTrackElement',
+      'HTMLUListElement',
+      'HTMLUnknownElement',
+      'HTMLVideoElement',
+      'CanvasRenderingContext2D',
+      'CanvasGradient',
+      'CanvasPattern',
+      'TextMetrics',
+      'ImageData',
+      'CanvasPixelArray',
+      'NotifyAudioAvailableEvent',
+      'HTMLFormControlsCollection',
+      'HTMLOptionsCollection',
+      'DOMStringMap',
+      'RadioNodeList',
+      'MediaError'
+    ].forEach(symbolImporter(dom));
+
+    var scripts = document.getElementsByTagName('script');
+    var wscode  = [];
+    for (var i = 0; i < scripts.length; i++) {
+      if (scripts[i].type == "text/wonderscript") {
+        wscode.push(scripts[i].text);
+      }
+    }
+    wscode.forEach(function(code) {
+      ws.readString(code);
     });
   }
-  ws.readFile("src/pbnj/core.ws");
-
+  defineModule(_.symbol('user'));
 } // namespace pbnj.wonderscript

@@ -36,9 +36,209 @@ namespace pbnj.core {
     };
   };
 
+  var isQuoted = _.makeTagPredicate(_.symbol('quote'));
+
+  _.inspect = function(exp) {
+    var i, buffer, props;
+    if (exp == null) {
+      return 'nil';
+    }
+    else if (_.isBoolean(exp)) {
+      return exp === true ? 'true' : 'false';
+    }
+    else if (_.isString(exp)) {
+      return ['"', exp, '"'].join('');
+    }
+    else if (isQuoted(exp)) {
+      return ["'", _.inspect(_.second(exp))].join('');
+    }
+    else if (_.isArray(exp)) {
+      buffer = [];
+      for (i = 0; i < exp.length; i++) {
+        buffer.push(_.inspect(exp[i]));
+      }
+      if (buffer.length === 0) {
+        return "(array)";
+      }
+      else {
+        return ["(array ", buffer.join(' '), ")"].join('');
+      }
+    }
+    else if (_.isObject(exp)) {
+      if (_.isFunction(exp.toString)) {
+        return exp.toString();
+      }
+      else {
+        props = Object.getOwnPropertyNames(exp);
+        buffer = [];
+        for (i = 0; i < props.length; i++) {
+          buffer.push([props[i], _.inspect(exp[props[i]])]);
+        }
+        if (buffer.length === 0) {
+          return "(js/object)";
+        }
+        else {
+          var vars = [];
+          for (i = 0; i < buffer.length; i++) {
+            vars.push([":", buffer[i][0], ' ', buffer[i][1]].join(''));
+          }
+          return ["(js/object ", vars.join(', '), ")"].join('');
+        }
+      }
+    }
+    else {
+      return '' + exp;
+    }
+  };
+  
+  _.makeType = function(name, meta, ctr) {
+    var fmtVar, joinComma, varStr, meta, types;
+    meta      = _.merge(_.hashMap(_.symbol('type'), true), meta);
+    fmtVar    = function(x) { return [x[0], ': ', _.inspect(x[1])].join('') };
+    joinComma = function(s, x) { return [s, ', ', x].join('') };
+    if (types = _.get(meta, _.keyword('types'))) {
+      types = _.union(types, _.set([ctr]));
+    }
+    else {
+      types = _.set([ctr]);
+    }
+    ctr.toString = function() {
+      return name.toString();
+    };
+    ctr.getMeta = function() {
+      return meta;
+    };
+    ctr.prototype.types = function() {
+      return types;
+    };
+    ctr.prototype['class'] = function() {
+      return ctr;
+    };
+    ctr.prototype['isa'] = function(klass) {
+      return _.has(types, klass);
+    };
+    ctr.prototype.toString = function() {
+      var props = [];
+      for (var prop in this) {
+        if (this.hasOwnProperty(prop)) {
+          props.push([prop, this[prop]]);
+        }
+      }
+      varStr = _.reduce(joinComma, _.map(fmtVar, props));
+      return _.str('#<', name, ' ', varStr, '>');
+    };
+    return ctr;
+  }
+
+  _.Atom = _.makeType(
+    _.symbol('pbnj.core', 'Atom'),
+    _.hashMap(),
+    function(value, meta, validator) {
+      this.meta  = meta;
+      this.value = value;
+      this.watches = {};
+      if (_.isFunction(validator)) {
+        this.validator = validator;
+      }
+    }
+  );
+
+  _.Atom.prototype.deref = function() {
+    return this.value;
+  };
+
+  _.Atom.prototype.reset = function(val) {
+    var keys = Object.getOwnPropertyNames(this.watches);
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      this.watches[keys[i]].call(null, keys[i], this, this.value, val);
+    }
+    if (!this.validator || this.validator.call(null, val) === true) {
+      this.value = val;
+    }
+    else {
+      throw new Error('not a valid value');
+    }
+    return this;
+  };
+
+  _.Atom.prototype.swap = function(fn) {
+    return this.reset(fn.apply(null, [this.value].concat(Array.prototype.slice.call(arguments, 1))));
+  };
+
+  _.Atom.prototype.addWatch = function(key, f) {
+    if (!_.isFunction(f)) throw new Error('second argument should be a function');
+    this.watches[key] = f;
+    return this;
+  };
+
+  /**
+   * @constructor
+   * @final
+   */
+  _.Var = _.makeType(
+    _.symbol('pbnj.core', 'Var'),
+    _.hashMap(),
+    function Var(value, meta) {
+      this.value = value;
+      this.meta = meta || _.hashMap();
+      this.notset = value == null ? true : false;
+    }
+  );
+
+  _.Var.prototype.getMeta = function() {
+    return this.meta;
+  };
+
+  _.Var.prototype.set = function(value) {
+    if (this.notset || this.isDynamic()) {
+      this.value = value;
+      this.notset = false;
+    }
+    else {
+      console.warn("A Var can only be set once unless it has been tagged :dynamic");
+    }
+    return this;
+  };
+
+  _.Var.prototype.get = function() {
+    return this.value;
+  };
+  _.Var.prototype.deref = _.Var.prototype.getValue;
+
+  _.Var.prototype.withMeta = function(meta) {
+    this.meta = meta;
+    return this;
+  };
+
+  _.Var.prototype.varyMeta = function(f, args) {
+    this.meta = f.apply(null, [this.meta].concat(_.intoArray(args)));
+    return this;
+  };
+
+  _.Var.prototype.isMacro = function() {
+    return this.meta && _.get(this.meta, _.keyword('macro'));
+  };
+
+  _.Var.prototype.isAlias = function() {
+    return this.meta && _.get(this.meta, _.keyword('ns', 'alias'));
+  };
+
+  _.Var.prototype.isNamespace = function() {
+    return this.meta && _.equals(_.get(this.meta, _.keyword('tag')), _.symbol('pbnj.wonderscript', 'Namespace'));
+  };
+
+  _.Var.prototype.isClass = function() {
+    return this.meta && _.get(this.meta, _.keyword('type'));
+  };
+
+  _.Var.prototype.isDynamic = function() {
+    return this.meta && _.get(this.meta, _.keyword('dynamic'));
+  };
+
   // Arithmetic
   
-  _.add = _['+'] = function(a, b) {
+  _['+'] = function(a, b) {
     if (arguments.length === 0) return 0;
     else if (arguments.length === 1) return a;
     else {
@@ -50,7 +250,7 @@ namespace pbnj.core {
     }
   };
 
-  _.sub = _['-'] = function(a, b) {
+  _['-'] = function(a, b) {
     if (arguments.length === 0) return 0;
     else if (arguments.length === 1) return -a;
     else {
@@ -62,7 +262,7 @@ namespace pbnj.core {
     }
   };
 
-  _.mult = _['*'] = function(a, b) {
+  _['*'] = function(a, b) {
     if (arguments.length === 0) return 1;
     else if (arguments.length === 1) return a;
     else {
@@ -74,7 +274,7 @@ namespace pbnj.core {
     }
   };
 
-  _.div = _['/'] = function(a, b) {
+  _['/'] = function(a, b) {
     if (arguments.length === 0) return 1;
     else if (arguments.length === 1) return a;
     else {
