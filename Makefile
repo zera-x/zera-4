@@ -11,16 +11,16 @@ browser: dist/pbnj.js
 node: dist/core.js dist/reader.js dist/wonderscript.js
 
 dist/core.js:
-	$(CC) --outDir dist src/pbnj/core.ts
+	($(CC) --outDir dist src/pbnj/core.ts >> /dev/null) || exit 0 
 
 dist/reader.js:
-	$(CC) --outDir dist src/pbnj/reader.ts
+	($(CC) --outDir dist src/pbnj/reader.ts >> /dev/null) || exit 0
 
 dist/wonderscript.js:
-	$(CC) --outDir dist src/pbnj/wonderscript.ts
+	($(CC) --outDir dist src/pbnj/wonderscript.ts >> /dev/null) || exit 0
 
 dist/pbnj.js:
-	$(CC) -p . --m system --outFile dist/pbnj.js
+	($(CC) -p . --m system --outFile dist/pbnj.js >> /dev/null) || exit 0
 
 clean-node:
 	rm dist/core.js
