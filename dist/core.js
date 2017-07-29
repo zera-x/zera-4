@@ -1,28 +1,39 @@
-"use strict";
-exports.__esModule = true;
-var _ = require("mori");
 var pbnj;
 (function (pbnj) {
     var core;
     (function (core) {
-        core.DEBUG = false;
+        var _ = pbnj.core;
+        var mori;
+        if (typeof exports !== 'undefined') {
+            module.exports = pbnj.core;
+            mori = require('mori');
+        }
+        else {
+            mori = window.mori;
+        }
+        _.DEBUG = false;
         // merge mori's API
-        function extend(target, source, pred) {
+        var extend = function (target, source, pred) {
             for (var key in source) {
                 if (!pred || pred(source[key], key, source, target))
                     target[key] = source[key];
             }
+        };
+        _.extend = extend;
+        if (typeof mori !== 'undefined') {
+            extend(_, mori);
         }
-        core.extend = extend;
+        else {
+            throw new Error('mori is required');
+        }
         _['->string'] = function (obj) { return '' + obj; };
-        function makeTagPredicate(tag) {
+        _.makeTagPredicate = function (tag) {
             return function (exp) {
                 return _.isList(exp) && _.isSymbol(_.first(exp)) && _.equals(_.first(exp), tag);
             };
-        }
-        core.makeTagPredicate = makeTagPredicate;
-        var isQuoted = makeTagPredicate(_.symbol('quote'));
-        function inspect(exp) {
+        };
+        var isQuoted = _.makeTagPredicate(_.symbol('quote'));
+        _.inspect = function (exp) {
             var i, buffer, props;
             if (exp == null) {
                 return 'nil';
@@ -73,10 +84,8 @@ var pbnj;
             else {
                 return '' + exp;
             }
-        }
-        core.inspect = inspect;
-        ;
-        function makeType(name, meta, ctr) {
+        };
+        _.makeType = function (name, meta, ctr) {
             var fmtVar, joinComma, varStr, meta, types;
             meta = _.merge(_.hashMap(_.symbol('type'), true), meta);
             fmtVar = function (x) { return [x[0], ': ', _.inspect(x[1])].join(''); };
@@ -113,9 +122,8 @@ var pbnj;
                 return _.str('#<', name, ' ', varStr, '>');
             };
             return ctr;
-        }
-        core.makeType = makeType;
-        core.Atom = _.makeType(_.symbol('pbnj.core', 'Atom'), _.hashMap(), function (value, meta, validator) {
+        };
+        _.Atom = _.makeType(_.symbol('pbnj.core', 'Atom'), _.hashMap(), function (value, meta, validator) {
             this.meta = meta;
             this.value = value;
             this.watches = {};
@@ -123,10 +131,10 @@ var pbnj;
                 this.validator = validator;
             }
         });
-        core.Atom.prototype.deref = function () {
+        _.Atom.prototype.deref = function () {
             return this.value;
         };
-        core.Atom.prototype.reset = function (val) {
+        _.Atom.prototype.reset = function (val) {
             var keys = Object.getOwnPropertyNames(this.watches);
             var i;
             for (i = 0; i < keys.length; i++) {
@@ -140,10 +148,10 @@ var pbnj;
             }
             return this;
         };
-        core.Atom.prototype.swap = function (fn) {
+        _.Atom.prototype.swap = function (fn) {
             return this.reset(fn.apply(null, [this.value].concat(Array.prototype.slice.call(arguments, 1))));
         };
-        core.Atom.prototype.addWatch = function (key, f) {
+        _.Atom.prototype.addWatch = function (key, f) {
             if (!_.isFunction(f))
                 throw new Error('second argument should be a function');
             this.watches[key] = f;
@@ -153,15 +161,15 @@ var pbnj;
          * @constructor
          * @final
          */
-        core.Var = _.makeType(_.symbol('pbnj.core', 'Var'), _.hashMap(), function (value, meta) {
+        _.Var = _.makeType(_.symbol('pbnj.core', 'Var'), _.hashMap(), function Var(value, meta) {
             this.value = value;
             this.meta = meta || _.hashMap();
             this.notset = value == null ? true : false;
         });
-        core.Var.prototype.getMeta = function () {
+        _.Var.prototype.getMeta = function () {
             return this.meta;
         };
-        core.Var.prototype.set = function (value) {
+        _.Var.prototype.set = function (value) {
             if (this.notset || this.isDynamic()) {
                 this.value = value;
                 this.notset = false;
@@ -171,32 +179,85 @@ var pbnj;
             }
             return this;
         };
-        core.Var.prototype.get = function () {
+        _.Var.prototype.get = function () {
             return this.value;
         };
-        core.Var.prototype.deref = core.Var.prototype.getValue;
-        core.Var.prototype.withMeta = function (meta) {
+        _.Var.prototype.deref = _.Var.prototype.getValue;
+        _.Var.prototype.withMeta = function (meta) {
             this.meta = meta;
             return this;
         };
-        core.Var.prototype.varyMeta = function (f, args) {
+        _.Var.prototype.varyMeta = function (f, args) {
             this.meta = f.apply(null, [this.meta].concat(_.intoArray(args)));
             return this;
         };
-        core.Var.prototype.isMacro = function () {
+        _.Var.prototype.isMacro = function () {
             return this.meta && _.get(this.meta, _.keyword('macro'));
         };
-        core.Var.prototype.isAlias = function () {
+        _.Var.prototype.isAlias = function () {
             return this.meta && _.get(this.meta, _.keyword('ns', 'alias'));
         };
-        core.Var.prototype.isNamespace = function () {
+        _.Var.prototype.isNamespace = function () {
             return this.meta && _.equals(_.get(this.meta, _.keyword('tag')), _.symbol('pbnj.wonderscript', 'Namespace'));
         };
-        core.Var.prototype.isClass = function () {
+        _.Var.prototype.isClass = function () {
             return this.meta && _.get(this.meta, _.keyword('type'));
         };
-        core.Var.prototype.isDynamic = function () {
+        _.Var.prototype.isDynamic = function () {
             return this.meta && _.get(this.meta, _.keyword('dynamic'));
+        };
+        // Arithmetic
+        _['+'] = function (a, b) {
+            if (arguments.length === 0)
+                return 0;
+            else if (arguments.length === 1)
+                return a;
+            else {
+                var sum = 0;
+                for (var i = 0; i < arguments.length; ++i) {
+                    sum += arguments[i];
+                }
+                return sum;
+            }
+        };
+        _['-'] = function (a, b) {
+            if (arguments.length === 0)
+                return 0;
+            else if (arguments.length === 1)
+                return -a;
+            else {
+                var diff = arguments[0];
+                for (var i = 1; i < arguments.length; ++i) {
+                    diff -= arguments[i];
+                }
+                return diff;
+            }
+        };
+        _['*'] = function (a, b) {
+            if (arguments.length === 0)
+                return 1;
+            else if (arguments.length === 1)
+                return a;
+            else {
+                var prod = 1;
+                for (var i = 0; i < arguments.length; ++i) {
+                    prod *= arguments[i];
+                }
+                return prod;
+            }
+        };
+        _['/'] = function (a, b) {
+            if (arguments.length === 0)
+                return 1;
+            else if (arguments.length === 1)
+                return a;
+            else {
+                var quot = arguments[0];
+                for (var i = 1; i < arguments.length; ++i) {
+                    quot /= arguments[i];
+                }
+                return quot;
+            }
         };
         /**
          * @param {*} val
@@ -290,8 +351,8 @@ var pbnj;
         _.name = function (sym) { return sym.name; };
         _.namespace = function (sym) { return sym.ba; };
         _.get = function (col, key, alt) {
-            if (_.isCollection(col)) {
-                return _.get(col, key, alt);
+            if (mori.isCollection(col)) {
+                return mori.get(col, key, alt);
             }
             else {
                 var val = col[key];
@@ -375,8 +436,8 @@ var pbnj;
                 return [];
             else if (_.isArray(obj))
                 return obj;
-            else if (_.isCollection(obj)) {
-                return _.intoArray(obj);
+            else if (mori.isCollection(obj)) {
+                return mori.intoArray(obj);
             }
             else {
                 return Array.prototype.slice.call(obj);
@@ -398,52 +459,44 @@ var pbnj;
             var length = obj && obj.length;
             return typeof length === 'number' && length >= 0 && length <= MAX_ARRAY_INDEX;
         };
-        // TODO: it'd probobly be better to have these mappings in core.ws
-        //  _['into-array'] = _.intoArray;
-        //  _['map-indexed'] = _.mapIndexed;
-        //
-        //  _['symbol?'] = _.isSymbol;
-        //  _['keyword?'] = _.isKeyword;
-        //  _['list?'] = _.isList;
-        //  _['map?'] = _.isMap;
-        //  _['vector?'] = _.isVector;
-        //  _['set?'] = _.isSet;
-        //  _['collection?'] = _.isCollection;
-        //  _['seq?'] = _.isSeq;
-        //  _['sequential?'] = _.isSequential;
-        //  _['associative?'] = _.isAssociative;
-        //  _['counted?'] = _.isCounted;
-        //  _['indexed?'] = _.isIndexed;
-        //  _['reduceable?'] = _.isReduceable;
-        //  _['seqable?'] = _.isSeqable;
-        //  _['reversable?'] = _.isReversable;
-        //
-        //  _['empty?'] = _.isEmpty;
-        //  _['odd?'] = _.isOdd;
-        //  _['even?'] = _.isEven;
-        //  _['subset?'] = _.isSubset;
-        //  _['superset?'] = _.isSuperset;
-        //
-        //  _['has?'] = _.hasKey;
-        //  _['has-key?'] = _.hasKey;
-        //
-        //  _['hash-map'] = _.hashMap;
-        //  _['sorted-set'] = _.sortedSet;
-        //
-        //  _['get-in'] = _.getIn;
-        //  _['assoc-in'] = _.assocIn;
-        //  _['update-in'] = _.updateIn;
-        //
-        //  _['reduce-kv'] = _.reduceKV;
-        //  _['take-while'] = _.takeWhile;
-        //  _['drop-while'] = _.dropWhile;
-        //  _['sort-by'] = _.sortBy;
-        //  _['partition-by'] = _.partitionBy;
-        //  _['group-by'] = _.groupBy;
-        //
-        //  _['prim-seq'] = _.primSeq;
-        //  _['->ws'] = _.toClj;
-        //  _['->js'] = _.toJs;
+        _['into-array'] = mori.intoArray;
+        _['map-indexed'] = mori.mapIndexed;
+        _['symbol?'] = mori.isSymbol;
+        _['keyword?'] = mori.isKeyword;
+        _['list?'] = mori.isList;
+        _['map?'] = mori.isMap;
+        _['vector?'] = mori.isVector;
+        _['set?'] = mori.isSet;
+        _['collection?'] = mori.isCollection;
+        _['seq?'] = mori.isSeq;
+        _['sequential?'] = mori.isSequential;
+        _['associative?'] = mori.isAssociative;
+        _['counted?'] = mori.isCounted;
+        _['indexed?'] = mori.isIndexed;
+        _['reduceable?'] = mori.isReduceable;
+        _['seqable?'] = mori.isSeqable;
+        _['reversable?'] = mori.isReversable;
+        _['empty?'] = mori.isEmpty;
+        _['odd?'] = mori.isOdd;
+        _['even?'] = mori.isEven;
+        _['subset?'] = mori.isSubset;
+        _['superset?'] = mori.isSuperset;
+        _['has?'] = mori.hasKey;
+        _['has-key?'] = mori.hasKey;
+        _['hash-map'] = mori.hashMap;
+        _['sorted-set'] = mori.sortedSet;
+        _['get-in'] = mori.getIn;
+        _['assoc-in'] = mori.assocIn;
+        _['update-in'] = mori.updateIn;
+        _['reduce-kv'] = mori.reduceKV;
+        _['take-while'] = mori.takeWhile;
+        _['drop-while'] = mori.dropWhile;
+        _['sort-by'] = mori.sortBy;
+        _['partition-by'] = mori.partitionBy;
+        _['group-by'] = mori.groupBy;
+        _['prim-seq'] = mori.primSeq;
+        _['->ws'] = mori.toClj;
+        _['->js'] = mori.toJs;
         /**
          * @param {pbnj.ArrayLike} obj
          * @returns {number}
