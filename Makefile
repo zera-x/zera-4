@@ -1,6 +1,6 @@
 .PHONY: clean deps all browser node clean-browser clean-node
 
-CC=tsc
+CC = tsc
 
 default: all
 
@@ -8,28 +8,24 @@ all: browser node
 
 browser: dist/pbnj.js
 
-node: dist/pbnj.core.js dist/pbnj.env.js dist/pbnj.reader.js dist/pbnj.wonderscript.js
+node: dist/core.js dist/reader.js dist/wonderscript.js
 
-dist/pbnj.core.js:
-	$(CC) src/pbnj/core.ts
+dist/core.js:
+	$(CC) --outDir dist src/pbnj/core.ts
 
-dist/pbnj.env.js:
-	$(CC) src/pbnj/env.ts
+dist/reader.js:
+	$(CC) --outDir dist src/pbnj/reader.ts
 
-dist/pbnj.reader.js:
-	$(CC) src/pbnj/reader.ts
-
-dist/pbnj.wonderscript.js:
-	$(CC) src/pbnj/wonderscript.ts
+dist/wonderscript.js:
+	$(CC) --outDir dist src/pbnj/wonderscript.ts
 
 dist/pbnj.js:
-	$(CC) -p .
+	$(CC) -p . --m system --outFile dist/pbnj.js
 
 clean-node:
-	rm dist/pbnj.core.js
-	rm dist/pbnj.env.js
-	rm dist/pbnj.reader.js
-	rm dist/pbnj.wonderscript.js
+	rm dist/core.js
+	rm dist/reader.js
+	rm dist/wonderscript.js
 
 clean-browser:
 	rm dist/pbnj.js

@@ -1,6 +1,4 @@
-; vim: ft=clojure
-;(require "types.ws")
-(module pbnj.honey)
+(ns pbnj.core.db)
 
 (define-function- parse-url
   [url]

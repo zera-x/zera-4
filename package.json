@@ -15,6 +15,9 @@
   "license": "ISC",
   "dependencies": {
     "esprima": "^4.0.0",
-    "mori": "^0.3.2",
+    "mori": "^0.3.2"
+  },
+  "devDependencies": {
+    "typescript": "^2.4.2"
   }
 }
