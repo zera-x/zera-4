@@ -1,13 +1,13 @@
-namespace pbnj.wonderscript {
-  var ws = wonderscript;
+namespace zera.core {
+  var ws = core;
 
-  var _, ROOT_OBJECT;
+  var _, ROOT_OBJECT, mori;
   if (typeof exports !== 'undefined') {
     // node.js
     mori = require('mori');
-    _    = require('./core.js');
-    pbnj.core = _;
-    pbnj.reader = require('./reader.js');
+    _    = require('./util.js');
+    zera.util = _;
+    zera.reader = require('./reader.js');
     ROOT_OBJECT = global;
   }
   else if (typeof java !== 'undefined') {
@@ -17,14 +17,14 @@ namespace pbnj.wonderscript {
   else {
     // browser
     ROOT_OBJECT = window;
-    _ = ROOT_OBJECT.pbnj.core;
+    _ = ROOT_OBJECT.zera.util;
   }
-  ROOT_OBJECT.pbnj = ROOT_OBJECT.pbnj || {};
-  ROOT_OBJECT.pbnj.wonderscript = ws;
-  ROOT_OBJECT.pbnj.core = _;
-  ROOT_OBJECT.pbnj.reader = pbnj.reader;
+  ROOT_OBJECT.zera = ROOT_OBJECT.zera || {};
+  ROOT_OBJECT.zera.core = ws;
+  ROOT_OBJECT.zera.util = _;
+  ROOT_OBJECT.zera.reader = zera.reader;
 
-  ws.STREAM_META = pbnj.reader.STREAM_META.swap(_.assoc, _.keyword('source'), "src/pbnj/wonderscript.js");
+  ws.STREAM_META = zera.reader.STREAM_META.swap(_.assoc, _.keyword('source'), "src/zera/core.ts");
   ws.inspect = _.inspect;
 
   // Exceptions
@@ -39,7 +39,7 @@ namespace pbnj.wonderscript {
   //
 
   ws.Protocol = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Protocol'),
+    _.symbol('zera.core', 'Protocol'),
     _.hashMap(),
     function(methods, protocols) {
       this.methods   = methods;
@@ -48,7 +48,7 @@ namespace pbnj.wonderscript {
   );
 
   ws.Type = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Type'),
+    _.symbol('zera.core', 'Type'),
     _.hashMap(),
     function(attrs, methods, protocols) {
       this.attrs     = attrs;
@@ -58,7 +58,7 @@ namespace pbnj.wonderscript {
   );
 
   ws.Function = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Function'),
+    _.symbol('zera.core', 'Function'),
     _.hashMap(_.keyword('types'), _.set([ws.Protocol])),
     function() {}
   );
@@ -1582,7 +1582,7 @@ namespace pbnj.wonderscript {
       for (i = 0; i < props.length; i++) {
         prop = props[i];
         if (prop === "@@SELF@@" || _.has(ex, prop)) continue;
-        var name = _.name(pbnj.reader.readSymbol(prop));
+        var name = _.name(zera.reader.readSymbol(prop));
         this.scope.define(name, jsmod[prop], _.hashMap(_.keyword('imported'), true));
       }
       return true;
@@ -1667,7 +1667,7 @@ namespace pbnj.wonderscript {
 
   var importModule = function(mod) {
     for (var fn in mod) {
-      if (pbnj.core.hasOwnProperty(fn)) {
+      if (zera.util.hasOwnProperty(fn)) {
         globalEnv.define(fn, mod[fn]);
       }
     }
@@ -1767,15 +1767,15 @@ namespace pbnj.wonderscript {
   };
 
   var globalEnv = ws.env(); //.withMeta(_.hashMap(_.keyword('ident'), _.symbol('global'), _.keyword('source'), 'src/pbnj/wonderscript.js'));
-  ws.DEFAULT_NS = defineModule(_.symbol('pbnj.core'));
-  ws.DEFAULT_NS.importJSModule(pbnj.core);
+  ws.DEFAULT_NS = defineModule(_.symbol('zera.core'));
+  ws.DEFAULT_NS.importJSModule(zera.util);
   ws.NS_SCOPE = ws.DEFAULT_NS;
   ws.globalEnv = globalEnv;
   
   globalEnv.define('*source*', null, _.hashMap(_.keyword('dynamic'), true));
 
-  var readerNS = defineModule(_.symbol('pbnj.reader'));
-  readerNS.importJSModule(pbnj.reader);
+  var readerNS = defineModule(_.symbol('zera.reader'));
+  readerNS.importJSModule(zera.reader);
 
   ws.DEFAULT_NS.define('macroexpand', macroexpand);
   ws.DEFAULT_NS.define('arity', arity);
@@ -1996,26 +1996,26 @@ namespace pbnj.wonderscript {
 
   ws.readString = function(str, input) {
     //console.log(str);
-    var stream = pbnj.reader.readString(str, input);
+    var stream = zera.reader.readString(str, input);
     return ws.readStream(stream);
   };
 
   ws.readJS = function(str) {
-    return ws.eval(pbnj.reader.readJS(str));
+    return ws.eval(zera.reader.readJS(str));
   };
   
   ws.DEFAULT_NS.define('read-string', ws.readString);
 
   ws.evalJS = function(exp) {
     //console.log(str);
-    var data = pbnj.reader.readJS(exp);
+    var data = zera.reader.readJS(exp);
     return ws.eval(data);
   };
 
   ws.DEFAULT_NS.define('eval-js', ws.evalJS);
 
   ws.compileString = function(str, input) {
-    var stream = pbnj.reader.readString(str, input);
+    var stream = zera.reader.readString(str, input);
     return ws.compileStream(stream);
   };
 
@@ -2027,14 +2027,14 @@ namespace pbnj.wonderscript {
     scope.define('*file*', file);
     var path = file.split('/');
     scope.define('*dir*', path.slice(0, path.length - 1).join('/'));
-    var stream = pbnj.reader.readFile(file);
+    var stream = zera.reader.readFile(file);
     return ws.readStream(stream, scope);
   };
 
   ws.DEFAULT_NS.define('read-file', ws.readFile);
 
   ws.compileFile = function(file) {
-    var stream = pbnj.reader.readFile(file);
+    var stream = zera.reader.readFile(file);
     return ws.compileStream(stream);
   };
 
@@ -2047,8 +2047,7 @@ namespace pbnj.wonderscript {
   globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.versions.v8) : "Unknown Browser");
   globalEnv.define('*target-language*', _.keyword('javascript'), _.hashMap(_.keyword('dynamic'), true));
 
-  var wsMod = defineModule(_.symbol('pbnj.wonderscript'))
-  wsMod.importJSModule(ws);
+  ws.DEFAULT_NS.importJSModule(ws);
 
   function symbolImporter(mod) {
     return function(name) {
@@ -2190,9 +2189,6 @@ namespace pbnj.wonderscript {
     node.define('require', require);
     node.define('__dirname', __dirname);
     node.define('__filename', __filename);
-    ws.readFile("src/pbnj/core.ws");
-    ws.readFile("src/pbnj/js.ws");
-    ws.readFile("src/pbnj/js/node.ws");
   }
 
   if (typeof document !== 'undefined') {
@@ -2316,7 +2312,7 @@ namespace pbnj.wonderscript {
     var scripts = document.getElementsByTagName('script');
     var wscode  = [];
     for (var i = 0; i < scripts.length; i++) {
-      if (scripts[i].type == "text/wonderscript") {
+      if (scripts[i].type == "text/zera") {
         wscode.push(scripts[i].text);
       }
     }
@@ -2325,4 +2321,4 @@ namespace pbnj.wonderscript {
     });
   }
   defineModule(_.symbol('user'));
-} // namespace pbnj.wonderscript
+} // namespace zera.core

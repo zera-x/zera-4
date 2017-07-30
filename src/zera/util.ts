@@ -1,10 +1,10 @@
-namespace pbnj.core {
+namespace zera.util {
 
-  var _ = pbnj.core;
+  var _ = zera.util;
 
   var mori;
   if (typeof exports !== 'undefined') {
-    module.exports = pbnj.core;
+    module.exports = zera.util;
     mori = require('mori');
   }
   else {
@@ -131,7 +131,7 @@ namespace pbnj.core {
   }
 
   _.Atom = _.makeType(
-    _.symbol('pbnj.core', 'Atom'),
+    _.symbol('zera.core', 'Atom'),
     _.hashMap(),
     function(value, meta, validator) {
       this.meta  = meta;
@@ -177,7 +177,7 @@ namespace pbnj.core {
    * @final
    */
   _.Var = _.makeType(
-    _.symbol('pbnj.core', 'Var'),
+    _.symbol('zera.core', 'Var'),
     _.hashMap(),
     function Var(value, meta) {
       this.value = value;
@@ -225,7 +225,7 @@ namespace pbnj.core {
   };
 
   _.Var.prototype.isNamespace = function() {
-    return this.meta && _.equals(_.get(this.meta, _.keyword('tag')), _.symbol('pbnj.wonderscript', 'Namespace'));
+    return this.meta && _.equals(_.get(this.meta, _.keyword('tag')), _.symbol('zera.core', 'Namespace'));
   };
 
   _.Var.prototype.isClass = function() {
@@ -442,13 +442,6 @@ namespace pbnj.core {
     }
   };
 
-  /** @interface */
-  pbnj.IArray = function() {};
-  pbnj.IArray.prototype.length = 0;
-  
-  /** @typedef {(Array<*>|pbnj.IArray)} */
-  pbnj.ArrayLike;
-  
   var optimizeCb = function(func, context, argCount) {
     if (context === void 0) return func;
     switch (argCount == null ? 3 : argCount) {

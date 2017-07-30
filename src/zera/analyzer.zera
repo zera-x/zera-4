@@ -1,14 +1,13 @@
 ; vim: ft=clojure
 (require "syntax.ws")
-(ns pbnj.wonderscript.analyzer)
+(ns zera.analyzer)
 
-(alias 'ws 'pbnj.wonderscript)
-(alias 's 'pbnj.wonderscript.syntax)
+(alias 's 'zera.syntax)
 
-(define property-accessor? ws/isPropertyAccessor)
-(define property-assignment? ws/isPropertyAssignment)
-(define method-application? ws/isMethodApplication)
-(define class-instantiation? ws/isClassInstantiation)
+(define property-accessor? isPropertyAccessor)
+(define property-assignment? isPropertyAssignment)
+(define method-application? isMethodApplication)
+(define class-instantiation? isClassInstantiation)
 
 (define variable? symbol?)
 

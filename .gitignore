@@ -22,3 +22,6 @@ examples/*.jwlibrary
 .wsi-history
 examples/TrueMgrAirBackup*.ndm
 examples/glucose.html
+dist/core.js
+dist/reader.js
+dist/util.js

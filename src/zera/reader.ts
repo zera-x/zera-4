@@ -1,13 +1,14 @@
-namespace pbnj.reader {
+namespace zera.reader {
 
-  var _, pair;
+  var _, pair, mori;
   if (typeof exports !== 'undefined') {
-    _ = require('./core.js');
+    mori = require('mori');
+    _ = require('./util.js');
     pair = _.pair;
   }
   else {
-    pair = pbnj.core.pair;
-    _ = pbnj.core;
+    pair = zera.util.pair;
+    _ = zera.util;
   }
 
   // should support full EDN spec
@@ -569,7 +570,7 @@ namespace pbnj.reader {
     return readJS(JSON.parse(str));
   };
 
-  pbnj.reader = {
+  zera.reader = {
     inputStream: inputStream,
     tokenStream: tokenStream,
     readString: readString,
@@ -582,6 +583,6 @@ namespace pbnj.reader {
   };
 
   if (typeof exports !== 'undefined') {
-    module.exports = pbnj.reader;
+    module.exports = zera.reader;
   }
 }

@@ -1,4 +1,5 @@
-(ns pbnj.wonderscript.syntax)
+; vim: ft=clojure
+(ns zera.syntax)
 
 (define-protocol Syntax
   (toJS [self]))

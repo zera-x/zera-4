@@ -2,10 +2,7 @@
 
 const fs = require('fs');
 const readline = require('readline');
-const _  = require(__dirname + '/../src/pbnj/core.js');
-const ws = require(__dirname + '/../src/pbnj/wonderscript.js');
-
-const HISTORY_FILE = process.cwd() + '/.wsi-history';
+const ws  = require(__dirname + '/../dist/index.js');
 
 function currentModuleName() {
   return ws.NS_SCOPE.getName();
@@ -41,7 +38,7 @@ else {
   ws.globalEnv.define('*file*', null);
   ws.readJS(
     ['do',
-      ['say', ['str', '"WonderScript "', '*version*']],
+      ['say', ['str', '"Zera "', '*version*']],
       ['say', '*platform-version*'],
       ['say', ['str', '"Running in "', '*mode*', '" mode"']],
       ['say', '"   Exit: Control+D or exit"'],
