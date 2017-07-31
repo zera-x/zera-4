@@ -64,19 +64,19 @@ namespace zera.core {
   );
 
   ws.Block = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Block'),
+    _.symbol('zera.core', 'Block'),
     _.hashMap(_.keyword('types'), _.set([ws.Protocol])),
     function() {}
   );
 
   ws.Object = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Object'),
+    _.symbol('zera.core', 'Object'),
     _.hashMap(_.keyword('types'), _.set([ws.Protocol])),
     function() {}
   );
 
   ws.Ref = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Ref'),
+    _.symbol('zera.core', 'Ref'),
     _.hashMap(_.keyword('types'), _.set([ws.Protocol, ws.Object])),
     function() {}
   );
@@ -92,7 +92,7 @@ namespace zera.core {
    * @final
    */
   var Env = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Env'),
+    _.symbol('zera.core', 'Env'),
     _.hashMap(_.keyword('type'), _.set([ws.Object])),
     function Env(parent, meta) {
       this.meta  = meta || _.hashMap(); 
@@ -1462,7 +1462,7 @@ namespace zera.core {
   };
 
   ws.Namespace = _.makeType(
-    _.symbol('pbnj.wonderscript', 'Namespace'),
+    _.symbol('zera.core', 'Namespace'),
     _.hashMap(),
     function(name) {
       if (!_.isSymbol(name)) throw new Error("module name should be a symbol");
@@ -1479,7 +1479,7 @@ namespace zera.core {
       var ns = new ws.Namespace(name);
       //ns.importJSModule(ns.extern(ROOT_OBJECT));
       cache[name] = ns;
-      globalEnv.define(name, ns, _.hashMap(_.keyword('tag'), _.symbol('pbnj.wonderscript', 'Namespace')));
+      globalEnv.define(name, ns, _.hashMap(_.keyword('tag'), _.symbol('zera.core', 'Namespace')));
     }
     return cache[name];
   };
@@ -2044,7 +2044,7 @@ namespace zera.core {
   globalEnv.define('*mode*', _.keyword('production'), _.hashMap(_.keyword('dynamic'), true));
   globalEnv.define('*platform*', typeof exports !== 'undefined' ? _.keyword('nodejs') : _.keyword('browser'));
   // TODO: add browser detection
-  globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.versions.v8) : "Unknown Browser");
+  globalEnv.define('*platform-version*', typeof exports !== 'undefined' ? _.str("Node.js ", process.version) : "Unknown Browser");
   globalEnv.define('*target-language*', _.keyword('javascript'), _.hashMap(_.keyword('dynamic'), true));
 
   ws.DEFAULT_NS.importJSModule(ws);
@@ -2176,19 +2176,14 @@ namespace zera.core {
       'console',
       'exports',
       'global',
-      'module',
       'process',
-      'require',
       'setImmediate',
       'setInterval',
       'setTimeout',
-      'require',
-      'module',
-      'exports',
     ].forEach(symbolImporter(node))
-    node.define('require', require);
-    node.define('__dirname', __dirname);
-    node.define('__filename', __filename);
+    node.define(_.symbol('require'), require);
+    node.define(_.symbol('module'), module);
+    node.define(_.symbol('exports'), exports);
   }
 
   if (typeof document !== 'undefined') {

@@ -1,32 +1,16 @@
 #!/usr/bin/env node
-
+/* jshint esversion:6 */
 const fs = require('fs');
 const readline = require('readline');
-const ws  = require(__dirname + '/../dist/index.js');
+const argv = require('yargs').argv;
+const z  = require(__dirname + '/../dist/index.js');
+const _  = require(__dirname + '/../dist/util.js');
 
 function currentModuleName() {
-  return ws.NS_SCOPE.getName();
+  return z.NS_SCOPE.getName();
 }
 
-function loadHistory() {
-  ws.readFile(HISTORY_FILE);
-}
-
-function appendHistory(exp) {
-  fs.appendFileSync(HISTORY_FILE, [exp, "\n"].join(''));
-}
-  
-if (process.argv.length >= 3) {
-  try {
-    ws.readFile([process.cwd(), process.argv[2]].join('/'));
-    process.exitCode = 0;
-  }
-  catch (e) {
-    console.error(e);
-    process.exitCode = 1;
-  }
-}
-else {
+if (argv.i || argv.interactive) {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -34,10 +18,11 @@ else {
     terminal: true
   });
   
-  ws.globalEnv.define('*dir*', process.cwd());
-  ws.globalEnv.define('*file*', null);
-  ws.readJS(
+  z.globalEnv.define('*dir*', process.cwd());
+  z.globalEnv.define('*file*', null);
+  z.readJS(
     ['do',
+      ['ns', 'user'],
       ['say', ['str', '"Zera "', '*version*']],
       ['say', '*platform-version*'],
       ['say', ['str', '"Running in "', '*mode*', '" mode"']],
@@ -47,9 +32,6 @@ else {
   rl.setPrompt(_.str(currentModuleName(), "> "));
   rl.prompt();
 
-  //loadHistory();
-  
-  //var stack = _.list();
   rl.on('line', function(line) {
     try {
       var input = line.trim();
@@ -58,11 +40,9 @@ else {
         process.exit(0);
       }
       else {
-        //appendHistory(input);
-        var res = ws.readString(input);
-        console.log(_.str("=> ", ws.inspect(res)));
+        var res = z.readString(input);
+        console.log(_.str("=> ", z.inspect(res)));
         rl.setPrompt(_.str(currentModuleName(), "> "));
-        //stack = _.conj(stack, res);
       }
     }
     catch (e) {
@@ -74,4 +54,20 @@ else {
     process.exit(0);
   });
   process.exitCode = 0;
+}
+else if (process.argv.length >= 3) {
+  try {
+    z.readJS(['ns', 'user']);
+    z.readFile([process.cwd(), process.argv[2]].join('/'));
+    process.exitCode = 0;
+  }
+  catch (e) {
+    console.error(e);
+    process.exitCode = 1;
+  }
+}
+else {
+  process.stdin.on('data', (chunk) => {
+    z.readString(chunk.toString('utf8'));
+  });
 }

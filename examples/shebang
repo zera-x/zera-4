@@ -1,2 +1,2 @@
-#! /Users/delon/Projects/Personal/pbnj/bin/wsi
-(println "This is a test")
+#!/usr/bin/env node bin/zera
+(say "This is a test")

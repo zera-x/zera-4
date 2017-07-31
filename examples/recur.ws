@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(module examples.recur)
+(ns examples.recur)
 
 (define-function fib
   {:memoize true}
@@ -60,4 +60,4 @@
       pairs (partition 2 fibs)
       ratios (reduce (lambda [memo xs] (concat memo (apply / xs))) pairs [])]
   (do-each [ratio ratios]
-    (println (str (join (reverse ratio) "/") " = " (apply / (reverse ratio))))))
+    (println (str (join "/" (reverse ratio)) " = " (apply / (reverse ratio))))))

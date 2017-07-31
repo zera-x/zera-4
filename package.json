@@ -1,12 +1,10 @@
 {
-  "name": "pbnj-lang",
-  "version": "0.1.0-alpha",
-  "description": "A web language framework",
-  "main": "index.js",
+  "name": "zera",
+  "version": "0.0.1-alpha",
+  "description": "A Language Framework",
+  "main": "dist/index.js",
   "bin": {
-    "wsi": "./bin/wsi",
-    "wsc": "./bin/wsc",
-    "pbc": "./bin/pbc"
+    "zera": "./bin/zera"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -14,8 +12,10 @@
   "author": "Delon Newman",
   "license": "ISC",
   "dependencies": {
-    "esprima": "^4.0.0",
-    "mori": "^0.3.2"
+    "better-sqlite3": "^3.1.2",
+    "mori": "^0.3.2",
+    "mysql": "^2.14.0",
+    "yargs": "^8.0.2"
   },
   "devDependencies": {
     "typescript": "^2.4.2"

@@ -1,9 +1,8 @@
-.PHONY: clean all
-
 CC = tsc
 
 default: all
 
+.PHONY: all
 all: dist/core.js dist/reader.js dist/util.js
 
 dist/core.js:
@@ -15,6 +14,11 @@ dist/util.js:
 dist/reader.js:
 	($(CC) src/zera/reader.ts --outDir dist >> /dev/null) || exit 0
 
+.PHONY: install
+install: all
+	npm install -g .
+
+.PHONY: clean
 clean:
 	rm dist/core.js
 	rm dist/reader.js
