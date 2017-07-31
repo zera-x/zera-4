@@ -8,6 +8,9 @@ all: dist/core.js dist/reader.js dist/util.js
 dist/core.js:
 	($(CC) src/zera/core.ts --outDir dist >> /dev/null) || exit 0
 
+dist/core-opt.js:
+	closure-compiler -O ADVANCED dist/core.js > dist/core-opt.js
+
 dist/util.js:
 	($(CC) src/zera/util.ts --outDir dist >> /dev/null) || exit 0
 

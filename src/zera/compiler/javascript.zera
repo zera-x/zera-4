@@ -1,0 +1,30 @@
+; vim: ft=clojure
+(require "syntax.zera")
+(require "analyzer.zera")
+(ns zera.compiler.javascript)
+
+(alias 's 'zera.compiler.syntax)
+(alias 'a 'zera.compiler.analyzer)
+
+(define-function compile
+  [exp]
+  (.toJS (a/analyze exp)))
+
+(say (compile 1))
+(say (compile :test/testing))
+(say (compile 'zera.core/str))
+(say (compile (js/Date.)))
+(say (compile []))
+(say (compile [1 2 3]))
+(say (compile {}))
+(say (compile {:a 1 :b 2 :c 3}))
+(say (compile #{}))
+(say (compile #{1 2 3}))
+(say (compile '(quote 1)))
+(say (compile '(if 1 2)))
+(say (compile '(if 1 2 3)))
+(say (compile '(if 1 2 (if 3 4))))
+(say (compile '(if 1 (if 2 3 4) (if 5 6))))
+(say (compile '(lambda [x] x)))
+(say (compile '(lambda [x] 1 2 3 x)))
+(.toJS (a/analyze '(define x 1)))

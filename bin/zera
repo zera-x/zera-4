@@ -10,7 +10,7 @@ function currentModuleName() {
   return z.NS_SCOPE.getName();
 }
 
-if (argv.i || argv.interactive) {
+function interactive() {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -55,6 +55,10 @@ if (argv.i || argv.interactive) {
   });
   process.exitCode = 0;
 }
+
+if (argv.i || argv.interactive) {
+  interactive();
+}
 else if (process.argv.length >= 3) {
   try {
     z.readJS(['ns', 'user']);
@@ -67,7 +71,14 @@ else if (process.argv.length >= 3) {
   }
 }
 else {
+  var INTERATIVE = false;
+  setTimeout(() => {
+    interactive();
+    INTERACTIVE = true;
+  }, 500);
   process.stdin.on('data', (chunk) => {
-    z.readString(chunk.toString('utf8'));
+    if (!INTERACTIVE) {
+      z.readString(chunk.toString('utf8'));
+    }
   });
 }

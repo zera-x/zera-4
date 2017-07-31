@@ -952,8 +952,10 @@
   
   (define-function join
     [delim col]
-    (let [joiner (lambda [s x] (str s delim x))]
-      (reduce joiner col)))
+    (if (empty? col)
+      ""
+      (let [joiner (lambda [s x] (str s delim x))]
+        (reduce joiner col))))
   
   (define-function replace
     ([s pat]

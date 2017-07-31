@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(ns zera.syntax)
+(ns zera.compiler.syntax)
 
 (define-protocol Syntax
   (toJS [self]))
@@ -71,7 +71,7 @@
   Symbolic
   (toJS [self]
     (let [ns (.-ns self)]
-      (str "_.keyword("
+      (str "zera.core.keyword("
            (if ns (str "\"" ns "\"") "null")
            ", "
            (str "\"" (.-name self)) "\")"))))
@@ -133,10 +133,13 @@
   [value]
   Collection
   (toJS [self]
-        (str "_.hashMap("
+    (let [coll (.-value self)]
+      (if (empty? coll)
+        "zera.core.hashMap()"
+        (str "zera.core.hashMap("
           (->> (.-value self)
                (map (lambda [x] (str (.toJS (x 0)) ", " (.toJS (x 1)))))
-               (reduce (lambda [s x] (str s ", " x)))) ")")))
+               (join ", ")) ")")))))
 
 ;(define-function map?
 ;  [x]
@@ -146,10 +149,11 @@
   [value]
   Collection
   (toJS [self]
-        (str "_.vector("
-          (->> (.-value self)
-               (map (lambda [x] (.toJS x)))
-               (reduce (lambda [s x] (str s ", " x)))) ")")))
+    (let [coll (.-value self)]
+      (if (empty? coll)
+        "zera.core.vector()"
+        (str "zera.core.vector("
+          (join ", " (map (& (.toJS %)) (.-value self))) ")")))))
 
 ;(define-function vector?
 ;  [x]
@@ -159,10 +163,13 @@
   [value]
   Collection
   (toJS [self]
-        (str "_.set(["
+    (let [coll (.-value self)]
+      (if (empty? coll)
+        "zera.core.set()"
+        (str "zera.core.set(["
           (->> (.-value self)
                (map (lambda [x] (.toJS x)))
-               (reduce (lambda [s x] (str s ", " x)))) "])")))
+               (join ", ")) "])")))))
 
 ;(define-function set?
 ;  [x]
@@ -171,7 +178,11 @@
 (define-type Variable
   [ns name]
   Syntax
-  (toJS [self] (str (.-ns self) "." (.-name self))))
+  (toJS [self]
+    (let [ns (.-ns self), name (.-name self)]
+      (if ns
+        (str (.-ns self) "." (.-name self))
+        (.-name self)))))
 
 ;(define-function variable?
 ;  [x]
@@ -182,15 +193,22 @@
   Syntax
   (toJS
     [self]
-    (str "_.identity(" (.toJS (.-value self)) ")")))
+    (.toJS (.-value self))))
 
 ;(define-function quoted-value?
 ;  [x]
 ;  (isa? x QuotedValue))
 
 (define-type Definition
-  [name value meta]
-  Syntax)
+  [variable value meta]
+  Syntax
+  (toJS [self]
+    (let [variable (.-variable self)
+          ns (.-ns variable)
+          name (.-name variable)]
+      (if ns
+        (str (.toJS variable) " = " (.toJS (.-value self)))
+        (str "var " (.toJS variable) " = " (.toJS (.-value self)))))))
 
 ;(define-function definition?
 ;  [x]
@@ -210,31 +228,40 @@
 ;  (isa? x Conditional))
 
 (define-type Lambda
-  [arglists bodies]
+  [argcount arglists bodies]
   Syntax
-  (toJS [self] (lambda->js (.-arglists self) (.-bodies self))))
+  (toJS [self] (lambda->js (.-argcount self) (.-arglists self) (.-bodies self))))
+
+(define-type ArgumentVector
+  [value]
+  (toJS [self]
+    (str "(" (join ", " (map (& (.toJS %)) (.-value self))) ")")))
 
 (define-function lambda-bodies->js
-  [args body]
-  (p args)
-  (p body)
-  (str (.toJS args) " " (.toJS body)))
-
+  [x]
+  (let [args (x 0), body (x 1)]
+    (str (.toJS args) " " (map (& (.toJS %)) body))))
 
 (define-function lambda->js
-  [arglists bodies]
-  (->> (zipmap arglists bodies)
-       (map (lambda [x] (apply lambda-bodies->js x)))))
-;    (join
-;      (concat
-;        (map-indexed
-;          (lambda [i x]
-;            (let [args (x 0)
-;                  body (x 1)
-;                  kw (if (= i 0) "if" "else if")]
-;              (str kw " (arguments.length === " (count args) "){ return " (.toJS body) "; }"))) xs)
-;        ["else { throw new Error('wrong number of arguments') }"])
-;      "\n")))
+  [argcount arglists bodies]
+  (if (= 1 (count arglists))
+    (let [stmts (map (& (.toJS %)) (first bodies))
+          rest (take (- (count stmts) 1) stmts)
+          last (drop (- (count stmts)) stmts)]
+      (str "(function() {\n"
+           "  if (arguments.length === " argcount ") {\n"
+              (if (empty? rest)
+                ""
+                (str "    " (join ";" rest) ";\n"))
+           "    return " (first last) ";\n" 
+           "  }\n"
+           "  else {\n"
+           "    throw new Error(['wrong number of arguments, expected: " argcount " got: ', arguments.length].join(''));\n"
+           "  }\n"
+           "})"))
+    (let [fns (zipmap arglists bodies)]
+      (str "(function(){"
+           (join " " (map lambda-bodies->js fns)) "})"))))
 
 ;(define-function lambda?
 ;  [x]

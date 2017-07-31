@@ -136,6 +136,22 @@ namespace zera.core {
     return null;
   };
 
+  var FETCHED = {};
+  Env.prototype.fetchObject = function(name) {
+    if (FETCHED[name]) return FETCHED[name];
+    else {
+      var env = this.lookup(name);
+      if (env) {
+        var obj = env.getObject(name);
+        FETCHED[name] = obj;
+        return obj;
+      }
+      else {
+        return null;
+      }
+    }
+  };
+
   Env.prototype.getObject = function(name) {
     if (name in this.vars) {
       return this.vars[name];
@@ -357,16 +373,18 @@ namespace zera.core {
 
   var isVariable = ws.isVariable = _.isSymbol;
 
+  var VARCACHE = {};
   ws.lookupVar = function(ident, env) {
     var scope, sym, ns, nm;
-    if (isFullyQualified(ident)) {
-      /*ns = ws.Namespace.get(_.symbol(_.namespace(ident)));
-      nm = _.name(ident);
-      sym = ident;
-      return ns.getVar(_.symbol(nm));*/
+    if (VARCACHE[ident]) {
+      return VARCACHE[ident];
+    }
+    else if (isFullyQualified(ident)) {
       var nsvar = ws.lookupVar(_.namespace(ident), env);
       if (nsvar.isNamespace() || nsvar.isAlias()) {
-        return nsvar.get().getVar(_.name(ident));
+        var obj = nsvar.get().getVar(_.name(ident));
+        VARCACHE[ident] = obj;
+        return obj;
       }
       else {
         throw new Error(_.str('invalid namespace: ', _.namespace(ident)));
@@ -1512,6 +1530,10 @@ namespace zera.core {
     return this.scope.lookup(name);
   };
 
+  ws.Namespace.prototype.fetchVar = function(name) {
+    return this.scope.fetchObject(name);
+  };
+
   ws.Namespace.prototype.getName = function() {
     return this.name;
   };
@@ -1813,12 +1835,11 @@ namespace zera.core {
   ws.eval = function(exp, env, callstack) {
     var env = env || globalEnv;
     var callstack = callstack || ws.stack();
-    //ws.STREAM_META.swap(_.assoc, _.keyword('exp'), exp);
     var exp = macroexpand(exp);
 
     try {
-      if (isSelfEvaluating(exp)) {
-        return evalSelfEvaluating(exp);
+      if (ws.isSelfEvaluating(exp)) {
+        return exp;
       }
       else if (_.isKeyword(exp)) {
         return evalKeyword(exp, env);

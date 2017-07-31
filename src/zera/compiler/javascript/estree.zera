@@ -1,0 +1,507 @@
+; vim: ft=clojure
+(ns zera.compiler.javascript.estree)
+
+; An implementation of the ESTree API ECMAScript 5 is supported
+
+; (-> Node [String type, [SourceLocation Nil] loc])
+(define-protocol Node)
+(define-protocol Pattern Node)
+(define-protocol Expression Node)
+
+; (-> SourceLocation [[String nil] source, Position start, Position end])
+(define-protocol SourceLocation)
+
+; (-> Position [Number line, Number column] :where (and (>= line 1) (>= column 0)))
+(define-protocol Position)
+
+; (-> Identifier ["Identifier" type, String name])
+(define-type Identifier
+  [type name]
+  Expression
+  Pattern)
+
+(define-function identifier
+  [name]
+  (Identifier. "Identifier" name))
+
+; (-> Literal ["Literal" type, [String Boolean Null Number RegExp] value])
+(define-protocol Literal Expression)
+
+(define-type StringLiteral
+  [type value]
+  Literal)
+
+(define-function string-literal
+  [val]
+  (StringLiteral. "Literal" val))
+
+(define-type BooleanLiteral
+  [type value]
+  Literal)
+
+(define-function boolean-literal
+  [val]
+  (BooleanLiteral. "Literal" val))
+
+(define-type NullLiteral
+  [type value]
+  Literal)
+
+(define-function null-literal
+  [val]
+  (NullLiteral. "Literal" val))
+
+(define-type NumberLiteral
+  [type value]
+  Literal)
+
+(define-function number-literal
+  [val]
+  (NumberLiteral. "Literal" val))
+
+(define-type RegExpLiteral
+  [type value regex]
+  Literal)
+
+(define-function regexp-literal
+  [val]
+  (RegExpLiteral. "Literal" val (regexp-value val)))
+
+(define-type RegExpValue
+  [pattern flags])
+
+(define-function regexp-value
+  [value]
+  (RegExpValue. (.pattern value) (.flags value)))
+
+(define-function literal
+  [value]
+  (cond
+    (js/string? value) (StringLiteral. "Literal" value)
+    (js/boolean? value) (BooleanLiteral. "Literal" value)
+    (js/null? value) (NullLiteral. "Literal" value)
+    (js/number? value) (NumberLiteral. "Literal" value)
+    (js/regexp? value) (RegExpLiteral. "Literal" value (regexp-value value))
+    :else
+      (throw (js/Error (str "Not a valid literal: " (inspect value))))))
+
+(define-type Program
+  [type body]
+  Node)
+
+(define-function program
+  [body]
+  (Program. "Program" (into-array body)))
+
+; (-> Function [[Idenifier Null] id, (Array Pattern) params, BlockStatement body])
+(define-protocol Function Node)
+
+;;
+;; Statements
+;;
+
+(define-protocol Statement Node)
+
+(define-type ExpressionStatement
+  [type expression]
+  Statement)
+
+(define-function expression-statement
+  [expression]
+  (ExpressionStatement. "ExpressionStatement" expression))
+
+(define-type BlockStatement
+  [type body]
+  Statement)
+
+(define-function block-statement
+  [body]
+  (BlockStatement. "BlockStatement" (into-array body)))
+
+
+(define-type EmptyStatement
+  [type]
+  Statement)
+
+(define-function empty-statement
+  []
+  (EmptyStatement. "EmptyStatement"))
+
+
+(define-type DebuggerStatement
+  [type]
+  Statement)
+
+(define-function debugger-statment
+  []
+  (DebuggerStatement. "DebuggerStatement"))
+
+; (-> WithStatement [String type, Expression object, Statement])
+(define-type WithStatement
+  [type object body]
+  Statement)
+
+(define-function with-statement
+  [object body]
+  (WithStatement. "WithStatement" object body))
+
+
+; (-> ReturnStatement [String type, [Expression Null] argument])
+(define-type ReturnStatement
+  [type argument]
+  Statement)
+
+(define-function return-statement
+  [argument]
+  (ReturnStatement. "ReturnStatement" argument))
+
+
+(define-type LabeledStatement
+  {:type '(-> LabeledStatement [js/String type, Identifier label, Statement body])}
+  [type label body]
+  Statement)
+
+(define-function labeled-statement
+  [label body]
+  (LabeledStatement. "LabeledStatement" label body))
+
+(define-type BreakStatement
+  {:type '(-> BreakStatement [js/String type, Identifier label])}
+  [type label]
+  Statement)
+
+(define-function break-statement
+  [label]
+  (BreakStatement. "BreakStatement" label))
+
+
+(define-type ContinueStatement
+  {:type '(-> ContinueStatement [js/String type, Identifier label])}
+  [type label]
+  Statement)
+
+(define-function continue-statement
+  [label]
+  (ContinueStatement. "ContinueStatement" label))
+
+
+(define-type IfStatement
+  {:type '(-> "IfStatement" type, Expression test, Statement consequent, [Statement js/Null] alternate)}
+  [type test consequent alternate]
+  Statement)
+
+(define-function if-statement
+  [test consequent alternate]
+  (IfStatement. "IfStatement" test consequent alternate))
+
+
+(define-type SwitchStatement
+  {:type '(-> "SwitchStatement" type, Expression discriminant, (Array SwitchCase) cases)}
+  [type discriminant cases]
+  Statement)
+
+(define-type SwitchCase
+ {:type '(-> "SwitchCase" type, [Expression js/Null] test, (Array Statement) consequent)} 
+ [type test consequent]
+ Node)
+
+(define-function switch-case
+  [test consequent]
+  (SwitchCase. "SwitchCase" test consequent))
+
+
+(define-type ThrowStatement
+  {:type '(-> "ThrowStatment" type, Expression argument)}
+  [type argument]
+  Statement)
+
+(define-function throw-statement
+  [argument]
+  (ThrowStatement. "ThrowStatement" argument))
+
+
+(define-type TryStatement
+  {:type
+    '(-> "TryStatement" type,
+         BlockStatement block,
+         [CatchClause js/Null] handler,
+         [BlockStatement js/Null] finalizer)}
+  [type block handler finalizer]
+  Statement)
+
+(define-function try-statement
+  [block handler finalizer]
+  (TryStatement. "TryStatement" block handler finalizer))
+
+
+(define-type CatchClause
+  {:type '(-> "CatchClause" type, Pattern param, BlockStatement body)}
+  [type param body]
+  Node)
+
+(define-function catch-clause
+  [param body]
+  (CatchClause. "CatchClause" param body))
+
+
+(define-type WhileStatement
+  {:type '(-> "WhileStatement" type, Expression test, Statement body)}
+  [type test body]
+  Statement)
+
+(define-function while-statement
+  [test body]
+  (WhileStatement. "WhileStatement" test body))
+
+
+(define-type DoWhileStatement
+  {:type '(-> "DoWhileStatement" type, Statement body, Expression test)}
+  [type body test]
+  Statement)
+
+(define-function do-while-statement
+  [body test]
+  (DoWhileStatement. "DoWhileStatement" body test))
+
+
+(define-type ForStatement
+  {:type
+    '(-> "ForStatement" type,
+         [VariableDeclaration Expression js/Null] init,
+         [Expression js/Null] test,
+         [Expression js/Null] update,
+         Statement body)}
+  [type init test update body]
+  Statement)
+
+(define-function for-statement
+  [init test update body]
+  (ForStatement. "ForStatement" init test update body))
+
+
+(define-type ForInStatement
+  {:type
+    '(-> "ForInStatement" type,
+         [VariableDeclaration Pattern] left,
+         Expression right,
+         Statement body)}
+  [type left right body]
+  Statement)
+
+(define-function for-in-statement
+  [left right body]
+  (ForInStatement. "ForInStatement" left right body))
+
+;;
+;; Declarations
+;;
+
+(define-protocol Declaration Statement)
+
+(define-type FunctionDeclaration
+  {:type '(-> "FunctionDeclaration" type, Identifier id, (Array Pattern) params, BlockStatement body)}
+  [type id params body]
+  Function
+  Declaration)
+
+(define-function function-declaration
+  [id params body]
+  (FunctionDeclaration. "FunctionDeclaration" id (into-array params) body))
+
+(define-type VariableDeclaration
+  {:type '(-> "VariableDeclaration" type, (js/Array VariableDeclarator) declarations, "var" kind)}
+  [type declarations kind]
+  Declaration)
+
+(define-type VariableDeclarator
+  {:type '(-> "VariableDeclarator" type, Pattern id, [Expresion js/Null] init)}
+  [type id init]
+  Node)
+
+(define-function variable-declaration
+  [declarations kind]
+  (VariableDeclaration. "VariableDeclaration" (into-array declarations) kind))
+
+(define-function variable-declarator
+  [id init]
+  (VariableDeclarator. "VariableDeclarator" id init))
+
+;;
+;; Expressions
+;;
+
+(define-type ThisExpression
+  {:type '(-> "ThisExpression" type)}
+  [type]
+  Expression)
+
+(define-function this-expression
+  []
+  (ThisExpression. "ThisExpression"))
+
+
+(define-type ArrayExpression
+  {:type '(-> "ArrayExpression" type, (js/Array [Expression js/Null]) elements)}
+  [type elements]
+  Expression)
+
+(define-function array-expression
+  [elements]
+  (ArrayExpression. "ArrayExpression" (into-array elements)))
+
+
+(define-type ObjectExpression
+  {:type '(-> "ObjectExpression" type, (js/Array Property) properties)}
+  [type properties]
+  Expression)
+
+(define-function object-expression
+  [properties]
+  (ObjectExpression. "ObjectExpression" (into-array properties)))
+
+
+(define-type Property
+  {:type
+    '(-> "Property" type,
+         [Literal Identifier] key,
+         Expression value,
+         ["init" "get" "set"] kind)}
+  [type key value kind]
+  Node)
+
+(define-function property
+  [key value kind]
+  (Property. "Property" key value kind))
+
+
+(define-type FunctionExpression
+  {:type '(-> "FunctionExpression" type, [Identifier js/Null] id, (Array Pattern) params, BlockStatement body)}
+  [type id params body]
+  Function
+  Expression)
+
+(define-function function-expression
+  [id params body]
+  (FunctionExpression. "FunctionExpression" id (into-array params) body))
+
+
+(define-type UnaryExpression
+  {:type '(-> "UnaryExpression" type, UnaryOperator operator, js/Boolean prefix, Expression argument)}
+  [type operator prefix argument]
+  Expression)
+
+(define UNARY_OPERATORS #{"-" "+" "!" "~" "typeof" "void" "delete"})
+
+(define-function unary-expression
+  [operator prefix argument]
+  (unless (has? UNARY_OPERATORS operator) (throw (js/Error. "invalid unary operator: " (inspect operator))))
+  (UnaryExpression. "UnaryExpression" operator prefix argument))
+
+(define-type UpdateExpression
+  {:type '(-> "UpdateExpression" type, UpdateOperator operator, js/Boolean prefix, Expression argument)}
+  [type operator prefix argument]
+  Expression)
+
+(define UPDATE_OPERATORS #{"--" "++"})
+
+(define-type UpdateOperator
+  {:type '(-> ["--" "++"] value)}
+  [value])
+
+(define-function update-expression
+  [operator prefix argument]
+  (unless (has? UPDATE_OPERATORS operator) (throw (js/Error. "invalid update operator: " (inspect operator))))
+  (UpdateExpression. "UpdateExpression" operator prefix argument))
+
+(define-type BinaryExpression
+  {:type '(-> "BinaryExpression" type, BinaryOperator operator, Expression left, Expression right)}
+  [type operator left right]
+  Expression)
+
+(define BINARY_OPERATORS #{"==" "!=" "===" "!==" "<" "<=" ">" ">=" "<<" ">>" ">>>" "+" "-" "*" "/" "%" "|" "^" "&" "in" "instanceof"})
+
+(define-function binary-expression
+  [operator left right]
+  (unless (has? BINARY_OPERATORS operator) (throw (js/Error. "invalid update operator: " (inspect operator))))
+  (BinaryExpression. "BinaryExpression" operator left right))
+
+(define-type AssignmentExpression
+  {:type '(-> "AssignmentExpression" type, AssignmentOperator operator, [Pattern Expression] left, Expression right)}
+  [type operator left right]
+  Expression)
+
+(define ASSIGNMENT_OPERATORS #{"=" "+=" "-=" "*=" "/=" "%=" "<<=" ">>=" ">>>=" "|=" "^=" "&="})
+
+(define-function assignment-expression
+  [operator left right]
+  (unless (has? ASSIGNMENT_OPERATORS operator) (throw (js/Error. "invalid assignment operator: " (inspect operator))))
+  (AssignmentExpression. "AssignmentExpression" operator left right))
+
+(define-type LogicalExpression
+  {:type '(-> "LogicalExpression" type, LogicalOperator operator, Expression left, Expression right)}
+  [type operator left right]
+  Expression)
+
+(define LOGICAL_OPERATORS #{"||" "&&"})
+
+(define-function logical-expression
+  [operator left right]
+  (unless (has? LOGICAL_OPERATORS operator) (throw (js/Error. "invalid logical operator: " (inspect operator))))
+  (LogicalExpression. "LogicalExpression" operator left right))
+
+
+(define-type MemberExpression
+  "A member expression. If computed is true, the node corresponds to a computed (a[b])
+  member expression and property is an Expression. If computed is false, the node
+  corresponds to a static (a.b) member expression and property is an Identifier."
+  {:type '(-> "MemberExpression" type, Expression object, Expression property, js/Boolean computed)}
+  [type object property computed]
+  Expression)
+
+(define-function member-expression
+  [object property computed]
+  (MemberExpression. "MemberExpression" object property computed))
+
+
+(define-type ConditionalExpression
+  "A conditional expression, i.e., a ternary ?/: expression."
+  {:type '(-> "ConditionalExpression" type, Expression test, Expression alernate, Expression consequent)}
+  [type test alternate consequent]
+  Expression)
+
+(define-function conditional-expression
+  [test alternate consequent]
+  (ConditionalExpression. "ConditionalExpression" test alternate consequent))
+
+
+(define-type CallExpression
+  "A function or method call expression."
+  {:type '(-> "CallExpression" type, Expression callee, (js/Array Expression) arguments)}
+  [type callee arguments]
+  Expression)
+
+(define-function call-expression
+  [callee arguments]
+  (CallExpression. "CallExpression" callee (into-array arguments)))
+
+
+(define-type NewExpression
+  "A `new` expression."
+  {:type '(-> "NewExpression" type, Expression callee, (js/Array Expression) arguments)}
+  [type callee arguments]
+  Expression)
+
+(define-function new-expression
+  [callee arguments]
+  (NewExpression. "NewExpression" callee (into-array arguments)))
+
+
+(define-type SequenceExpression
+  "A sequence expression, i.e., a comma-separated sequence of expressions."
+  {:type '(-> "SequenceExpression" type, (js/Array Expression) expressions)}
+  [type expressions]
+  Expression)
+
+(define-function sequence-expression
+  [expressions]
+  (SequenceExpression. "SequenceExpression" (into-array expressions)))

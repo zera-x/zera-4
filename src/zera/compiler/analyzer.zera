@@ -1,8 +1,8 @@
 ; vim: ft=clojure
-(require "syntax.ws")
-(ns zera.analyzer)
+(require "syntax.zera")
+(ns zera.compiler.analyzer)
 
-(alias 's 'zera.syntax)
+(alias 's 'zera.compiler.syntax)
 
 (define property-accessor? isPropertyAccessor)
 (define property-assignment? isPropertyAssignment)
@@ -92,9 +92,9 @@
   (s/QuotedValue. (analyze x)))
 
 (define-function analyze-definition
-  ([name] (s/Definition. name nil (hash-map)))
-  ([name value] (s/Definition. name value (hash-map)))
-  ([name value meta] (s/Definition. name value meta)))
+  ([nm] (s/Definition. (s/Variable. (namespace nm) (name nm)) nil (hash-map)))
+  ([nm value] (s/Definition. (s/Variable. (namespace nm) (name nm)) value (hash-map)))
+  ([nm value meta] (s/Definition. (s/Variable. (namespace nm) (name nm)) value meta)))
 
 (define-function analyze-if
   ([pred alt]
@@ -105,13 +105,28 @@
 (define-function analyze-lambda
   [args]
   (let [x (first args)]
-    (cond (vector? x) (s/Lambda. (list (analyze x)) (list (map analyze (rest args))))
-          (list? x)
-            (s/Lambda.
-              (map analyze (map first args))
-              (map analyze (map second args)))
-          :else
-            (throw (js/Error. "the second element of a Lambda expression should be an arguments vector or a list of bodies")))))
+    (cond
+      (vector? x) (s/Lambda. 1 (list (analyze-argument-vector x)) (list (map analyze (rest args))))
+      (list? x)
+        (let [arglists (map analyze (map first args))
+              argcount (argument-count arglists)]
+          (s/Lambda.
+            argcount
+            arglists
+            (map analyze (map second args))))
+        :else
+          (throw (js/Error. "the second element of a Lambda expression should be an arguments vector or a list of bodies")))))
+
+(define-function argument-count
+  [arglists]
+  (->> arglists
+       (map count)
+       sort
+       first))
+
+(define-function analyze-argument-vector
+  [args]
+  (s/ArgumentVector. (map analyze args)))
 
 (define-function analyze-block
   [body]
