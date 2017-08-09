@@ -415,7 +415,7 @@ namespace zera.core {
     return v.get();
   };
 
-  var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('define'));
+  var isDefinition = ws.isDefinition = makeTagPredicate(_.symbol('def'));
 
   var defineVariable = function(env, ident, value, meta) {
     var meta = meta || _.hashMap();
@@ -485,7 +485,7 @@ namespace zera.core {
     return value;
   };
 
-  var isProtocol = ws.isProtocol = makeTagPredicate(_.symbol('define-protocol'));
+  var isProtocol = ws.isProtocol = makeTagPredicate(_.symbol('defprotocol'));
 
   // (distance [self other] ...)
   var evalMethod = function(exp, env) {
@@ -601,7 +601,7 @@ namespace zera.core {
     return mixin;
   };
 
-  var isType = ws.isType = makeTagPredicate(_.symbol('define-type'));
+  var isType = ws.isType = makeTagPredicate(_.symbol('deftype'));
 
   // (define-type Point [x y])
   var evalType = function(exp, env) {
@@ -743,7 +743,7 @@ namespace zera.core {
 
   ws.ContinuationException = ContinuationException;
 
-  var isLambda = ws.isLambda = makeTagPredicate(_.symbol('lambda'));
+  var isLambda = ws.isLambda = makeTagPredicate(_.symbol('fn'));
 
   var validateVariables = function(body, scope) {
     var exp_, exp, list = body;
@@ -986,7 +986,7 @@ namespace zera.core {
   };
 
   var isLoop = ws.isLoop = makeTagPredicate(_.symbol('loop'));
-  var isRecursionPoint = ws.isRecursionPoint = makeTagPredicate(_.symbol('again'));
+  var isRecursionPoint = ws.isRecursionPoint = makeTagPredicate(_.symbol('recur'));
 
   var Loop = _.makeType('Loop', _.hashMap(), function Loop(bindings, body, env) {
     if (arguments.length !== 3) {
@@ -1286,26 +1286,26 @@ namespace zera.core {
     return null;
   };
 
-  var isMacroDef = makeTagPredicate(_.symbol('define-macro'));
+  var isMacroDef = makeTagPredicate(_.symbol('defmacro'));
 
   ws.TAGGED_SPECIAL_FORMS = _.set([
-    _.symbol('lambda'),
+    _.symbol('fn'),
     _.symbol('quote'),
     _.symbol('cond'),
-    _.symbol('define'),
+    _.symbol('def'),
     _.symbol('do'),
     _.symbol('try'),
     _.symbol('catch'),
     _.symbol('throw'),
     _.symbol('again'),
     _.symbol('set!'),
-    _.symbol('define-type'),
-    _.symbol('define-protocol'),
-    _.symbol('define-macro'),
+    _.symbol('deftype'),
+    _.symbol('defprotocol'),
+    _.symbol('defmacro'),
     _.symbol('.-'),
     _.symbol('.'),
     _.symbol('new'),
-    _.symbol('module'),
+    _.symbol('ns'),
     _.symbol('require'),
     _.symbol('loop'),
     _.symbol('use')
@@ -1641,7 +1641,7 @@ namespace zera.core {
   };
   ws.defineModule = defineModule;
 
-  var isModuleDefinition = ws.isModuleDefinition = makeTagPredicate(_.symbol('ns*'));
+  var isModuleDefinition = ws.isModuleDefinition = makeTagPredicate(_.symbol('ns'));
 
   var evalModuleDefinition = function(exp, env) {
     var name = _.second(exp); 
@@ -2177,7 +2177,7 @@ namespace zera.core {
   js.define(_.symbol('array?'), _.isArray);
   js.define(_.symbol('object?'), _.isObject);
   js.define(_.symbol('regexp?'), _.isRegExp);
-  js.define(_.symbol('function?'), _.isFunction);
+  js.define(_.symbol('fn?'), _.isFunction);
   js.define(_.symbol('arguments?'), _.isArguments);
   js.define(_.symbol('element?'), _.isElement);
   js.define(_.symbol('identical?'), function(a, b) { return a === b });

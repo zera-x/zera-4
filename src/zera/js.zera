@@ -1,6 +1,6 @@
 (ns js)
 
-(define-function object
+(defn object
   [&pairs]
   (let [o (.create js/Object js/null)
         xs (partition 2 pairs)]
@@ -10,5 +10,5 @@
     o))
 
 ; TODO: build with js/function and js/object
-(define-function create-type [attrs &specs])
-(define-function create-protocol [attrs &specs])
+(defn create-type [attrs &specs])
+(defn create-protocol [attrs &specs])

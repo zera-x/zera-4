@@ -1,44 +1,44 @@
 ; vim: ft=clojure
-(ns* zera.core)
+(ns zera.core)
 
 ; TODO: implement destructure (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/clj/clojure/core.clj#L4341)
 
-(define-protocol Exception)
+(defprotocol Exception)
 
-(define-type MacroException
+(deftype MacroException
   [message]
   Exception)
 
-(define-macro comment [&forms] nil)
+(defmacro comment [&forms] nil)
 
-(define-macro if
+(defmacro if
   ([pred conse] (list 'cond pred conse))
   ([pred conse alt] (list 'cond pred conse :else alt))) 
 
-(define-macro if-not
+(defmacro if-not
   ([pred conse] (list 'cond (list 'not pred) conse))
   ([pred conse alt] (list 'cond (list 'not pred) conse :else alt)))
 
-(define-macro unless [pred &acts]
+(defmacro unless [pred &acts]
   (list 'cond (list 'not pred) (cons 'do acts)))
 
-(define-macro not= [&values]
+(defmacro not= [&values]
   (list 'not (cons '= values)))
 
 
-(define-macro when [pred &acts]
+(defmacro when [pred &acts]
   (list 'cond pred (cons 'do acts)))
 
-(define-macro cond-with
+(defmacro cond-with
   "(cond-with '= a
      5 \"a is 5\"
      6 \"a is 6\"
      :else \"a is not 5 or 6\")"
   [cmp value &rules]
   (cons 'cond (->> (partition 2 rules)
-                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list cmp value (first r))) (second r)])))))
+                   (mapcat (fn [r] [(if (= :else (first r)) :else (list cmp value (first r))) (second r)])))))
 
-(define-macro case
+(defmacro case
   "(case a
      5 \"a is 5\"
      6 \"a is 6\"
@@ -46,20 +46,20 @@
   [value &rules]
   (cons 'cond-with (cons '= (cons value rules))))
 
-(define-macro define-
+(defmacro def-
   "define a private variable (it cannot be seen outside of the module scope)."
-  ([nm] (list 'define :private nm))
-  ([nm value] (list 'define :private nm value))
-  ([meta nm value] (list 'define (if (keyword? meta) {meta true :private true} (assoc meta :private true)) nm value)))
+  ([nm] (list 'def :private nm))
+  ([nm value] (list 'def :private nm value))
+  ([meta nm value] (list 'def (if (keyword? meta) {meta true :private true} (assoc meta :private true)) nm value)))
 
-(define-macro let [bindings &body]
+(defmacro let [bindings &body]
   (cond (not (vector? bindings)) (throw "let bindings should be a vector"))
   (cons 'do
-        (concat (map (lambda [pair] (list 'define :private (first pair) (second pair)))
+        (concat (map (fn [pair] (list 'def :private (first pair) (second pair)))
                      (partition 2 bindings))
                 body)))
 
-(define-macro if-let
+(defmacro if-let
   ([bind x] (list 'if-let bind x nil))
   ([bind x y]
    (unless (= (count bind) 2)
@@ -67,80 +67,80 @@
    (list 'let bind
          (list 'if (first bind) x y))))
 
-(define-macro when-let
+(defmacro when-let
   [bind &forms]
   (unless (= (count bind) 2)
      (throw "Bindings must have exactly two elements"))
   (list 'let bind
         (cons 'when (cons (first bind) forms))))
 
-(define-macro or
+(defmacro or
   ([] nil)
   ([a] a)
   ([&forms]
    (let [or* (first forms)]
      (list 'if or* or* (cons 'or (rest forms))))))
 
-(define-macro or=
+(defmacro or=
   [x &forms]
-  (cons 'or (map (lambda [form] (list '= x form)) forms)))
+  (cons 'or (map (fn [form] (list '= x form)) forms)))
 
-(define-macro and
+(defmacro and
   ([] true)
   ([a] a)
   ([&forms]
    (let [and* (first forms)]
      (list 'if and* (cons 'and (rest forms)) and*))))
 
-(define-macro define-function
-  "(define-function name doc-string? meta-map? arguments body)
-  (define-function name doc-string? meta-map? (arguments body))"
+(defmacro defn
+  "(defn name doc-string? meta-map? arguments body)
+  (defn name doc-string? meta-map? (arguments body))"
   [name &forms]
   (if (symbol? name)
     nil
     (do
       (println *scope*)
-      (throw (MacroException. (str "first argument of define-function should be a symbol, got: " (inspect name))))))
+      (throw (MacroException. (str "first argument of defn should be a symbol, got: " (inspect name))))))
   (let [x (first forms)
         y (second forms)]
     (cond (and (string? x) (map? y))
-            (list 'define (assoc y :doc x) name (cons 'lambda (rest (rest forms))))
+            (list 'def (assoc y :doc x) name (cons 'fn (rest (rest forms))))
           (string? x)
-            (list 'define {:doc x} name (cons 'lambda (rest forms)))
+            (list 'def {:doc x} name (cons 'fn (rest forms)))
           (map? x)
-            (list 'define x name (cons 'lambda (rest forms)))
+            (list 'def x name (cons 'fn (rest forms)))
           (or (vector? x) (list? x))
-            (list 'define name (cons 'lambda forms))
+            (list 'def name (cons 'fn forms))
           :else
             (throw
               (MacroException.
-                "after name define-function expects a doc string, an arguments vector, or a list of bodies")))))
+                "after name defn expects a doc string, an arguments vector, or a list of bodies")))))
 
-(define-macro define-function-
+(defmacro defn-
   [name &forms]
-  (list 'define :private name (cons 'lambda forms)))
+  (list 'def :private name (cons 'fn forms)))
 
-(define-macro .?
+(defmacro ?.
   ([obj method]
-   (list '.? obj method nil))
+   (list '?. obj method nil))
   ([obj method alt]
    (if (list? method)
      (list 'if (list 'and obj (list '.- obj (first method))) (list '. obj method) alt)
      (list 'if (list 'and obj (list '.- obj method)) (list '. obj method) alt))))
 
-(define-macro ..
+(defmacro ..
   ([x form] (list '. x form))
   ([x form &more] (cons '.. (cons (list '. x form) more))))
 
-(define-macro ..?
-  ([x form] (list '.? x form))
-  ([x form &more] (cons '..? (cons (list '.? x form) more))))
+(defmacro ?..
+  ([x form] (list '?. x form))
+  ([x form &more] (cons '?.. (cons (list '?. x form) more))))
 
-(define-macro ..-
+(defmacro ..-
   ([x form] (list '.- x form))
   ([x form &more] (cons '..- (cons (list '.- x form) more))))
 
-(define-macro do-to
+(defmacro do-to
   "Take an object `x` and perform (presumably) mutation operations `forms` on it.
   The expression evaluates to the object.
   
@@ -154,10 +154,10 @@
   (let [obj (gen-sym "$obj")]
     (cons 'let
             (cons [obj x]
-                  (concat (map (lambda [x] (cons (first x) (cons obj (rest x)))) forms)
+                  (concat (map (fn [x] (cons (first x) (cons obj (rest x)))) forms)
                           (list obj))))))
 
-(define-macro do-times
+(defmacro do-times
   [bindings &body]
   (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
@@ -169,7 +169,7 @@
                       (concat body [(list 'again (list '+ var 1))])))
           init)))
 
-(define-macro do-each
+(defmacro do-each
   [bindings &body]
   (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
@@ -182,17 +182,17 @@
                       (concat body ['(again (first col-nm) (rest col-nm))])))
           'init))))
 
-(define-macro while
+(defmacro while
   [pred &body]
   (list 'loop []
          (cons 'when (cons pred (concat body [(list 'again)])))))
 
-(define-macro until
+(defmacro until
   [pred &body]
   (list 'loop []
         (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))
 
-(define-macro ->
+(defmacro ->
   [x &forms]
   (loop [x* x, forms* forms]
     (if (empty? forms*)
@@ -203,7 +203,7 @@
                        (list form x*))]
         (again threaded (rest forms*))))))
 
-(define-macro ->>
+(defmacro ->>
   [x &forms]
   (loop [x* x, forms* forms]
     (if (empty? forms*)
@@ -214,16 +214,16 @@
                        (list form x*))]
         (again threaded (rest forms*))))))
 
-(define-macro case
+(defmacro case
   "(case a
      5 \"a is 5\"
      6 \"a is 6\"
      :else \"a is not 5 or 6\")"
   [value &rules]
   (cons 'cond (->> (partition 2 rules)
-                   (mapcat (lambda [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
+                   (mapcat (fn [r] [(if (= :else (first r)) :else (list '= value (first r))) (second r)])))))
 
-(define-function prototype
+(defn prototype
   [x]
   (cond
     (.-prototype x) (.-prototype x)
@@ -231,22 +231,22 @@
     :else
       nil))
 
-(define-function constructor
+(defn constructor
   [x]
   (.-constructor x))
 
-(define-function isa?
+(defn isa?
   [x klass]
-  (.? x (isa klass) false))
+  (?. x (isa klass) false))
 
-(define-function class
+(defn class
   [x]
-  (.? x class (eval (symbol "js" (class-name x)))))
+  (?. x class (eval (symbol "js" (class-name x)))))
 
-(define-protocol IDeref
+(defprotocol IDeref
   (deref [self] (.- self value)))
 
-(define-protocol IBlockingDeref
+(defprotocol IBlockingDeref
   (deref
     ([self]
      (.deref self 3000 nil))
@@ -257,7 +257,7 @@
             nil)
      (or (.-value self) timeout-val)))))
 
-(define-function deref
+(defn deref
   "Dereferences (returning a hidden value) an instance of the `IDef` protocol `x`,
   including Atoms. The reader provides a shorthand of the form:
       
@@ -267,11 +267,11 @@
       @x => 1"
   {:added "1.0"}
   ([x]
-   (.? x deref))
+   (?. x deref))
   ([x timeout-ms timeout-val]
-   (.? x (deref timeout-ms timeout-val))))
+   (?. x (deref timeout-ms timeout-val))))
 
-(define-protocol IRef
+(defprotocol IRef
   (setValidator
     [self fn]
     (.-set! self validator fn)
@@ -298,42 +298,42 @@
           (f k self (.- self value) newVal))))
     self))
 
-(define-function add-watch
+(defn add-watch
   "Add watch function to the atom `x` with a key `k` (that can be used for traces).
   The watch function will be proccessed each time the atom value changes. When
   the watch function is proccessed it is passed 4 arguments, the key, the atom,
   the current value, and the new value.
 
   Example:
-      (define x (atom 1))
+      (def x (atom 1))
       (add-watch x :times-are-a-changin
-        (lambda [k a old new]
-                (println (str \"processing \" k))
-                (println (str \"old value: \" (inspect old)))
-                (println (str \"new value: \" (inspect new)))))"
+        (fn [k a old new]
+          (println (str \"processing \" k))
+          (println (str \"old value: \" (inspect old)))
+          (println (str \"new value: \" (inspect new)))))"
   {:added "1.0"}
   [x k f]
-  (.? x (addWatch k f)))
+  (?. x (addWatch k f)))
 
-(define-function remove-watch
+(defn remove-watch
   "Removes a watch (set by add-watch) from a reference"
   {:added "1.0"}
   [x k]
-  (.? x (removeWatch k)))
+  (?. x (removeWatch k)))
 
-(define-function set-validator!
+(defn set-validator!
   {:added "1.0"}
   [x fn]
-  (.? x (setValidator fn)))
+  (?. x (setValidator fn)))
 
-(define-protocol IMeta
+(defprotocol IMeta
   (getMeta [self] (.-meta self))
   (withMeta [self m] (.-set! self meta m))
   (varyMeta
     [self f &args]
     (.withMeta (apply f (cons (.-meta self) args)))))
 
-(define-type Atom
+(deftype Atom
   [value meta validator]
   IMeta
   IDeref
@@ -352,15 +352,15 @@
       (.reset self newVal)
       self)))
 
-(define-function atom
+(defn atom
   "Constructs a new Atom wrapping the given value `x`."
   {:added "1.0"}
   [x &options]
   (if (empty? options)
     (Atom. x {} nil)
     (let [opts (partition 2 options)
-          meta (first (filter (lambda [x] (= :meta (first x))) opts))
-          validator (first (filter (lambda [x] (= :validator (first x))) opts))]
+          meta (first (filter (fn [x] (= :meta (first x))) opts))
+          validator (first (filter (fn [x] (= :validator (first x))) opts))]
       (cond (and meta validator)
               (Atom. x (second meta) (second validator))
             validator
@@ -370,11 +370,11 @@
             :else
               (Atom. x {} nil)))))
 
-(define-function atom?
+(defn atom?
   [x]
   (isa? x Atom))
 
-(define-function reset!
+(defn reset!
   "Resets the value of an Atom `x` to `value`, any watches that have
   been added will be processed.
 
@@ -384,9 +384,9 @@
       @x => 2"
   {:added "1.0"}
   [x value]
-  (.? x (reset value)))
+  (?. x (reset value)))
 
-(define-function compare-and-set!
+(defn compare-and-set!
   "Atomically sets the value of atom to newval if and only if the
   current value of the atom is identical to oldval. Returns true if
   set happened, else false."
@@ -398,7 +398,7 @@
       true)
     false))
 
-(define-function swap!
+(defn swap!
   "Swaps the the value of `x` with the return value of the function `f`
   which receives the current value of `x` as it's single argument.
   
@@ -408,9 +408,9 @@
       (deref x) => 2"
   {:added "1.0"}
   [x f]
-  (.? x (swap f)))
+  (?. x (swap f)))
 
-(define-type Var
+(deftype Var
   [value meta]
   IMeta
   IRef
@@ -424,29 +424,29 @@
   (isClass [self]
     (-> self .getMeta :type)))
 
-(define-function var?
+(defn var?
   [x]
   (isa? x Var))
 
-(define-function get-var
+(defn get-var
   [x]
   (if (var? x)
     (.get x)))
 
-(define-function set-var
+(defn set-var
   [x val]
   (if (var? x)
     (.set x val)))
 
-(define-function macro?
+(defn macro?
   [x]
   (if (var? x) (.isMacro x)))
 
-(define-function class?
+(defn class?
   [x]
   (if (var? x) (.isClass x)))
 
-(define-type Env
+(deftype Env
   [id vars parent]
   (extend [self]
     (env self))
@@ -469,10 +469,10 @@
 ;        (set! scope (.-parent scope)))
 ;      (into '() buffer)))
   (get [self name]
-    (.? (.get-var self name) get))
+    (?. (.get-var self name) get))
   (set [self name value]
     (if-let [scope (.lookup self name)]
-      (..? self (get-var name) (set value))
+      (?.. self (get-var name) (set value))
       (throw (str "Undefined variable: '" name "'")))
     value)
   (define [self name value meta]
@@ -480,25 +480,25 @@
       (.-set! self vars (assoc (.-vars self) name (Var. value {})))
       value)))
 
-(define env
+(def env
   (do
-    (define- id (atom 0))
-    (lambda
+    (def- id (atom 0))
+    (fn
       ([] (env nil))
       ([parent]
         (let [vars (if parent (.-vars parent) {})]
           (Env. @(swap! id add1) vars parent))))))
 
-(define-protocol IPending
+(defprotocol IPending
   (realized?
     [self]
     (.-value self)))
 
-(define-function realized?
+(defn realized?
   [x]
-  (.? x realized?))
+  (?. x realized?))
 
-(define-type Delay
+(deftype Delay
   [fn value]
   IDeref
   IPending
@@ -508,16 +508,16 @@
       (.-set! self value ((.-fn self))))
     (.-value self)))
 
-(define-macro delay
+(defmacro delay
   [&body]
-  (list 'Delay. (cons 'lambda (cons [] body)) nil))
+  (list 'Delay. (cons 'fn (cons [] body)) nil))
 
-(define-function add1 [n] (+ 1 n))
-(define-function sub1 [n] (- 1 n))
+(defn add1 [n] (+ 1 n))
+(defn sub1 [n] (- 1 n))
 
 (do
-  (define- sym-count (atom 0))
-  (define-function gen-sym 
+  (def- sym-count (atom 0))
+  (defn gen-sym 
     "Generate a unique symbol with an optional prefix (used for symbol generation in macros)."
     {:added "1.0"}
     ([] (gen-sym "$sym"))
@@ -528,7 +528,7 @@
 
 ;; ---------------------------- meta data ------------------------------ ;;
 
-(define-function defined?
+(defn defined?
   [sym]
   (try
     (var sym)
@@ -536,23 +536,23 @@
     (catch [e zera.core/UndefinedVariableException]
       false)))
 
-(define-function var-set
+(defn var-set
   [x value]
-  (.? x (set value)) x)
+  (?. x (set value)) x)
 
-(define-function var-get
+(defn var-get
   [x]
-  (.? x get))
+  (?. x get))
 
-(define-function macro?
+(defn macro?
   [x]
-  (.? x isMacro))
+  (?. x isMacro))
 
-(define-function var?
+(defn var?
   [x]
   (isa? x Var))
 
-(define-function class?
+(defn class?
   [x]
   (cond (var? x)
           (.isClass x)
@@ -560,34 +560,34 @@
           ((.getMeta x) :type)
         :else false))
 
-(define-function meta
+(defn meta
   "Return meta data for the given Variable object `x`."
   [x] (.getMeta x))
 
-(define-function with-meta
+(defn with-meta
   "Add meta data `meta` (expects a Map) to the given Variable object `x`."
   [x meta]
   (.withMeta x meta))
 
-(define-function vary-meta
+(defn vary-meta
   "Change the meta data for the given Variable object `x`,
   with the function `f` and any required `args`."
   [x f &args]
   (.varyMeta x f args))
 
-(define-macro define-once
+(defmacro defonce
   [nm value]
-  (list 'cond (list 'not (list 'defined? nm)) (list 'define nm value) :else nm))
+  (list 'cond (list 'not (list 'defined? nm)) (list 'def nm value) :else nm))
 
-(define-macro defined-in-module?
+(defmacro defined-in-module?
   ([nm] (list '.- 'zera.core/MODULE_SCOPE nm))
   ([mod nm]
    (list '.- mod nm)))
 
-(define-macro define-in-module-once [nm value]
-  (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'define nm value) :else nm))
+(defmacro define-in-module-once [nm value]
+  (list 'cond (list 'not (list 'defined-in-module? nm)) (list 'def nm value) :else nm))
 
-(define-macro doc
+(defmacro doc
   "Retreive documentation for the given symbol"
   [sym]
   (let [v (gen-sym "$var")
@@ -597,7 +597,7 @@
         args (gen-sym "$args")
         kind (gen-sym "$kind")]
     (list 'let [v (list 'var sym)
-                meta (list '.? v 'getMeta)]
+                meta (list '?. v 'getMeta)]
           (list 'if
                 v
                 (list 'let [doc  (list meta :doc)
@@ -615,7 +615,7 @@
                         (list 'println "Methods")
                         (list 'println
                               (list 'map
-                                    '(lambda [x] [(.methodName x) (.arglists x)])
+                                    '(fn [x] [(.methodName x) (.arglists x)])
                                     (list '.instanceMethods (list 'deref v)))))
                       (list 'if doc (list 'println doc))
                       (list 'when (list meta :see-also)
@@ -624,7 +624,7 @@
                             (list 'do-each ['cite (list meta :see-also)]
                                 (list 'println 'cite))))) nil)))
 
-(define-macro source
+(defmacro source
   [sym]
   (let [meta (gen-sym "meta")]
     (list 'let [meta (list 'deref (list 'var sym))]
@@ -632,39 +632,39 @@
 
 ;; ------------------------------------ testing -------------------------------------- ;;
 
-(define-macro define-test [nm &body]
+(defmacro deftest [nm &body]
   (when (and (defined? *mode*) (or (= *mode* :development) (= *mode* :test)))
-    (let [t (cons 'lambda (cons [] (concat body [[(keyword (namespace nm) (name nm)) :passed]])))]
+    (let [t (cons 'fn (cons [] (concat body [[(keyword (namespace nm) (name nm)) :passed]])))]
       (list 'if
             (list 'defined? nm)
             (list 'vary-meta (list 'var nm) 'assoc :test t)
-            (list 'define {:tag :test, :test t} nm :test)))))
+            (list 'def {:tag :test, :test t} nm :test)))))
 
-(define :private format-test-results
- (lambda [body]
+(def :private format-test-results
+ (fn [body]
   ;(println "body" body)
   (if (list? body)
     (inspect (cons (first body) (map eval (rest body))))
     (inspect body))))
 
-(define-macro is
+(defmacro is
   ([body]
    (list 'is body (list 'str "FAILURE: " (inspect body) " is false")))
   ([body msg]
    (list 'cond
          (list 'not body) (list 'throw msg))))
 
-(define-macro is-not [body &args]
+(defmacro is-not [body &args]
   (cons 'is (cons (list 'not body) args)))
 
-(define-function namespace-scope
+(defn namespace-scope
   "Return the scope of the named module."
   [mod]
   (if (symbol? mod)
     (-> (eval mod) .getScope)
     (.getScope mod)))
 
-(define-function tests
+(defn tests
   "Collect all the tests in the given module, if no module us specified
   the tests from the current module are returned."
   ([] (tests *namespace*))
@@ -675,7 +675,7 @@
         (filter :test)
         (map :test))))
 
-(define-macro prove
+(defmacro prove
   "Run the named test"
   [tname]
   (let [v (gen-sym "$var")
@@ -684,12 +684,12 @@
                 f (list 'if v (list '-> (list '.getMeta v) :test))]
          (list 'if f (list 'apply f)))))
 
-(define-function prove-ns [ns]
+(defn prove-ns [ns]
   (map apply (tests ns)))
 
 ;; Special Forms
 
-(define
+(def
   {:doc "Takes a set of test/expression pairs. It evaluates each test one at a
         time.  If a test returns logical true, cond evaluates and returns
         the value of the corresponding expr and doesn't evaluate any of the
@@ -710,7 +710,7 @@
    :added "1.0"}
   cond)
 
-(define
+(def
   {:doc "A function (lambda) expression, not a true function in the strictest sense (it does allow imperative programming, i.e. side-effects)
         but they are true closures, in that any variables that are defined in a higher scope or passed as parameters are available
         to the function at execution time.
@@ -725,59 +725,59 @@
       "https://en.wikipedia.org/wiki/Closure_(computer_programming)"
       pbnj.core/identity
       pbnj.core/always
-      pbnj.core/define-function
-      pbnj.core/define-macro
+      pbnj.core/defn
+      pbnj.core/defmacro
       pbnj.core/define-generic
       pbnj.core/define-method)
    :added "1.0"}
-  lambda)
+  fn)
 
-(define-function fraction [n]
+(defn fraction [n]
   (- n (.floor js/Math n)))
 
-(define-function sign [n]
+(defn sign [n]
   (if (number? n) (.sign js/Math n) 0))
 
-(define-function positive? [n]
+(defn positive? [n]
   (= n (.abs js/Math n)))
 
-(define-function negative? [n]
+(defn negative? [n]
   (not= n (.abs js/Math n)))
 
-(define-function integer? [n] (and (number? n) (= 0 (fraction n))))
+(defn integer? [n] (and (number? n) (= 0 (fraction n))))
 
-(define-function natural? [n]
+(defn natural? [n]
   (and (integer? n) (positive? n)))
 
-(define-function generate-int
+(defn generate-int
   ([] (generate-int -100 100))
   ([min max]
    (let [a (.ceil js/Math min)
          b (.ceil js/Math max)]
      (+ a (.floor js/Math (* (.random js/Math) (- b a)))))))
 
-(define-function generate-nat
+(defn generate-nat
   ([] (generate-int 0 100))
   ([min max]
    (let [a (.abs js/Math min)]
     (if (> a max) (throw "The absolute value of min should be less than max"))
     (generate-int a max))))
 
-(define-function generate-float
+(defn generate-float
   ([] (generate-float 0 100))
   ([min max]
    (+ (generate-int min max) (* (.random js/Math (- max min))))))
 
-(define-function generate-str
+(defn generate-str
   ([] (generate-str 1 20))
   ([min max]
    (let [n (generate-nat min max)
          xs (take n (iterate (partial generate-nat 0x20 0x4000) (generate-nat 0x20 0x4000)))]
      (->> xs
-          (map (lambda [x] (.fromCodePoint js/String x)))
+          (map (fn [x] (.fromCodePoint js/String x)))
           (reduce str)))))
 
-(define-function generate-keyword
+(defn generate-keyword
   ([] (generate-keyword 1 20))
   ([min max]
    (let [ns? (> (generate-int 0 2) 0)
@@ -787,7 +787,7 @@
       (keyword ns nm)
       (keyword nm)))))
 
-(define-function generate-symbol
+(defn generate-symbol
   ([] (generate-keyword 1 20))
   ([min max]
    (let [ns? (> (generate-int 0 2) 0)
@@ -797,27 +797,27 @@
       (symbol ns nm)
       (symbol nm)))))
 
-(define-function maybe
+(defn maybe
   ([value just]
    (maybe value just nil))
   ([value just none]
    (if (nil? value) none (just value))))
 
-(define-function either
+(defn either
   ([value left]
    (if (nil? value) (left) nil))
   ([value left right]
    (if (nil? value) (left) (right value))))
 
-(define-function raise
+(defn raise
   [e]
-  (lambda [] (throw e)))
+  (fn [] (throw e)))
 
-(define-function identity [x] x)
+(defn identity [x] x)
 
-(define-function always [x] (lambda [] x))
+(defn always [x] (fn [] x))
 
-(define-macro define-generic
+(defmacro defmulti
   "Defines a generic function
 
   Example:
@@ -826,12 +826,12 @@
       (define-method t true [_] :string)"
   {:added "1.0"}
   ([name fn]
-   (list 'define-generic name nil fn))
+   (list 'defmulti name nil fn))
   ([name doc fn]
-   (list 'define
+   (list 'def
          {:generic-function true :doc doc :methods {}}
          name
-         (list 'lambda ['&args]
+         (list 'fn ['&args]
                (list 'let ['meths (list '-> (list 'var name) '.getMeta :methods)]
                      (list 'if (list 'empty? 'meths)
                            (list 'throw (str "There are no methods for the generic function '" name "'")))
@@ -840,7 +840,7 @@
                                  (list 'throw (str "there is no method for the given arguments " (list 'inspect 'args))))
                            (list 'apply 'meth 'args)))))))
 
-(define-macro define-method
+(defmacro defmethod
   "Defines a method for a generic function
 
   Example:
@@ -850,12 +850,12 @@
   {:added "1.0"}
   [name val args &body]
   (list '.varyMeta (list 'var name)
-        (list 'lambda '[m]
+        (list 'fn '[m]
               (list 'let ['meths (list 'get 'm :methods)
-                          'fn (cons 'lambda (cons args body))]
+                          'fn (cons 'fn (cons args body))]
                     (list 'assoc 'm :methods (list 'assoc 'meths val 'fn))))))
 
-(define-macro nodejs?
+(defmacro nodejs?
   "If `*platform*` is `:nodejs` wrap code in a `do` block
   in place otherwise return `nil`."
   {:added "1.0"}
@@ -863,7 +863,7 @@
   (if (= *platform* :nodejs)
     (cons 'do forms)))
 
-(define-macro browser?
+(defmacro browser?
   "If `*platform*` is `:browser` wrap code in a `do` block
   in place otherwise return `nil`."
   {:added "1.0"}
@@ -871,7 +871,7 @@
   (if (= *platform* :browser)
     (cons 'do forms)))
 
-(define-macro javascript?
+(defmacro javascript?
   "If `*target-language*` is `:javascript` wrap code in a `do` block
   in place otherwise return `nil`."
   {:added "1.0"}
@@ -879,15 +879,15 @@
   (if (= *target-language* :javascript)
     (cons 'do forms)))
 
-(define-macro for-platform
+(defmacro for-platform
   [&forms]
   (cons 'case (cons '*platform* forms)))
 
-(define-macro for-language
+(defmacro for-language
   [&forms]
   (cons 'case (cons '*target-language* forms)))
 
-(define-function say
+(defn say
   "String concatenate `vals` and print to console
   with a new line at the end (depending on platform)."
   {:platforms #{:javascript}
@@ -896,7 +896,7 @@
   (javascript?
     (.log js/console (apply str vals))))
 
-(define-function broken
+(defn broken
   []
   (throw "this is broken")
   1
@@ -904,11 +904,11 @@
   3
   4)
 
-(define-function broken1
+(defn broken1
   []
   (broken))
 
-(define-function print
+(defn print
   "String concatenate `vals` and print to console
   with a new line at the end (depending on platform)."
   {:platforms #{:nodejs :browser}
@@ -921,19 +921,19 @@
 
 (nodejs?
 
-  (define
+  (def
     {:doc ""
      :platforms #{:nodejs}
      :added "1.0"}
     *operating-system* (.-platform js.node/process))
   
-  (define 
+  (def
     {:doc "A map of environment variables"
      :platforms #{:nodejs}
      :added "1.0"}
     *env* (object->map (.-env js.node/process)))
 
-  (define
+  (def
     {:doc "A vector of command line arguments"
      :platforms #{:nodejs}
      :added "1.0"}
@@ -942,22 +942,22 @@
 
 (javascript?
 
-  (define-function lines
+  (defn lines
     [s]
     (-> (.split s \newline) array->list))
   
-  (define-function split
+  (defn split
     [s delim]
     (-> (.split s delim) array->list))
   
-  (define-function join
+  (defn join
     [delim col]
     (if (empty? col)
       ""
-      (let [joiner (lambda [s x] (str s delim x))]
+      (let [joiner (fn [s x] (str s delim x))]
         (reduce joiner col))))
   
-  (define-function replace
+  (defn replace
     ([s pat]
      (replace s pat ""))
     ([s pat val]
@@ -966,31 +966,31 @@
        (.replace s pat val))))
 )
 
-(define-function json
+(defn json
   [x]
   (.parse js/JSON x))
 
-(define-macro promise
+(defmacro promise
   [binds &forms]
-  (cons 'js/Promise. (cons 'lambda (cons binds forms))))
+  (cons 'js/Promise. (cons 'fn (cons binds forms))))
 
-(define-macro >>
+(defmacro >>
   [x &forms]
   (cons '..
     (cons x
           (map
-            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            (fn [form] (list 'then (list 'fn '[x] (list form 'x))))
             forms))))
 
-(define-macro >>>
+(defmacro >>>
   [x &forms]
   (cons '..
     (cons x
           (map
-            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            (fn [form] (list 'then (list 'fn '[x] (list form 'x))))
             forms))))
 
-(define-function position-vars
+(defn position-vars
   [exp]
   (cond (and (symbol? exp) (.startsWith (str exp) "%"))
           [exp]
@@ -1005,21 +1005,21 @@
         :else
           []))
 
-(define-macro &
+(defmacro &
   [exp]
-  (list 'lambda (position-vars exp) exp))
+  (list 'fn (position-vars exp) exp))
 
-(define-function alias
+(defn alias
   [alias ns-sym]
   (let [ns (var ns-sym)]
     (.alias *namespace* alias (.get ns)))
   nil)
 
-(define-macro ns
+(defmacro ns
   [sym]
   (list 'ns* sym))
 
-(define-function fn-opts
+(defn fn-opts
   ([args k] (fn-opts args k nil))
   ([args k alt]
    (or (second (first (filter (& (= k (first %))) (partition 2 args)))) alt)))

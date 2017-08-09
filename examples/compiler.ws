@@ -1,4 +1,4 @@
-(module examples.jess)
+(ns examples.jess)
 (require "../src/pbnj/compiler.ws")
 
 (define- compile pbnj.compiler/compile)

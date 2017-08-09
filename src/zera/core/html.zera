@@ -1,0 +1,39 @@
+(ns zera.core.html)
+
+(defn render-expression-list
+  [exprs]
+  (join " " (map html exprs)))
+
+(defn fmt-attrs
+  [attrs]
+  (->> attrs
+       (map (fn [kv] (str (kv 0) "=" (kv 1))))
+       (join " ")))
+
+(def tag? keyword?)
+
+; Any -> HTML(String)
+(defn html
+  {:memoize true}
+  [exp]
+  (p (vector? exp))
+  (p exp)
+  (cond
+    (nil? exp) ""
+    (boolean? exp) (if exp "Yes" "No")
+    (vector? exp)
+      (cond
+        (= 0 (count exp)) ""
+        (not (tag? exp)) (render-expression-list exp)
+        :else
+          (let [tag (name (first exp))]
+            (if (map? (exp 1))
+              (str "<" tag " " (fmt-attrs (exp 1)) ">" (render-expression-list (rest (rest exp))) "</" tag ">")
+              (str "<" tag ">" (render-expression-list (rest exp)) "</" tag ">"))))
+    :else
+      (do
+        (say "else")
+        (str exp))))
+
+(p (html [:a {:href "#"} "test"]))
+(p (html [:a {:href "#"} "test"]))

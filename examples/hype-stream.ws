@@ -1,22 +1,18 @@
 ; vim: ft=clojure
-(require "../src/pbnj/peanutbutter.ws")
-(require "../src/pbnj/http-service.ws")
-(module hype-stream)
-(use pbnj.http-service)
+(require "../src/zera/core/http-service.zera")
+(ns hype-stream)
+(use zera.core.http-service)
 
-(define- html pbnj.peanutbutter/compile)
-(define- define-component pbnj.peanutbutter/define-component)
-
-(define- *client-id* "b9bd493916ff449bac5ed7d0f3ddb44f")
-(define- *access-token* "4366567491.b9bd493.1e3417a1c28b438297fa134dca5d9c66")
-(define- *dbconn* (atom nil))
+(def *client-id* "b9bd493916ff449bac5ed7d0f3ddb44f")
+(def *access-token* "4366567491.b9bd493.1e3417a1c28b438297fa134dca5d9c66")
+(def *dbconn* (atom nil))
 
 ; Stream Item
 ; {:item/date js/Date
 ;  :item/type keyword
 ;  :item/content map}
 
-(define-function initdb!
+(defn initdb!
   []
   (let [mysql (js.node/require "promise-mysql")]
     (.. mysql
@@ -25,7 +21,7 @@
                  :user "root"
                  :password ""
                  :database "hype-stream"}))
-        (then (lambda [conn]
+        (then (fn [conn]
                       (reset! *dbconn* conn)
                       (.query conn "CREATE SCHEMA IF NOT EXISTS `hype-stream`")
                       (.query conn "CREATE TABLE IF NOT EXISTS `items` (
@@ -37,13 +33,13 @@
                                         PRIMARY KEY (`id`)
                                      ) ENGINE=INNODB;"))))))
 
-(define-function add-item!
+(defn add-item!
   [item]
   (.query @*dbconn*
           "INSERT INTO `items` (`t`, `type`, `content`) VALUES (? ? ?)"
           (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content)))))
 
-(define-function update-item!
+(defn update-item!
   [item]
   (if-not (item :item/id)
     (throw "An :item/id is required to perform update"))
@@ -51,13 +47,13 @@
           "UPDATE `items` SET `t` = ?, `type` = ?, `content` = ? WHERE `id` = ?"
           (array (item :item/t) (str (item :item/type)) (JSON/stringify (item :item/content)) (item :item/id))))
 
-(define-function get-item!
+(defn get-item!
   [id]
   (.query @*dbconn*
           "SELECT `id`, `t`, `type`, `content` FROM `items` WHERE `id` = ?"
           (array (item :item/id))))
 
-(define-function item
+(defn item
   ([t type content]
    (item nil t type conent))
   ([id t type content]
@@ -66,19 +62,20 @@
     :item/type type
     :item/content content}))
 
-(define-function instagram-client
+
+(defn instagram-client
   [id token]
   (let [Instagram (.- (js.node/require "node-instagram") default)]
     (new Instagram (->js {:clientId id, :accessToken token}))))
 
-(define-function stackoverflow-feed
+(defn stackoverflow-feed
   [id]
   (let [parser (js.node/require "feedparser-promised")]
     (.. parser
         (parse (str "https://stackoverflow.com/feeds/user/" id))
         (catch (lambda [err] (console.error err))))))
 
-(define-function media-item
+(defn media-item
   [obj]
   (reduce
      (lambda [m k]
@@ -90,7 +87,7 @@
      {}
      (array->list (. js/Object (keys obj)))))
 
-(define-function media-stream
+(defn media-stream
   [obj]
   (let [data (.- obj data)]
     (map media-item (array->list data))))
@@ -100,7 +97,7 @@
     [stream]
     (map (lambda [x] [:instagram/media-item x]) stream)))
 
-(define-function fmt-time [t]
+(defn fmt-time [t]
   (let [d (new js/Date (* 1000 t))]
     (str (+ 1 (.getUTCMonth d)) "/" (.getUTCDate d) "/" (.getUTCFullYear d))))
 
@@ -122,13 +119,13 @@
     [:div {:class "instagram-media-item"}
      (cond (= "image" (item :type)) [:instagram/media-image item])]))
 
-(define-function show-profile
+(defn show-profile
   [client]
   (.. client
       (get "users/self")
       (then println)))
 
-(define-function show-media
+(defn show-media
   ([client]
    (show-media client "self"))
   ([client user]
@@ -137,9 +134,9 @@
        (then media-stream)
        (then (lambda [x] (html [:instagram/media x]))))))
 
-(define *client* (instagram-client *client-id* *access-token*))
+(def *client* (instagram-client *client-id* *access-token*))
 
-(define-service hype-stream
+(defservice hype-stream
   "A web application to consolidate social media streams"
   (GET "/?" [req]
        (let [params (req :query)
@@ -148,26 +145,26 @@
              user (get params :user "self")]
          (show-media (instagram-client *client-id* *access-token*) user))))
 
-(define-function instagram-feed
+(defn instagram-feed
   [user]
   (.get (instagram-client *client-id* *access-token*)
         (str "users/" user "/media/recent")))
 
-(define-function store-instagram-items
+(defn store-instagram-items
   [data]
   (println data))
 
-(define-function store-feed
+(defn store-feed
   [type promise]
   (.then promise store-instagram-items))
 
-(define-function start-service
+(defn start-service
   [key ref old new]
   (if (and (nil? old) new)
     (start hype-stream 4000
            (lambda [] (println "Hype Stream Service - listening at http://localhost:4000")))))
 
-(define-function store-feeds
+(defn store-feeds
   [key ref old new]
   (if (and (nil? old) new)
     (store-feed :feed/instagram (instagram-feed "self"))))

@@ -1,5 +1,5 @@
 ; vim: ft=clojure
-(module pbnj.core.system)
+(ns zera.core.system)
 
 (define Promise
   (for-platform
