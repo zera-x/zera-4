@@ -1,0 +1,7 @@
+(ns zera.core.http-client)
+
+(def http (js.node/require "http"))
+
+(defn request
+  [opts]
+  (.request http (->js opts)))

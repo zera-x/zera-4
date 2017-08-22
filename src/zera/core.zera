@@ -120,9 +120,9 @@
   [name &forms]
   (list 'def :private name (cons 'fn forms)))
 
-(defmacro ?.
+(defmacro ?
   ([obj method]
-   (list '?. obj method nil))
+   (list '? obj method nil))
   ([obj method alt]
    (if (list? method)
      (list 'if (list 'and obj (list '.- obj (first method))) (list '. obj method) alt)
@@ -133,19 +133,19 @@
   ([x form &more] (cons '.. (cons (list '. x form) more))))
 
 (defmacro ?..
-  ([x form] (list '?. x form))
-  ([x form &more] (cons '?.. (cons (list '?. x form) more))))
+  ([x form] (list '? x form))
+  ([x form &more] (cons '?.. (cons (list '? x form) more))))
 
 (defmacro ..-
   ([x form] (list '.- x form))
   ([x form &more] (cons '..- (cons (list '.- x form) more))))
 
-(defmacro do-to
+(defmacro doto
   "Take an object `x` and perform (presumably) mutation operations `forms` on it.
   The expression evaluates to the object.
   
       Example:
-          (do-to person
+          (doto person
             (.setFirstName \"John\")
             (.setLastName \"Smith\")
             (.setAge 21))"
@@ -157,7 +157,7 @@
                   (concat (map (fn [x] (cons (first x) (cons obj (rest x)))) forms)
                           (list obj))))))
 
-(defmacro do-times
+(defmacro dotimes
   [bindings &body]
   (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
@@ -166,10 +166,10 @@
     (list 'loop [var 0]
           (cons 'when
                 (cons (list '< var init)
-                      (concat body [(list 'again (list '+ var 1))])))
+                      (concat body [(list 'recur (list '+ var 1))])))
           init)))
 
-(defmacro do-each
+(defmacro doeach
   [bindings &body]
   (if (not (and (vector? bindings) (= (count bindings) 2)))
     (throw "bindings should be a vector with two elements"))
@@ -179,18 +179,18 @@
       (list 'loop [var '(first init) 'col-nm '(rest init)]
           (cons 'when
                 (cons var
-                      (concat body ['(again (first col-nm) (rest col-nm))])))
+                      (concat body ['(recur (first col-nm) (rest col-nm))])))
           'init))))
 
 (defmacro while
   [pred &body]
   (list 'loop []
-         (cons 'when (cons pred (concat body [(list 'again)])))))
+         (cons 'when (cons pred (concat body [(list 'recur)])))))
 
 (defmacro until
   [pred &body]
   (list 'loop []
-        (cons 'when (cons (list 'not pred) (concat body [(list 'again)])))))
+        (cons 'when (cons (list 'not pred) (concat body [(list 'recur)])))))
 
 (defmacro ->
   [x &forms]
@@ -201,7 +201,7 @@
             threaded (if (seq? form)
                        (list (first form) x* (first (rest form)))
                        (list form x*))]
-        (again threaded (rest forms*))))))
+        (recur threaded (rest forms*))))))
 
 (defmacro ->>
   [x &forms]
@@ -212,7 +212,7 @@
             threaded (if (seq? form)
                        (list (first form) (first (rest form)) x*)
                        (list form x*))]
-        (again threaded (rest forms*))))))
+        (recur threaded (rest forms*))))))
 
 (defmacro case
   "(case a
@@ -237,11 +237,11 @@
 
 (defn isa?
   [x klass]
-  (?. x (isa klass) false))
+  (? x (isa klass) false))
 
 (defn class
   [x]
-  (?. x class (eval (symbol "js" (class-name x)))))
+  (? x class (eval (symbol "js" (class-name x)))))
 
 (defprotocol IDeref
   (deref [self] (.- self value)))
@@ -267,9 +267,9 @@
       @x => 1"
   {:added "1.0"}
   ([x]
-   (?. x deref))
+   (? x deref))
   ([x timeout-ms timeout-val]
-   (?. x (deref timeout-ms timeout-val))))
+   (? x (deref timeout-ms timeout-val))))
 
 (defprotocol IRef
   (setValidator
@@ -292,7 +292,7 @@
   (processWatches
     [self newVal]
     (when (.- self watches)
-      (do-each [x (.- self watches)]
+      (doeach [x (.- self watches)]
         (let [k (x 0)
               f (x 1)]
           (f k self (.- self value) newVal))))
@@ -313,18 +313,18 @@
           (println (str \"new value: \" (inspect new)))))"
   {:added "1.0"}
   [x k f]
-  (?. x (addWatch k f)))
+  (? x (addWatch k f)))
 
 (defn remove-watch
   "Removes a watch (set by add-watch) from a reference"
   {:added "1.0"}
   [x k]
-  (?. x (removeWatch k)))
+  (? x (removeWatch k)))
 
 (defn set-validator!
   {:added "1.0"}
   [x fn]
-  (?. x (setValidator fn)))
+  (? x (setValidator fn)))
 
 (defprotocol IMeta
   (getMeta [self] (.-meta self))
@@ -384,7 +384,7 @@
       @x => 2"
   {:added "1.0"}
   [x value]
-  (?. x (reset value)))
+  (? x (reset value)))
 
 (defn compare-and-set!
   "Atomically sets the value of atom to newval if and only if the
@@ -408,7 +408,7 @@
       (deref x) => 2"
   {:added "1.0"}
   [x f]
-  (?. x (swap f)))
+  (? x (swap f)))
 
 (deftype Var
   [value meta]
@@ -463,13 +463,13 @@
 ;    (let [buffer (array)
 ;          scope self]
 ;      (while scope
-;        (do-each [x (.-vars scope)]
+;        (doeach [x (.-vars scope)]
 ;           (if (.call (.. Object prototype hasOwnProperty) (first x))
 ;             (.push buffer (second x))))
 ;        (set! scope (.-parent scope)))
 ;      (into '() buffer)))
   (get [self name]
-    (?. (.get-var self name) get))
+    (? (.get-var self name) get))
   (set [self name value]
     (if-let [scope (.lookup self name)]
       (?.. self (get-var name) (set value))
@@ -487,7 +487,7 @@
       ([] (env nil))
       ([parent]
         (let [vars (if parent (.-vars parent) {})]
-          (Env. @(swap! id add1) vars parent))))))
+          (Env. @(swap! id inc) vars parent))))))
 
 (defprotocol IPending
   (realized?
@@ -496,7 +496,7 @@
 
 (defn realized?
   [x]
-  (?. x realized?))
+  (? x realized?))
 
 (deftype Delay
   [fn value]
@@ -512,8 +512,8 @@
   [&body]
   (list 'Delay. (cons 'fn (cons [] body)) nil))
 
-(defn add1 [n] (+ 1 n))
-(defn sub1 [n] (- 1 n))
+(defn inc [n] (+ 1 n))
+(defn dec [n] (- 1 n))
 
 (do
   (def- sym-count (atom 0))
@@ -523,7 +523,7 @@
     ([] (gen-sym "$sym"))
     ([prefix]
      (let [sym (symbol (str prefix "-" @sym-count))]
-       (swap! sym-count add1)
+       (swap! sym-count inc)
        sym))))
 
 ;; ---------------------------- meta data ------------------------------ ;;
@@ -538,15 +538,15 @@
 
 (defn var-set
   [x value]
-  (?. x (set value)) x)
+  (? x (set value)) x)
 
 (defn var-get
   [x]
-  (?. x get))
+  (? x get))
 
 (defn macro?
   [x]
-  (?. x isMacro))
+  (? x isMacro))
 
 (defn var?
   [x]
@@ -597,7 +597,7 @@
         args (gen-sym "$args")
         kind (gen-sym "$kind")]
     (list 'let [v (list 'var sym)
-                meta (list '?. v 'getMeta)]
+                meta (list '? v 'getMeta)]
           (list 'if
                 v
                 (list 'let [doc  (list meta :doc)
@@ -621,7 +621,7 @@
                       (list 'when (list meta :see-also)
                             (list 'println)
                             (list 'println "See Also:")
-                            (list 'do-each ['cite (list meta :see-also)]
+                            (list 'doeach ['cite (list meta :see-also)]
                                 (list 'println 'cite))))) nil)))
 
 (defmacro source
@@ -896,18 +896,6 @@
   (javascript?
     (.log js/console (apply str vals))))
 
-(defn broken
-  []
-  (throw "this is broken")
-  1
-  2
-  3
-  4)
-
-(defn broken1
-  []
-  (broken))
-
 (defn print
   "String concatenate `vals` and print to console
   with a new line at the end (depending on platform)."
@@ -920,7 +908,6 @@
     (.log js/console (apply str vals))))
 
 (nodejs?
-
   (def
     {:doc ""
      :platforms #{:nodejs}
@@ -941,7 +928,6 @@
 )
 
 (javascript?
-
   (defn lines
     [s]
     (-> (.split s \newline) array->list))
@@ -1023,3 +1009,11 @@
   ([args k] (fn-opts args k nil))
   ([args k alt]
    (or (second (first (filter (& (= k (first %))) (partition 2 args)))) alt)))
+
+(defmacro time
+  [&forms]
+  (list 'do
+    '(def t0 (js/Date.))
+    (cons 'do forms)
+    '(def t1 (js/Date.))
+    '(say "Elapsed time: " (/ (- (.valueOf t1) (.valueOf t0)) 1000) " seconds")))

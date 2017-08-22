@@ -4,105 +4,105 @@
 
 (alias 's 'zera.compiler.syntax)
 
-(define property-accessor? isPropertyAccessor)
-(define property-assignment? isPropertyAssignment)
-(define method-application? isMethodApplication)
-(define class-instantiation? isClassInstantiation)
+(def property-accessor? isPropertyAccessor)
+(def property-assignment? isPropertyAssignment)
+(def method-application? isMethodApplication)
+(def class-instantiation? isClassInstantiation)
 
-(define variable? symbol?)
+(def variable? symbol?)
 
-(define-function tag-predicate [tag]
+(defn tag-predicate [tag]
   (lambda [exp] (= tag (first exp))))
 
-(define quoted? (tag-predicate 'quote))
+(def quoted? (tag-predicate 'quote))
 
-(define definition? (tag-predicate 'define))
+(def definition? (tag-predicate 'def))
 
-(define if? (tag-predicate 'if))
+(def if? (tag-predicate 'if))
 
-(define lambda? (tag-predicate 'lambda))
+(def lambda? (tag-predicate 'fn))
 
-(define block? (tag-predicate 'do))
+(def block? (tag-predicate 'do))
 
-(define assignment? (tag-predicate 'set!))
+(def assignment? (tag-predicate 'set!))
 
-(define variable-introspection? (tag-predicate 'defined?))
+(def variable-introspection? (tag-predicate 'defined?))
 
-(define thrown-exception? (tag-predicate 'throw))
+(def thrown-exception? (tag-predicate 'throw))
 
-(define application? list?)
+(def application? list?)
 
-(define-function analyze-application [fn &args]
+(defn analyze-application [fn &args]
   (s/Application. fn args))
 
-(define-function analyze-nil
+(defn analyze-nil
   [x]
   (s/Nil.))
 
-(define-function analyze-number
+(defn analyze-number
   [x]
   (s/Number. x))
 
-(define-function analyze-boolean
+(defn analyze-boolean
   [x]
   (s/Boolean. x))
 
-(define-function analyze-string
+(defn analyze-string
   [x]
   (s/String. x))
 
-(define-function analyze-date
+(defn analyze-date
   [x]
   (s/Instant. x))
 
-(define-function analyze-regexp
+(defn analyze-regexp
   [x]
   (s/RegExp. x))
 
-(define-function analyze-keyword
+(defn analyze-keyword
   [x]
   (s/Keyword. (namespace x) (name x)))
 
-(define-function analyze-symbol
+(defn analyze-symbol
   [x]
   (s/Symbol. (namespace x) (name x)))
 
-(define-function analyze-map-entries
+(defn analyze-map-entries
   [x]
   [(analyze (x 0)) (analyze (x 1))])
 
-(define-function analyze-map
+(defn analyze-map
   [x]
   (s/Map. (map analyze-map-entries x)))
 
-(define-function analyze-vector
+(defn analyze-vector
   [x]
   (s/Vector. (map analyze x)))
 
-(define-function analyze-set
+(defn analyze-set
   [x]
   (s/Set. (map analyze x)))
 
-(define-function analyze-variable
+(defn analyze-variable
   [x]
   (s/Variable. (namespace x) (name x)))
 
-(define-function analyze-quoted
+(defn analyze-quoted
   [x]
   (s/QuotedValue. (analyze x)))
 
-(define-function analyze-definition
+(defn analyze-definition
   ([nm] (s/Definition. (s/Variable. (namespace nm) (name nm)) nil (hash-map)))
   ([nm value] (s/Definition. (s/Variable. (namespace nm) (name nm)) value (hash-map)))
   ([nm value meta] (s/Definition. (s/Variable. (namespace nm) (name nm)) value meta)))
 
-(define-function analyze-if
+(defn analyze-if
   ([pred alt]
    (s/If. (analyze pred) (analyze alt) nil))
   ([pred alt conse]
    (s/If. (analyze pred) (analyze alt) (analyze conse))))
 
-(define-function analyze-lambda
+(defn analyze-lambda
   [args]
   (let [x (first args)]
     (cond
@@ -117,46 +117,46 @@
         :else
           (throw (js/Error. "the second element of a Lambda expression should be an arguments vector or a list of bodies")))))
 
-(define-function argument-count
+(defn argument-count
   [arglists]
   (->> arglists
        (map count)
        sort
        first))
 
-(define-function analyze-argument-vector
+(defn analyze-argument-vector
   [args]
   (s/ArgumentVector. (map analyze args)))
 
-(define-function analyze-block
+(defn analyze-block
   [body]
   (s/Block. body))
 
-(define-function analyze-thrown-exception
+(defn analyze-thrown-exception
   [expression]
   (s/ThrownException. expression))
 
-(define-function analyze-property-accessor
+(defn analyze-property-accessor
   [obj property]
   (s/PropertyAccessor. obj property))
 
-(define-function analyze-property-assignment
+(defn analyze-property-assignment
   [obj property value]
   (s/PropertyAssignment. obj property value))
 
-(define-function analyze-method-application
+(defn analyze-method-application
   [obj method args]
   (s/MethodApplication. obj method args))
 
-(define-function analyze-class-instantiation
+(defn analyze-class-instantiation
   [class args]
   (s/ClassInstatiation. class args))
 
-(define-function analyze-application
+(defn analyze-application
   [fn args]
   (s/Application. fn args))
 
-(define-function analyze [exp]
+(defn analyze [exp]
   (let [exp_ (macroexpand exp)]
     (cond (nil? exp) (analyze-nil exp)
           (number? exp) (analyze-number exp)

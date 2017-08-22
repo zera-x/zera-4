@@ -1,26 +1,26 @@
 ; vim: ft=clojure
 (ns zera.compiler.syntax)
 
-(define-protocol Syntax
+(defprotocol Syntax
   (toJS [self]))
 
 ;(define-function syntax?
 ;  [x]
 ;  (isa? x Syntax))
 
-(define-protocol Literal Syntax)
+(defprotocol Literal Syntax)
 
 ;(define-function literal?
 ;  [x]
 ;  (isa? x Literal))
 
-(define-protocol Atomic Literal)
+(defprotocol Atomic Literal)
 
 ;(define-function atomic?
 ;  [x]
 ;  (isa? x Atomic))
 
-(define-type Nil
+(deftype Nil
   []
   Atomic
   (toJS [self] "null"))
@@ -29,7 +29,7 @@
 ;  [x]
 ;  (isa? x Nil))
 
-(define-type Boolean
+(deftype Boolean
   [value]
   Atomic
   (toJS [self] (if (.-value self) "true" "false")))
@@ -38,13 +38,13 @@
 ;  [x]
 ;  (isa? x Boolean))
 
-(define-protocol Numeric)
+(defprotocol Numeric)
 
 ;(define-function numeric?
 ;  [x]
 ;  (isa? x Numeric))
 
-(define-type Number
+(deftype Number
   [value]
   Atomic
   Numeric
@@ -54,18 +54,18 @@
 ;  [x]
 ;  (isa? x Number))
 
-(define-type String
+(deftype String
   [value]
   Atomic
   (toJS [self] (str "'" (.-value self) "'")))
 
-(define-protocol Symbolic)
+(defprotocol Symbolic)
 
 ;(define-function symbolic?
 ;  [x]
 ;  (isa? x Symbolic))
 
-(define-type Keyword
+(deftype Keyword
   [ns name]
   Atomic
   Symbolic
@@ -81,7 +81,7 @@
 ;  [x]
 ;  (isa? x Keyword))
 
-(define-type Symbol
+(deftype Symbol
   [ns name]
   Atomic
   Symbolic
@@ -95,7 +95,7 @@
 ;  [x]
 ;  (isa? x Symbol))
 
-(define-type Instant
+(deftype Instant
   [value]
   Atomic
   (toJS [self]
@@ -103,7 +103,7 @@
 
 ;(define instant? (lambda [x] (isa? x Instant)))
 
-(define-type Regex
+(deftype Regex
   [value]
   Atomic
   (toJS [self]
@@ -115,13 +115,13 @@
 ;    [x]
 ;    (isa? x RegExp)))
 
-(define-protocol Collection Literal)
+(defprotocol Collection Literal)
 
 ;(define-function collection?
 ;  [x]
 ;  (isa? x Collection))
 
-(define-type List
+(deftype List
   [value]
   Collection)
 
@@ -129,7 +129,7 @@
 ;  [x]
 ;  (isa? x List))
 
-(define-type Map
+(deftype Map
   [value]
   Collection
   (toJS [self]
@@ -145,7 +145,7 @@
 ;  [x]
 ;  (isa? x Map))
 
-(define-type Vector
+(deftype Vector
   [value]
   Collection
   (toJS [self]
@@ -159,7 +159,7 @@
 ;  [x]
 ;  (isa? x Vector))
 
-(define-type Set
+(deftype Set
   [value]
   Collection
   (toJS [self]
@@ -175,7 +175,7 @@
 ;  [x]
 ;  (isa? x Set))
 
-(define-type Variable
+(deftype Variable
   [ns name]
   Syntax
   (toJS [self]
@@ -188,7 +188,7 @@
 ;  [x]
 ;  (isa? x Variable))
 
-(define-type QuotedValue
+(deftype QuotedValue
   [value]
   Syntax
   (toJS
@@ -199,7 +199,7 @@
 ;  [x]
 ;  (isa? x QuotedValue))
 
-(define-type Definition
+(deftype Definition
   [variable value meta]
   Syntax
   (toJS [self]
@@ -214,7 +214,7 @@
 ;  [x]
 ;  (isa? x Definition))
 
-(define-type If
+(deftype If
   [predicate alternate consequent]
   Syntax
   (toJS
@@ -227,12 +227,12 @@
 ;  [x]
 ;  (isa? x Conditional))
 
-(define-type Lambda
+(deftype Lambda
   [argcount arglists bodies]
   Syntax
   (toJS [self] (lambda->js (.-argcount self) (.-arglists self) (.-bodies self))))
 
-(define-type ArgumentVector
+(deftype ArgumentVector
   [value]
   (toJS [self]
     (str "(" (join ", " (map (& (.toJS %)) (.-value self))) ")")))
@@ -267,7 +267,7 @@
 ;  [x]
 ;  (isa? x Lambda))
 
-(define-type Block
+(deftype Block
   [expressions]
   Syntax)
 
@@ -275,7 +275,7 @@
 ;  [x]
 ;  (isa? x Block))
 
-(define-type TryBlock
+(deftype TryBlock
   [body catchClause finallyClause]
   Syntax)
 
@@ -283,7 +283,7 @@
 ;  [x]
 ;  (isa? x TryBlock))
 
-(define-type CatchClause
+(deftype CatchClause
   [bindings body]
   Syntax)
 
@@ -291,7 +291,7 @@
 ;  [x]
 ;  (isa? x CatchClause))
 
-(define-type FinallyClause
+(deftype FinallyClause
   [body]
   Syntax)
 
@@ -299,7 +299,7 @@
 ;  [x]
 ;  (isa? x FinallyClause))
 
-(define-type Loop
+(deftype Loop
   [bindings body]
   Syntax)
 
@@ -307,7 +307,7 @@
 ;  [x]
 ;  (isa? x Loop))
 
-(define-type RecursionPoint
+(deftype RecursionPoint
   [args]
   Syntax)
 
@@ -315,7 +315,7 @@
 ;  [x]
 ;  (isa? x RecursionPoint))
 
-(define-type Assignment
+(deftype Assignment
   [obj value]
   Syntax)
 
@@ -323,7 +323,7 @@
 ;  [x]
 ;  (isa? x Assignment))
 
-(define-type ProtocolDefinition
+(deftype ProtocolDefinition
   [name specs meta]
   Syntax)
 
@@ -331,7 +331,7 @@
 ;  [x]
 ;  (isa? x ProtocolDefinition))
 
-(define-type TypeDefinition
+(deftype TypeDefinition
   [name bindings specs meta]
   Syntax)
 
@@ -339,7 +339,7 @@
 ;  [x]
 ;  (isa? x TypeDefinition))
 
-(define-type MacroDefinition
+(deftype MacroDefinition
   [name bindings body meta]
   Syntax)
 
@@ -347,7 +347,7 @@
 ;  [x]
 ;  (isa? x MacroDefinition))
 
-(define-type ThrownException
+(deftype ThrownException
   [expression]
   Syntax)
 
@@ -355,7 +355,7 @@
 ;  [x]
 ;  (isa? x ThrownException))
 
-(define-type PropertyAccessor
+(deftype PropertyAccessor
   [obj property]
   Syntax)
 
@@ -363,7 +363,7 @@
 ;  [x]
 ;  (isa? x PropertyAccessor))
 
-(define-type PropertyAssignment
+(deftype PropertyAssignment
   [obj property value]
   Syntax)
 
@@ -371,7 +371,7 @@
 ;  [x]
 ;  (isa? x PropertyAssignment))
 
-(define-type MethodApplication
+(deftype MethodApplication
   [obj method args]
   Syntax)
 
@@ -379,7 +379,7 @@
 ;  [x]
 ;  (isa? x MethodApplication))
 
-(define-type ClassInstantiation
+(deftype ClassInstantiation
   [class args]
   Syntax)
 
@@ -387,7 +387,7 @@
 ;  [x]
 ;  (isa? x ClassInstantiation))
 
-(define-type ModuleDefinition
+(deftype ModuleDefinition
   [name]
   Syntax)
 
@@ -395,7 +395,7 @@
 ;  [x]
 ;  (isa? x MethodDefinition))
 
-(define-type ModuleRequire
+(deftype ModuleRequire
   [name]
   Syntax)
 
@@ -403,7 +403,7 @@
 ;  [x]
 ;  (isa? x ModuleRequire))
 
-(define-type ModuleSet
+(deftype ModuleSet
   [name]
   Syntax)
 
@@ -411,7 +411,7 @@
 ;  [x]
 ;  (isa? x ModuleSet))
 
-(define-type Application
+(deftype Application
   [fn args]
   Syntax)
 

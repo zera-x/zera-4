@@ -1,1 +1,48 @@
 (ns js.node)
+
+(def fs (js.node/require "fs"))
+(def path (js.node/require "path"))
+
+(defn mkdir [path]
+  (.mkdirSync fs path))
+
+(defn file-exists? [path]
+  (.existsSync fs path))
+
+(defn slurp [file]
+  (.readFileSync fs file, "utf8"))
+
+(defn spit [file data]
+  (.writeFileSync fs file data))
+
+(def require* js.node/require)
+
+(defn node-modules-paths
+  [start]
+  "Node modules lookup
+  (see https://nodejs.org/api/modules.html)"
+  (loop [parts (reverse (.split start "/")) dirs (set)]
+    (if (empty? parts)
+      dirs
+      (let [dir (.normalize path (str (join "/" (reverse parts)) "/node_modules"))]
+        (if (file-exists? dir)
+          (recur (rest parts) (conj dirs dir))
+          (recur (rest parts) dirs))))))
+
+(def :dynamic *node-path* [*dir* "/usr/local/lib"])
+;(p (mapcat node-modules-paths *node-path*))
+
+;(defn require [path]
+;  (if (file-exists? path)
+;    (require* path)
+;    (cond (.startsWith path "./")
+;            (require* (str *dir* (.slice path 1)))
+;          (.startsWith path "../")
+;            (require* (str *dir* "/" path))
+;          (.startsWith path "/")
+;            (require* path)
+;          :else
+;            ; 
+;      )))
+
+;(p (file-exists? (str *dir* "/node.zera")))

@@ -55,30 +55,30 @@
              (object->list req request-keys))))
 
 (defmacro defservice
-  ([nm &body] (cons 'define-service (cons nm (cons nil body))))
+  ([nm &body] (cons 'defservice (cons nm (cons nil body))))
   ([nm doc &body]
-   (list 'define {:doc doc :tag :http-service/express} nm
+   (list 'def {:doc doc :tag :http-service/express} nm
          (cons 'do
                (cons
-                 (list 'define- '*http-express* (list 'js.node/require "express"))
+                 (list 'def :private 'http-express (list 'js.node/require "express"))
                  (cons
-                   (list 'define- '*http-express-app* (list '*http-express*))
-                   (concat body ['*http-express-app*])))))))
+                   (list 'def :private '$http-express-app (list 'http-express))
+                   (concat body ['$http-express-app])))))))
 
 (defn response [res val]
   (if (and (object? val) (.- val then))
-    (.then val (lambda [x] (. res (send x))))
+    (.then val (fn [x] (. res (send x))))
     (.send res val)))
 
 (defn- build-http-verb
   [verb path bindings body]
-  (list '. '*http-express-app*
+  (list '. '$http-express-app
         (list verb path
-              (list 'lambda '[*request* *response* o]
-                    (list 'pbnj.http-service/response
-                          '*response*
-                          (list (cons 'lambda (cons bindings body))
-                                (list 'pbnj.http-service/build-request-map '*request*)))))))
+              (list 'fn '[$request $response o]
+                    (list 'zera.core.http-service/response
+                          '$response
+                          (list (cons 'fn (cons bindings body))
+                                (list 'zera.core.http-service/build-request-map '$request)))))))
 
 (defn start
   ([svc port]

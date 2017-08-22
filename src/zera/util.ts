@@ -387,8 +387,21 @@ namespace zera.util {
   _.object = function() { return {} };
   _.println = console.log.bind(console);
 
-  _.name = function(sym) { return sym.name };
-  _.namespace = function(sym) { return sym.ba };
+  _.name = function(x) {
+    if (x && x.name) {
+      return x.name;
+    }
+    else {
+      return "" + x;
+    }
+  };
+
+  _.namespace = function(x) {
+    if (mori.isSymbol(x) || mori.isKeyword(x)) {
+      return x.ba;
+    }
+    throw new Error(["Doesn't support namespace: ", _.inspect(x)].join(''));
+  };
   
   _.get = function(col, key, alt) {
     if (mori.isCollection(col)) {

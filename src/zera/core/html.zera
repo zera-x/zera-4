@@ -2,38 +2,46 @@
 
 (defn render-expression-list
   [exprs]
-  (join " " (map html exprs)))
+  (join "" (map html exprs)))
 
 (defn fmt-attrs
   [attrs]
   (->> attrs
-       (map (fn [kv] (str (kv 0) "=" (kv 1))))
+       (map (fn [kv] (str (name (kv 0)) "=" (kv 1))))
        (join " ")))
 
-(def tag? keyword?)
+(defn tag?
+  [x]
+  (or (keyword? x) (fn? x)))
 
 ; Any -> HTML(String)
 (defn html
   {:memoize true}
   [exp]
-  (p (vector? exp))
-  (p exp)
   (cond
     (nil? exp) ""
     (boolean? exp) (if exp "Yes" "No")
-    (vector? exp)
+    (or (vector? exp) (list? exp))
       (cond
         (= 0 (count exp)) ""
-        (not (tag? exp)) (render-expression-list exp)
+        (not (tag? (first exp))) (render-expression-list exp)
         :else
-          (let [tag (name (first exp))]
-            (if (map? (exp 1))
-              (str "<" tag " " (fmt-attrs (exp 1)) ">" (render-expression-list (rest (rest exp))) "</" tag ">")
-              (str "<" tag ">" (render-expression-list (rest exp)) "</" tag ">"))))
+          (let [tag (first exp)]
+            (if (fn? tag)
+              (html (apply tag (rest exp)))
+              (if (map? (second exp))
+                (str "<" (name tag) " " (fmt-attrs (exp 1)) ">" (render-expression-list (rest (rest exp))) "</" (name tag) ">")
+                (str "<" (name tag) ">" (render-expression-list (rest exp)) "</" (name tag) ">")))))
     :else
-      (do
-        (say "else")
-        (str exp))))
+      (str exp)))
 
+(comment
 (p (html [:a {:href "#"} "test"]))
 (p (html [:a {:href "#"} "test"]))
+
+(defn greet
+  [attr &children]
+  [:div (merge {:class "greeting"} attr) children])
+
+(p (html [greet {:id "my-greeting"} "Hello " "Delon"]))
+)

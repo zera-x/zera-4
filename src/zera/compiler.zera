@@ -1,68 +1,68 @@
 ; vim: ft=clojure
 (require "jess.ws")
-(ns pbnj.compiler)
+(ns zera.compiler)
 
 ; TODO: add module definitions
 ; TODO: add require support
 
-(define *js-root-object* (if (= *platform* :nodejs) 'global 'window))
+(def *js-root-object* (if (= *platform* :nodejs) 'global 'window))
 
-(define property-accessor? pbnj.wonderscript/isPropertyAccessor)
-(define property-assignment? pbnj.wonderscript/isPropertyAssignment)
-(define method-application? pbnj.wonderscript/isMethodApplication)
-(define class-instantiation? pbnj.wonderscript/isClassInstantiation)
+(def property-accessor? pbnj.wonderscript/isPropertyAccessor)
+(def property-assignment? pbnj.wonderscript/isPropertyAssignment)
+(def method-application? pbnj.wonderscript/isMethodApplication)
+(def class-instantiation? pbnj.wonderscript/isClassInstantiation)
 
-(define-function repl-pprint [exp]
+(defn repl-pprint [exp]
   (pprint exp)
   (pbnj.wonderscript.repl/pprint exp))
 
-(define-function property-accessor->jess
+(defn property-accessor->jess
   [env obj prop]
   (list '.- (ws->jess obj env) (ws->jess prop env)))
 
-(define-function property-assignment->jess
+(defn property-assignment->jess
   [env obj prop value]
   (list '.-set! (ws->jess obj env) (ws->jess prop env) (ws->jess value env)))
 
-(define-function method-application->jess
+(defn method-application->jess
   [env obj method]
   (if (list? method)
-    (cons '. (cons (ws->jess obj env) (cons (first method) (map (lambda [x] (ws->jess x env)) (rest method)))))
+    (cons '. (cons (ws->jess obj env) (cons (first method) (map (fn [x] (ws->jess x env)) (rest method)))))
     (list '. (ws->jess obj env) method)))
 
-(define-function class-instantiation->jess
+(defn class-instantiation->jess
   [env klass &args]
-  (cons 'new (cons (ws->jess klass env) (map (lambda [x] (ws->jess x env)) args))))
+  (cons 'new (cons (ws->jess klass env) (map (fn [x] (ws->jess x env)) args))))
 
-(define-function compile [exp]
+(defn compile [exp]
   (pbnj.jess/compile (ws->jess exp (pbnj.wonderscript/env))))
 
-(define-function self-evaluating? [exp]
+(defn self-evaluating? [exp]
   (or (nil? exp) (number? exp) (boolean? exp) (string? exp) (date? exp) (regexp? exp)))
 
-(define-function keyword->jess [exp]
+(defn keyword->jess [exp]
   (list 'pbnj.core.keyword (namespace exp) (name exp)))
 
-(define-function map->jess [exp env]
+(defn map->jess [exp env]
   (cons 'pbnj.core.hashMap
-        (mapcat (lambda [xs]
-                        [(ws->jess (xs 0) env) (ws->jess (xs 1) env)]) exp)))
+        (mapcat (fn [xs]
+                  [(ws->jess (xs 0) env) (ws->jess (xs 1) env)]) exp)))
 
-(define-function vector->jess [exp env]
-  (cons 'pbnj.core.vector (map (lambda [x] (ws->jess x env)) exp)))
+(defn vector->jess [exp env]
+  (cons 'pbnj.core.vector (map (fn [x] (ws->jess x env)) exp)))
 
-(define-function set->jess [exp env]
-  (cons 'pbnj.core.set (map (lambda [x] (ws->jess x env)) exp)))
+(defn set->jess [exp env]
+  (cons 'pbnj.core.set (map (fn [x] (ws->jess x env)) exp)))
 
-(define variable? symbol?)
+(def variable? symbol?)
 
-(define-function variable-ns [sym env]
+(defn variable-ns [sym env]
   (let [scope (pbnj.wonderscript/lookupVariable sym env)]
     (if (or (nil? scope) (isEnv scope))
       nil
       (.- scope "@@NAME@@"))))
 
-(define-function variable->jess [sym env]
+(defn variable->jess [sym env]
   (let [ns (namespace sym)
         nm (name sym)]
     (cond ns
@@ -77,18 +77,18 @@
               (list '.- *js-root-object* (into (vector) (concat ns-parts [nm]))))
             sym)))))
 
-(define-function tag-predicate [tag]
-  (lambda [exp] (= tag (first exp))))
+(defn tag-predicate [tag]
+  (fn [exp] (= tag (first exp))))
 
-(define quoted? (tag-predicate 'quote))
+(def quoted? (tag-predicate 'quote))
 
-(define-function quoted->jess [value]
+(defn quoted->jess [value]
   (cons 'quote value))
 
-(define definition? (tag-predicate 'define))
+(def definition? (tag-predicate 'def))
 
 ; TODO: add module resolution
-(define-function definition->jess
+(defn definition->jess
   ([name env] (list 'var name))
   ([name value env]
     (let [ns (namespace name)]
@@ -96,39 +96,39 @@
         (list 'set! name (ws->jess value env))
         (list 'var name (ws->jess value env))))))
 
-(define cond? (tag-predicate 'cond))
+(def cond? (tag-predicate 'cond))
 
-(define-function cond->jess
+(defn cond->jess
   ([env pred conse] (list 'if (ws->jess pred env) (ws->jess conse env)))
   ([env pred conse alt] (list 'if (ws->jess pred env) (ws->jess conse env) (ws->jess alt env)))
   ([env &body]
    (if (not= (mod (count body) 2) 0) (throw "Expecting an even number of arguments"))
    (let [pairs (reverse (pair body))
-         alt? (lambda [xs] (= (first xs) :else))
+         alt? (fn [xs] (= (first xs) :else))
          alt (first (filter alt? pairs))
          preds (cons alt (remove alt? pairs))]
      (reduce
-       (lambda [l xs]
-               (if (alt? l)
-                 (cond->jess env (xs 0) (xs 1) (ws->jess (second l) env))
-                 (first (cons (cond->jess env (xs 0) (xs 1) l)))))
+       (fn [l xs]
+         (if (alt? l)
+           (cond->jess env (xs 0) (xs 1) (ws->jess (second l) env))
+           (first (cons (cond->jess env (xs 0) (xs 1) l)))))
        preds))))
 
-(define lambda? (tag-predicate 'lambda))
+(def lambda? (tag-predicate 'fn))
 
 ; argCount = _.reduce(args, function(sum, arg) { return (_.str(arg)[0] === '&' ? (sum + 1) * -1 : sum + 1) }, 0);
 ; TODO: add capture arguments
 ; TODO: add recursion points, define-type, and define-protocol
-(define-function lambda-body [body env]
+(def lambda-body [body env]
   (reduce
-    (lambda [l exp]
-            (if (empty? l)
-              (cons (list 'return (ws->jess exp env)) l)
-              (cons (ws->jess exp env) l)))
+    (fn [l exp]
+      (if (empty? l)
+        (cons (list 'return (ws->jess exp env)) l)
+        (cons (ws->jess exp env) l)))
     (list)
     (reverse body)))
 
-(define-function lambda-single-body [args body env]
+(defn lambda-single-body [args body env]
   (list 'paren
     (cons 'function
           (cons args
@@ -137,8 +137,8 @@
                             (list 'throw "Wrong number of arguments"))
                 (lambda-body body env))))))
 
-(define-function lambda-multi-body [bodies env]
-  (let [arg-list (map (sort-by second (map bodies (lambda [b] [(first b) (count (first b))]))) first)
+(defn lambda-multi-body [bodies env]
+  (let [arg-list (map (sort-by second (map bodies (fn [b] [(first b) (count (first b))]))) first)
         longest (last arg-list)
         shortest (first arg-list)]
     (list 'paren
@@ -146,44 +146,44 @@
              (list longest
                    (cons 'if-else
                          (concat
-                           (mapcat (lambda [body]
-                                           [(list '=== 'arguments.length (count (first body)))
-                                            (cons 'do (lambda-body (rest body) env))]) bodies)
+                           (mapcat (fn [body]
+                                     [(list '=== 'arguments.length (count (first body)))
+                                      (cons 'do (lambda-body (rest body) env))]) bodies)
                            [:else (list 'throw (list 'new 'Error "Wrong number of arguments"))])))))))
 
-(define-function lambda->jess
+(defn lambda->jess
   [args body env]
   (cond (vector? args) (lambda-single-body args body env)
         (list? args) (lambda-multi-body (cons args body) env)
         :else (throw "first argument should be a list or a vector")))
 
-(define block? (tag-predicate 'do))
+(def block? (tag-predicate 'do))
 
-(define-function block->jess [env &exprs]
+(defn block->jess [env &exprs]
   (list 'paren (list (cons 'function (cons [] (lambda-body exprs env))))))
 
-(define assignment? (tag-predicate 'set!))
+(def assignment? (tag-predicate 'set!))
 
-(define-function assignment->jess [env var val]
+(defn assignment->jess [env var val]
   (list 'set! var (ws->jess val env)))
 
-(define variable-introspection? (tag-predicate 'defined?))
+(def variable-introspection? (tag-predicate 'defined?))
 
-(define-function variable-introspection->jess [env var]
+(defn variable-introspection->jess [env var]
   (list '!== (list 'type (ws->jess var env)) "undefined"))
 
-(define thrown-exception? (tag-predicate 'throw))
+(def thrown-exception? (tag-predicate 'throw))
 
-(define-function thrown-exception->jess [env value]
+(defn thrown-exception->jess [env value]
   (list 'throw (ws->jess value env)))
 
-(define application? list?)
+(def application? list?)
 
-(define-function application->jess [env fn &args]
+(defn application->jess [env fn &args]
   (let [fn_ (if (has? '#{+ - / * < > <= >= not mod} fn) fn (ws->jess fn env))]
-    (cons fn_ (map args (lambda [x] (ws->jess x env))))))
+    (cons fn_ (map args (fn [x] (ws->jess x env))))))
 
-(define-function ws->jess [exp_ env]
+(defn ws->jess [exp_ env]
   (let [exp (macroexpand exp_)]
     (cond (self-evaluating? exp) exp
           (keyword? exp) (keyword->jess exp)

@@ -373,17 +373,13 @@ namespace zera.core {
 
   var isVariable = ws.isVariable = _.isSymbol;
 
-  var VARCACHE = {};
   ws.lookupVar = function(ident, env) {
+    if (!_.isSymbol(ident)) throw new Error(['ident should be a symbol, got: ', _.inspect(ident)].join(''));
     var scope, sym, ns, nm;
-    if (VARCACHE[ident]) {
-      return VARCACHE[ident];
-    }
-    else if (isFullyQualified(ident)) {
-      var nsvar = ws.lookupVar(_.namespace(ident), env);
+    if (isFullyQualified(ident)) {
+      var nsvar = ws.lookupVar(_.symbol(_.namespace(ident)), env);
       if (nsvar.isNamespace() || nsvar.isAlias()) {
         var obj = nsvar.get().getVar(_.name(ident));
-        VARCACHE[ident] = obj;
         return obj;
       }
       else {
@@ -732,17 +728,6 @@ namespace zera.core {
     return func.apply(null, args ? _.intoArray(args) : []);
   };
 
-  function ContinuationException(fn) {
-    this.fn = fn;
-    this.frames = [];
-  }
-
-  ContinuationException.prototype.pushFrame = function(frame) {
-    this.frames.push(frame);
-  };
-
-  ws.ContinuationException = ContinuationException;
-
   var isLambda = ws.isLambda = makeTagPredicate(_.symbol('fn'));
 
   var validateVariables = function(body, scope) {
@@ -938,16 +923,7 @@ namespace zera.core {
         index++; // TODO: add static analysis to index just what's needed
       }
       catch (e) {
-        if (e instanceof ContinuationException) {
-          console.log('contiuation in lambda: ', e);
-          e.pushFrame({
-            index: index,
-            args: body.args,
-            scope: this.scope
-          });
-          throw e;
-        }
-        else if (e instanceof RecursionPoint) {
+        if (e instanceof RecursionPoint) {
           return this.bind(e.args).exec();
         }
         else {
@@ -980,6 +956,8 @@ namespace zera.core {
     }
     return fn;
   };
+
+  ws['fn?'] = _.isFunction;
 
   var evalLambda = function(exp, env, callstack) {
     return new Lambda(exp, env, callstack).toFunction();
@@ -1062,46 +1040,6 @@ namespace zera.core {
   var evalRecursionPoint = function(exp, env) {
     var args = _.intoArray(mori.map(function(x) { return ws.eval(x, env); }, _.rest(exp)));
     throw new RecursionPoint(args);
-  };
-
-  function SetContinuationPoint(id) {
-    this.id = id;
-  }
-
-  function ccFrame(exprs, scope) {
-    return function() {
-      var exp, exprs_ = exprs;
-      while (_.count(exprs_) !== 0) {
-        exp = _.first(exprs_);
-        ret = ws.eval(exp, scope);
-        exprs_ = _.rest(exprs_);
-      }
-      return ret;
-    };
-  }
-
-  var CCID = 0;
-  var CCFRAMES = {};
-
-  /*
-   * (define cont)
-   * (callcc (lambda [c] (set! cont c)))
-   * (cont)
-   *
-   * Possible special forms
-   * CollectionLiteral?
-   * Definition
-   * Cond
-   * Lambda
-   * Block
-   * TryBlock
-   * Assignment
-   * Application
-   *
-   */
-
-  _.suspend = function(fn) {
-    throw new ContinuationException(fn);
   };
 
   var isApplication = ws.isApplication = function(exp) {
@@ -1838,101 +1776,90 @@ namespace zera.core {
     var exp = macroexpand(exp);
 
     try {
+      var out = null;
       if (ws.isSelfEvaluating(exp)) {
-        return exp;
+        out = exp;
       }
       else if (_.isKeyword(exp)) {
-        return evalKeyword(exp, env);
+        out = evalKeyword(exp, env);
       }
       else if (isCollectionLiteral(exp)) {
-        return evalCollectionLiteral(exp, env);
+        out = evalCollectionLiteral(exp, env);
       }
       else if (isVariable(exp)) {
-        return evalVariable(exp, env);
+        out = evalVariable(exp, env);
       }
       else if (isQuoted(exp)) {
-        return evalQuote(exp);
+        out = evalQuote(exp);
       }
       else if (isDefinition(exp)) {
-        return evalDefinition(exp, env);
+        out = evalDefinition(exp, env);
       }
       else if (isCond(exp)) {
-        return evalCond(exp, env);
+        out = evalCond(exp, env);
       }
       else if (isLambda(exp)) {
-        return evalLambda(exp, env, callstack);
+        out = evalLambda(exp, env, callstack);
       }
       else if (isBlock(exp)) {
-        return evalBlock(exp, env);
+        out = evalBlock(exp, env);
       }
       else if (isTryBlock(exp)) {
-        return evalTryBlock(exp, env);
+        out = evalTryBlock(exp, env);
       }
       else if (isLoop(exp)) {
-        return evalLoop(exp, env);
+        out = evalLoop(exp, env);
       }
       else if (isRecursionPoint(exp)) {
-        return evalRecursionPoint(exp, env);
+        out = evalRecursionPoint(exp, env);
       }
       else if (isAssignment(exp)) {
-        return evalAssignment(exp, env);
+        out = evalAssignment(exp, env);
       }
       else if (isProtocol(exp)) {
-        return evalProtocol(exp, env);
+        out = evalProtocol(exp, env);
       }
       else if (isType(exp)) {
-        return evalType(exp, env);
+        out = evalType(exp, env);
       }
       else if (isMacroDef(exp)) {
-        return evalMacroDef(exp, env);
+        out = evalMacroDef(exp, env);
       }
       else if (isThrownException(exp)) {
-        return evalThrownException(exp, env);
+        out = evalThrownException(exp, env);
       }
       else if (isPropertyAccessor(exp)) {
-        return evalPropertyAccessor(exp, env);
+        out = evalPropertyAccessor(exp, env);
       }
       else if (isPropertyAssignment(exp)) {
-        return evalPropertyAssignment(exp, env);
+        out = evalPropertyAssignment(exp, env);
       }
       else if (isMethodApplication(exp)) {
-        return evalMethodApplication(exp, env);
+        out = evalMethodApplication(exp, env);
       }
       else if (isClassInstantiation(exp)) {
-        return evalClassInstantiation(exp, env);
+        out = evalClassInstantiation(exp, env);
       }
       else if (isModuleDefinition(exp)) {
-        return evalModuleDefinition(exp, env);
+        out = evalModuleDefinition(exp, env);
       }
       else if (isModuleRequire(exp)) {
-        return evalModuleRequire(exp, env);
+        out = evalModuleRequire(exp, env);
       }
       else if (isModuleSet(exp)) {
-        return evalModuleSet(exp, env);
+        out = evalModuleSet(exp, env);
       }
       else if (isApplication(exp)) {
-        return evalApplication(exp, env, callstack);
+        out = evalApplication(exp, env, callstack);
       }
       else {
         throw new Error(["invalid expression: '", exp, "'"].join(''));
       }
+      return out;
     }
     catch (e) {
       if (e instanceof RecursionPoint) {
         throw e;
-      }
-      else if (e instanceof ContinuationException) {
-      /*
-       * Possible special forms:
-       * CollectionLiteral?
-       * Cond
-       * Lambda
-       * Block
-       * Assignment
-       * Application
-       */
-        ws.RESTORE.dorestore = true;
-        ws.RESTORE.frames = e.frames;
       }
       else {
         if (_.isEmpty(callstack.deref())) {
@@ -2177,7 +2104,7 @@ namespace zera.core {
   js.define(_.symbol('array?'), _.isArray);
   js.define(_.symbol('object?'), _.isObject);
   js.define(_.symbol('regexp?'), _.isRegExp);
-  js.define(_.symbol('fn?'), _.isFunction);
+  js.define(_.symbol('function?'), _.isFunction);
   js.define(_.symbol('arguments?'), _.isArguments);
   js.define(_.symbol('element?'), _.isElement);
   js.define(_.symbol('identical?'), function(a, b) { return a === b });

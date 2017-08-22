@@ -1,28 +1,51 @@
 ; vim: ft=clojure
-(module pbnj.types)
+(ns zera.types)
 
-(define-type Symbol
+(deftype Symbol
   [ns name])
 
-(define-type Keyword
+(deftype Keyword
   [ns name])
 
-(define-protocol Seqable
+(defprotocol ISeq
+  (first [this])
+  (next [this])
+  (more [this]))
+
+(defprotocol Seqable
   (seq [this]))
 
-(define-protocol IPersistentCollection
+(defprotocol Countable
+  (count [this]))
+
+(deftype Cons
+  [f m]
+  ISeq
+  (first [this] (.-f this))
+  (more [this]
+    (if (nil? (.-m this))
+      EMPTY-LIST
+      (.-m this)))
+  (next [this] (.. this more seq))
+  Countable
+  (count [this]
+    (inc (count (.more this))))
+  Seqable
+  (seq [this] this))
+
+(defprotocol IPersistentCollection
   ; Seqable
   (count [this])
   (cons [this x])
   (empty? [this] (and (nil? (.first this)) (nil? (.rest this))))
   (equiv? [this x]))
 
-(define-protocol IPersistentStack
+(defprotocol IPersistentStack
   ; IPersistentCollection
   (peek [this])
   (pop [this]))
 
-(define-protocol IReduce
+(defprotocol IReduce
   (reduce
     ([this fn] (.reduce this fn nil))
     ([this fn init]
@@ -35,17 +58,18 @@
             (swap! l (lambda [val] (.rest val))))
          init*)))))
 
-(define-protocol Counted
+(defprotocol Counted
   (count [this]))
 
-(define-protocol Sequential) ; ??? (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/jvm/clojure/lang/Sequential.java)
+(defprotocol Sequential) ; ??? (see https://github.com/clojure/clojure/blob/clojure-1.9.0-alpha14/src/jvm/clojure/lang/Sequential.java)
 
-(define-protocol IPersistentList
+(defprotocol IPersistentList
   ; Sequential
   ; IPersistentStack
   )
 
-(define-type PersistentList
+; TODO: get PersistentList and LazySeq definition from subway
+(deftype PersistentList
   [head tail count]
   IPersistentList
   IReduce
@@ -54,14 +78,14 @@
   (rest [this] (.- this tail))
   (cons [this x] (PersistentList. x this (+ 1 count))))
 
-(define EMPTY-LIST (PersistentList. nil nil 0))
+(def EMPTY-LIST (PersistentList. nil nil 0))
 
-(define list
+(def list
   ([a] (PersistentList. a nil 1))
   ([a b] (PersistentList. a b 2))
   ([a b c] (.cons (list b c) a)))
 
-(define-type PersistentLazyList
+(deftype PersistentLazyList
   [head tail]
   IList
   (first [this] ((.- this head)))
@@ -69,45 +93,45 @@
   (cons [this x] (PersistentLazyList. x (always this)))
   (map [this fn]))
 
-(define EMPTY-LAZY-LIST (PersistentLazyList. (always nil) (always nil)))
+(def EMPTY-LAZY-LIST (PersistentLazyList. (always nil) (always nil)))
 
-(define-function lazy-list
+(defn lazy-list
   [head tail]
   (PersistentLazyList. head tail))
 
-(define-function first [col]
+(defn first [col]
   (.? col first))
 
-(define-function second
+(defn second
   [col]
   (.first (.rest col)))
 
-(define-function third
+(defn third
   [col]
   (.first (.rest (.rest col))))
 
-(define-function fourth
+(defn fourth
   [col]
   (.first (.rest (.rest (.rest col)))))
 
-(define-function rest [col]
+(defn rest [col]
   (.? col rest))
 
-(define-function cons
+(defn cons
   [x col]
   (if (nil? col)
     (PersistentList. x nil 1)
     (.? col (cons x)
       (throw (new js/Error (str "'" (inspect col) "' is not cons-able"))))))
 
-(define-function conj
+(defn conj
   [col x]
   (if (nil? col)
     (PersistentList. x nil 1)
     (.? col (cons x)
       (throw (new js/Error (str "'" (inspect col) "' is not conj-able"))))))
 
-(define-function empty?
+(defn empty?
   [col]
   (.? col empty?
       (throw (new js/Error (str "'" (inspect col) "' empty? method not defined")))))
@@ -119,7 +143,7 @@
 ;      (set! xs (rest xs)))
 ;    ys))
 
-(define-function mori-list->list
+(defn mori-list->list
   [l]
   (let [xs (pbnj.core/reverse l), ys EMPTY-LIST]
     (println (count xs))
@@ -128,7 +152,7 @@
       (set! xs (pbnj.core/rest xs)))
     ys))
 
-(define-function reduce
+(defn reduce
   ([fn col]
    (.reduce col fn nil))
   ([fn col init]

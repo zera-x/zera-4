@@ -1,7 +1,7 @@
 ; vim: ft=clojure
 (ns examples.recur)
 
-(define-function fib
+(defn fib
   {:memoize true}
   [n]
   (cond (= n 0) 1
@@ -11,15 +11,15 @@
 
 ;(println (fib 15))
 
-;(define factorial
-;  (lambda
+;(def factorial
+;  (fn
 ;    [n]
 ;    (loop [cnt n acc 1]
 ;      (if (= cnt 0)
 ;          acc
 ;        (again (sub1 cnt) (* acc cnt))))))
 
-(define-function fact!
+(defn fact!
   ;{:memoize true}
   ([n] (fact! n 1))
   ([n acc]
@@ -29,7 +29,7 @@
 
 ;(println (fact! 10))
 
-(define-function map*
+(defn map*
   ;{:memoize str}
   [f col]
   (cond (empty? col) col
@@ -37,7 +37,7 @@
           (let [x (first col) xs (rest col) x* (f x)]
             (cons (f (first col)) (map* f (rest col))))))
 
-(define-function times2 [x] (* x 2))
+(defn times2 [x] (* x 2))
 
 ;(p (map* times2 (range 0 20)))
 
@@ -56,8 +56,10 @@
 
 ;(println (fib 5))
 
+(time
 (let [fibs (map fib (range 50))
       pairs (partition 2 fibs)
-      ratios (reduce (lambda [memo xs] (concat memo (apply / xs))) pairs [])]
-  (do-each [ratio ratios]
+      ratios (reduce (fn [memo xs] (concat memo (apply / xs))) pairs [])]
+  (doeach [ratio ratios]
     (println (str (join "/" (reverse ratio)) " = " (apply / (reverse ratio))))))
+)
