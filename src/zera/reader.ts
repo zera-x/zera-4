@@ -7,6 +7,7 @@ namespace zera.reader {
     pair = _.pair;
   }
   else {
+    mori = window.mori;
     pair = zera.util.pair;
     _ = zera.util;
   }

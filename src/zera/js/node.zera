@@ -1,19 +1,81 @@
+(require "../js.zera")
 (ns js.node)
 
-(def fs (js.node/require "fs"))
-(def path (js.node/require "path"))
+(def- fs (js.node/require "fs"))
+(def- path (js.node/require "path"))
 
+; TODO: make these accept an :async argument like slurp and spit
 (defn mkdir [path]
   (.mkdirSync fs path))
 
 (defn file-exists? [path]
   (.existsSync fs path))
 
-(defn slurp [file]
-  (.readFileSync fs file, "utf8"))
+(def
+  {:doc "An alias for process.abort() on Node.js"
+   :platforms #{:nodejs}
+   :added "1.0"}
+  abort (.-abort process))
 
-(defn spit [file data]
+(def
+  {:doc "An alias for process.chdir() on Node.js"
+   :arglists '([directory])
+   :platforms #{:nodejs}
+   :added "1.0"}
+  chdir (.-chdir process))
+
+(def
+  {:doc "An alias for process.cwd() on Node.js"
+   :arglists '([])
+   :platforms #{:nodejs}
+   :added "1.0"}
+  cwd (.-cwd process))
+
+(def
+  {:doc "An alias for process.exit() on Node.js"
+   :arglists '([] [code])
+   :platforms #{:nodejs}
+   :added "1.0"}
+  exit (.-exit process))
+
+; TODO: make promisify function, and maybe our own Promise implementation
+;(def- read-file (.promisify js/Promise (.-readFile fs)))
+;(def- write-file (.promisify js/Promise (.-readFile fs)))
+
+;; TODO: Make a browser version of slurp and spit
+
+(defn slurp
+  "Read entire contents of `file` to a string"
+  {:added "1.0"}
+  [file &opts]
+  (.readFileSync fs file))
+
+(defn spit
+  "Write `data` to `file`. Data can be a String, Buffer, or Uint8Array."
+  {:added "1.0"}
+  [file data]
   (.writeFileSync fs file data))
+
+(def
+  {:doc "An alias for path.basename() on Node.js"
+   :arglists '([path] [path ext])
+   :platforms #{:nodejs}
+   :added "1.0"}
+  basename (.-basename path))
+
+(def
+  {:doc "An alias for path.dirname() on Node.js"
+   :arglists '([path] [path ext])
+   :platforms #{:nodejs}
+   :added "1.0"}
+  dirname (.-dirname path))
+
+(def
+  {:doc "An alias for path.extname() on Node.js"
+   :arglists '([path] [path ext])
+   :platforms #{:nodejs}
+   :added "1.0"}
+  extname (.-extname path))
 
 (def require* js.node/require)
 

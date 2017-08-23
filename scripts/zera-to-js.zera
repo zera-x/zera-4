@@ -1,0 +1,10 @@
+(ns zera-to-js)
+
+(unless (= 2 (count *argv*))
+  (say "USAGE: " (*argv* 0) " FILE")
+  (js.node/exit 0))
+
+(def file (*argv* 1))
+(def var-name (.toUpperCase (replace (js.node/basename file) (js/RegExp. "\\.") "_")))
+(def code (js.node/slurp (*argv* 1)))
+(say "var " var-name " = " (js/encode-json (str code)) ";")

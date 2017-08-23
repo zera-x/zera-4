@@ -16,6 +16,7 @@ namespace zera.core {
   }
   else {
     // browser
+    mori = window.mori;
     ROOT_OBJECT = window;
     _ = ROOT_OBJECT.zera.util;
   }
@@ -2251,6 +2252,10 @@ namespace zera.core {
       'RadioNodeList',
       'MediaError'
     ].forEach(symbolImporter(dom));
+
+    // read core library
+    ws.readString(CORE_ZERA); // src/zera/core.zera
+    ws.readString(JS_ZERA); // src/zera/js.zera
 
     var scripts = document.getElementsByTagName('script');
     var wscode  = [];

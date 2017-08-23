@@ -20,3 +20,42 @@
 (defn decode-json
   [json-string]
   (.parse js/JSON json-string))
+
+(defmacro promise
+  [binds &forms]
+  (cons 'Promise. (cons 'lambda (cons binds forms))))
+
+(defmacro >>
+  [x &forms]
+  (cons '..
+    (cons x
+          (map
+            (lambda [form] (list 'then (list 'lambda '[x] (list form 'x))))
+            forms))))
+
+(defn fulfilled?
+  [x]
+  (.? x isFulfilled))
+
+(defn rejected?
+  [x]
+  (.? x isRejected))
+
+(defn pending?
+  [x]
+  (.? x isPending))
+
+(defn canceled?
+  [x]
+  (.? x isCanceled?))
+
+(browser?
+  (defn http-get
+    [url]
+    (promise [success failure]
+      (doto (js/XMLHttpRequest.)
+        (.addEventListener "error" failure)
+        (.addEventListener "load" success)
+        (.open "GET" url)
+        (.send nil)))))
+
