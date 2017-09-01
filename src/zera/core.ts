@@ -1236,7 +1236,7 @@ namespace zera.core {
     _.symbol('try'),
     _.symbol('catch'),
     _.symbol('throw'),
-    _.symbol('again'),
+    _.symbol('recur'),
     _.symbol('set!'),
     _.symbol('deftype'),
     _.symbol('defprotocol'),
@@ -2256,6 +2256,7 @@ namespace zera.core {
     // read core library
     ws.readString(CORE_ZERA); // src/zera/core.zera
     ws.readString(JS_ZERA); // src/zera/js.zera
+    ws.readString(HTML_ZERA); // src/zera/core/html.zera
 
     var scripts = document.getElementsByTagName('script');
     var wscode  = [];

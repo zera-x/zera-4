@@ -1,15 +1,43 @@
 (require "../js.zera")
 (ns js.node)
 
-(def- fs (js.node/require "fs"))
+(def- fs   (js.node/require "fs"))
 (def- path (js.node/require "path"))
+(def- cp   (js.node/require "child_process"))
 
-; TODO: make these accept an :async argument like slurp and spit
+(defn module-path [dir]
+  (.addPath (js.node/require "app-module-path") dir))
+
 (defn mkdir [path]
   (.mkdirSync fs path))
 
 (defn file-exists? [path]
   (.existsSync fs path))
+
+(defn sh [cmd &args]
+  (.execSync cp cmd (->js args)))
+
+(defn exec [cmd &args]
+  (.spawnSync cp cmd (->js args)))
+
+(defn npm-install [pkg &opts]
+  (let [global? (fn-opts opts :global false)]
+    (->ws (exec "/usr/local/bin/node" "/usr/local/bin/npm" "install" (if global? "-g" "") pkg))))
+
+(defmacro import [specs]
+  (unless (vector? specs) (throw (js/Error. "Expected a spec vector")))
+  (let [specs* (map (fn [s]
+                      (let [mod (first s)
+                            as (second s)
+                            name (second (rest s))]
+                        (if (and (string? mod) (= :as as) (symbol? name))
+                          [mod name]
+                          (throw (js/Error. (str "Spec is in wrong form" (inspect s)))))))
+                    (partition 3 specs))]
+;    (doeach [s specs*]
+;      (p (s 0))
+;      (npm-install (s 0)))
+    (cons 'do (map (fn [s] (list 'def (s 1) (list 'js.node/require (s 0)))) specs*))))
 
 (def
   {:doc "An alias for process.abort() on Node.js"
@@ -76,8 +104,6 @@
    :platforms #{:nodejs}
    :added "1.0"}
   extname (.-extname path))
-
-(def require* js.node/require)
 
 (defn node-modules-paths
   [start]

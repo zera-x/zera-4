@@ -1,2 +1,3 @@
-#!/usr/bin/env node bin/zera
+#!/usr/bin/env zera
 (say "This is a test")
+; vim: ft=clojure

@@ -1,18 +1,15 @@
 ; vim: ft=clojure
-(require "syntax.zera")
 (ns zera.compiler.analyzer)
 
-(alias 's 'zera.compiler.syntax)
+; http://vps124502.vps.ovh.ca/rage/resources/public/
 
-(def property-accessor? isPropertyAccessor)
-(def property-assignment? isPropertyAssignment)
-(def method-application? isMethodApplication)
+(def member-access? isMethodApplication)
 (def class-instantiation? isClassInstantiation)
 
 (def variable? symbol?)
 
 (defn tag-predicate [tag]
-  (lambda [exp] (= tag (first exp))))
+  (fn [exp] (= tag (first exp))))
 
 (def quoted? (tag-predicate 'quote))
 
@@ -33,39 +30,31 @@
 (def application? list?)
 
 (defn analyze-application [fn &args]
-  (s/Application. fn args))
+  {:tag :application :fn fn :args args})
 
 (defn analyze-nil
   [x]
-  (s/Nil.))
+  {:tag :nil})
 
 (defn analyze-number
   [x]
-  (s/Number. x))
+  {:op :constant :tag :number :value x})
 
 (defn analyze-boolean
   [x]
-  (s/Boolean. x))
+  {:op :constant :tag :boolean :value x})
 
 (defn analyze-string
   [x]
-  (s/String. x))
-
-(defn analyze-date
-  [x]
-  (s/Instant. x))
-
-(defn analyze-regexp
-  [x]
-  (s/RegExp. x))
+  {:op :constant :tag :string :value x})
 
 (defn analyze-keyword
   [x]
-  (s/Keyword. (namespace x) (name x)))
+  {:op :constant :tag :zera.core.Keyword :ns (namespace x) :name (name x)})
 
 (defn analyze-symbol
   [x]
-  (s/Symbol. (namespace x) (name x)))
+  {:op :constant :tag :zera.core.Symbol :ns (namespace x) :name (name x)})
 
 (defn analyze-map-entries
   [x]
@@ -73,47 +62,52 @@
 
 (defn analyze-map
   [x]
-  (s/Map. (map analyze-map-entries x)))
+  {:op :map :tag :zera.core.IMap :entries (map analyze-map-entries x)})
 
 (defn analyze-vector
   [x]
-  (s/Vector. (map analyze x)))
+  {:op :map :tag :zera.core.IVector :elements (map analyze x)})
 
 (defn analyze-set
   [x]
-  (s/Set. (map analyze x)))
+  {:op :set :tag :zera.core.ISet :elements (map analyze x)})
 
 (defn analyze-variable
   [x]
-  (s/Variable. (namespace x) (name x)))
+  {:op :variable :tag :any :ns (namespace x) :name (name x)})
 
 (defn analyze-quoted
   [x]
-  (s/QuotedValue. (analyze x)))
+  {:op :quote :tag :any :value (analyze x)})
 
 (defn analyze-definition
-  ([nm] (s/Definition. (s/Variable. (namespace nm) (name nm)) nil (hash-map)))
-  ([nm value] (s/Definition. (s/Variable. (namespace nm) (name nm)) value (hash-map)))
-  ([nm value meta] (s/Definition. (s/Variable. (namespace nm) (name nm)) value meta)))
+  ([nm] (analyze-definition nm nil (hash-map)))
+  ([nm value] (analyze-definition nm value (hash-map))
+  ([nm value meta] {:op :def :tag :any :name {:tag :variable :ns (namespace nm) :name (name nm)} :value value :meta meta})
 
 (defn analyze-if
   ([pred alt]
-   (s/If. (analyze pred) (analyze alt) nil))
+   (analyze-if pred alt nil))
   ([pred alt conse]
-   (s/If. (analyze pred) (analyze alt) (analyze conse))))
+   {:op :if :tag :any :predicate (analyze pred) :alternate (analyze alt) :consequent (analyze conse)}))
 
 (defn analyze-lambda
   [args]
   (let [x (first args)]
     (cond
-      (vector? x) (s/Lambda. 1 (list (analyze-argument-vector x)) (list (map analyze (rest args))))
+      (vector? x) {:op :fn
+                   :tag :any
+                   :argcount (count x)
+                   :arglists (list (analyze-argument-vector x))
+                   :bodies (list (map analyze (rest args)))}
       (list? x)
         (let [arglists (map analyze (map first args))
               argcount (argument-count arglists)]
-          (s/Lambda.
-            argcount
-            arglists
-            (map analyze (map second args))))
+          {:op :fn
+           :tag :any
+           :argcount argcount
+           :arglists arglists
+           :bodies (map analyze (map second args))})
         :else
           (throw (js/Error. "the second element of a Lambda expression should be an arguments vector or a list of bodies")))))
 
@@ -126,35 +120,23 @@
 
 (defn analyze-argument-vector
   [args]
-  (s/ArgumentVector. (map analyze args)))
-
-(defn analyze-block
-  [body]
-  (s/Block. body))
+  {:op :argument-vector :tag :zera.core.IVector :entries (map analyze args)})
 
 (defn analyze-thrown-exception
   [expression]
-  (s/ThrownException. expression))
+  {:op :throw :tag :any :expression expression})
 
-(defn analyze-property-accessor
-  [obj property]
-  (s/PropertyAccessor. obj property))
-
-(defn analyze-property-assignment
-  [obj property value]
-  (s/PropertyAssignment. obj property value))
-
-(defn analyze-method-application
+(defn analyze-member-access
   [obj method args]
-  (s/MethodApplication. obj method args))
+  {:op :. :object obj :member method :args args})
 
 (defn analyze-class-instantiation
   [class args]
-  (s/ClassInstatiation. class args))
+  {:op :new :tag :any :class class :args args})
 
 (defn analyze-application
   [fn args]
-  (s/Application. fn args))
+  {:op :application :tag :any :invocant fn :args args})
 
 (defn analyze [exp]
   (let [exp_ (macroexpand exp)]
@@ -173,15 +155,12 @@
           (definition? exp) (apply analyze-definition (rest exp))
           (if? exp) (apply analyze-if (rest exp))
           (lambda? exp) (analyze-lambda (rest exp))
-          (block? exp) (apply analyze-block (rest exp))
           (assignment? exp) (apply analyze-assignment (rest exp))
           (thrown-exception? exp) (apply analyze-thrown-exception (rest exp))
-          (property-accessor? exp) (apply analyze-property-accessor (rest exp))
-          (property-assignment? exp) (apply analyze-property-assignment (rest exp))
-          (method-application? exp) (apply analyze-method-application (rest exp))
+          (member-access? exp) (apply analyze-member-access (rest exp))
           (class-instantiation? exp) (apply analyze-class-instantiation (rest exp))
           (application? exp) (apply analyze-application exp)
           :else 
             (do
               (println exp)
-              (throw (str "analyz: invalid form: '" exp "'"))))))
+              (throw (str "analyze: invalid form: '" exp "'"))))))

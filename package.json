@@ -12,8 +12,11 @@
   "author": "Delon Newman",
   "license": "ISC",
   "dependencies": {
+    "app-module-path": "^2.2.0",
+    "async": "^2.5.0",
     "better-sqlite3": "^3.1.2",
     "bluebird": "^3.5.0",
+    "chalk": "^2.1.0",
     "escodegen": "^1.8.1",
     "express": "^4.15.4",
     "feedparser-promised": "^1.4.0",

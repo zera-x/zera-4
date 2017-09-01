@@ -116,6 +116,18 @@
               (MacroException.
                 "after name defn expects a doc string, an arguments vector, or a list of bodies")))))
 
+(defn third [s]
+  (second (rest s)))
+
+(defn fourth [s]
+  (second (rest (rest s))))
+
+(defn rrest [s]
+  (rest (rest s)))
+
+(defn nnext [s]
+  (next (next s)))
+
 (defmacro defn-
   [name &forms]
   (list 'def :private name (cons 'fn forms)))
@@ -821,21 +833,21 @@
   "Defines a generic function
 
   Example:
-      (define-generic t string?)
-      (define-method t false [_] :not-string)
-      (define-method t true [_] :string)"
+      (defmulti t string?)
+      (defmethod t false [_] :not-string)
+      (defmethod t true [_] :string)"
   {:added "1.0"}
-  ([name fn]
-   (list 'defmulti name nil fn))
-  ([name doc fn]
+  ([name f]
+   (list 'defmulti name nil f))
+  ([name doc f]
    (list 'def
          {:generic-function true :doc doc :methods {}}
          name
          (list 'fn ['&args]
-               (list 'let ['meths (list '-> (list 'var name) '.getMeta :methods)]
+               (list 'let ['meths (list '-> (list 'var (list 'quote name)) '.getMeta :methods)]
                      (list 'if (list 'empty? 'meths)
                            (list 'throw (str "There are no methods for the generic function '" name "'")))
-                     (list 'let ['meth (list 'get 'meths (list 'apply fn 'args))]
+                     (list 'let ['meth (list 'get 'meths (list 'apply f 'args))]
                            (list 'if-not 'meth
                                  (list 'throw (str "there is no method for the given arguments " (list 'inspect 'args))))
                            (list 'apply 'meth 'args)))))))
@@ -844,16 +856,16 @@
   "Defines a method for a generic function
 
   Example:
-      (define-generic t string?)
-      (define-method t false [_] :not-string)
-      (define-method t true [_] :string)"
+      (defmulti t string?)
+      (defmethod t false [_] :not-string)
+      (defmethod t true [_] :string)"
   {:added "1.0"}
   [name val args &body]
-  (list '.varyMeta (list 'var name)
+  (list '.varyMeta (list 'var (list 'quote name))
         (list 'fn '[m]
               (list 'let ['meths (list 'get 'm :methods)
-                          'fn (cons 'fn (cons args body))]
-                    (list 'assoc 'm :methods (list 'assoc 'meths val 'fn))))))
+                          'f (cons 'fn (cons args body))]
+                    (list 'assoc 'm :methods (list 'assoc 'meths val 'f))))))
 
 (defmacro nodejs?
   "If `*platform*` is `:nodejs` wrap code in a `do` block
