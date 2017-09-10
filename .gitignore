@@ -28,3 +28,5 @@ dist/util.js
 dist/core.zera.js
 dist/js.zera.js
 dist/zera.js
+dist/html.zera.js
+out/
