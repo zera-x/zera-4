@@ -1,10 +1,26 @@
 (ns zera-to-js)
 
+(def- ->json js/->json)
+
 (unless (= 2 (count *argv*))
   (say "USAGE: " (*argv* 0) " FILE")
   (js.node/exit 0))
 
 (def file (*argv* 1))
 (def var-name (.toUpperCase (replace (js.node/basename file) (js/RegExp. "\\.") "_")))
-(def code (js.node/slurp (*argv* 1)))
-(say "var " var-name " = " (js/encode-json (str code)) ";")
+(def code (str (js.node/slurp (*argv* 1))))
+
+(comment
+(def s (zera.reader/readString code))
+(if (nil? s) (throw "there was an error reading the code given"))
+
+(def :dynamic forms (vector))
+(loop [form (.next s)]
+  ;(say "form: " (inspect form))
+  (set! forms (conj forms form))
+  (if-not (.eof s)
+    (recur (.next s))))
+)
+
+;(p forms)
+(say "var " var-name " = " (->json code) ";")
