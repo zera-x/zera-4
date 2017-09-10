@@ -1,0 +1,10 @@
+(ns zera.tools.reader.edn)
+;; An EDN reader, to serve as the basis for new LispReader
+
+;; Port of https://github.com/clojure/tools.reader/blob/master/src/main/cljs/cljs/tools/reader/edn.cljs
+
+(deftype PushbackReader [])
+
+(defn read-string [s])
+
+(say "test")
