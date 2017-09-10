@@ -1,9 +1,14 @@
 namespace zera.core {
   var ws = core;
 
+  var isNode    = false;
+  var isBrowser = false;
+  var isJSA     = false;
+  var isNashorn = false;
+
   var _, ROOT_OBJECT, mori;
   if (typeof exports !== 'undefined') {
-    // node.js
+    isNode = true;
     mori = require('mori');
     _    = require('./util.js');
     zera.util = _;
@@ -11,15 +16,21 @@ namespace zera.core {
     ROOT_OBJECT = global;
   }
   else if (typeof java !== 'undefined') {
-    // nashorn
-    throw new Error('nashorn support is coming!');
+    isNashorn = true;
   }
-  else {
-    // browser
+  else if (typeof ObjC !== 'undefined') {
+    isJSA = true;
+  }
+  else if (typeof document !== 'undefined') {
+    isBrowser = true;
     mori = window.mori;
     ROOT_OBJECT = window;
     _ = ROOT_OBJECT.zera.util;
   }
+  else {
+    console.warn('Unkown JavaScript environment');
+  }
+
   ROOT_OBJECT.zera = ROOT_OBJECT.zera || {};
   ROOT_OBJECT.zera.core = ws;
   ROOT_OBJECT.zera.util = _;
@@ -1654,9 +1665,9 @@ namespace zera.core {
       if (m == null) {
         throw new Error(['method "', ws.inspect(method), '" does not exist'].join(''));
       }
-      ws.pprint(exp);
-      console.log('obj: ', obj);
-      console.log('meth: ', m);
+      //ws.pprint(exp);
+      //console.log('obj: ', obj);
+      //console.log('meth: ', m);
       return m.apply(obj);
     }
   };
@@ -2111,8 +2122,11 @@ namespace zera.core {
   js.define(_.symbol('identical?'), function(a, b) { return a === b });
   js.define(_.symbol('equiv?'), function(a, b) { return a == b });
   js.define(_.symbol('array'), function() { return Array.prototype.slice.call(arguments) });
+  js.define(_.symbol('instanceof?'), function(a, b) { return a instanceof b });
+  js.define(_.symbol('typeof'), function(x) { return typeof x });
 
-  if (typeof exports !== 'undefined') {
+  // Node
+  if (isNode) {
     module.exports = ws;
     var node = defineModule(_.symbol('js.node'));
     [
@@ -2128,14 +2142,31 @@ namespace zera.core {
       'process',
       'setImmediate',
       'setInterval',
-      'setTimeout',
+      'setTimeout'
     ].forEach(symbolImporter(node))
     node.define(_.symbol('require'), require);
     node.define(_.symbol('module'), module);
     node.define(_.symbol('exports'), exports);
   }
 
-  if (typeof document !== 'undefined') {
+  // Apple JSA 
+  if (isJSA) {
+    var jsa = defineModule(_.symbol('js.jsa'));
+    [
+      'Automation',
+      'Application',
+      'Library',
+      'Path',
+      'Progress',
+      'ObjectSpecifier',
+      'delay',
+      'ObjC',
+      'Rerf',
+      '$'
+    ].forEach(symbolImporter(jsa))
+  }
+
+  if (isBrowser) {
     var dom = defineModule(_.symbol('js.dom'));
     [
       'Attr',
