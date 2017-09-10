@@ -21,6 +21,18 @@
   [json-string]
   (.parse js/JSON json-string))
 
+(defn ->json [x]
+  (cond (nil? x) "null"
+        (symbol? x) (str "\"" x "\"")
+        (keyword? x) (str "\"" x "\"")
+        (number? x) (str x)
+        (boolean? x) (if x "true" "false")
+        (string? x) (.stringify js/JSON x)
+        (map? x) (str "{" (join "," (map (fn [x] (str (->json (x 0)) ":" (->json (x 1)))) x)) "}")
+        (vector? x) (str "[\"vector\", " (join "," (map ->json x)) "]")
+        (collection? x) (str "[" (join "," (map ->json x)) "]")
+        :else (throw (str "Don't know how to convert: " (inspect x) " to JSON"))))
+
 (defmacro promise
   [binds &forms]
   (cons 'Promise. (cons 'lambda (cons binds forms))))
