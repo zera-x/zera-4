@@ -485,8 +485,7 @@ namespace zera.reader {
    * @returns {Array<Object>}
    */
   function readString(str, input) {
-    if (str == null || typeof str !== 'string') return [];
-    var tokens = [];
+    if (str == null || typeof str !== 'string') return null;
     return tokenStream(inputStream(str, input || 'string-input'));
   }
 
