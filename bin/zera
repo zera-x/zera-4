@@ -62,7 +62,15 @@ if (argv.i || argv.interactive) {
 else if (process.argv.length >= 3) {
   try {
     z.readJS(['ns', 'user']);
-    z.readFile([process.cwd(), process.argv[2]].join('/'));
+    var file = process.argv[2];
+    // Absolute path
+    if (file.startsWith('/')) {
+      z.readFile(process.argv[2]);
+    }
+    // relative path
+    else {
+      z.readFile([process.cwd(), process.argv[2]].join('/'));
+    }
     process.exitCode = 0;
   }
   catch (e) {
@@ -75,10 +83,21 @@ else {
   setTimeout(() => {
     interactive();
     INTERACTIVE = true;
-  }, 500);
+  }, 10);
   process.stdin.on('data', (chunk) => {
     if (!INTERACTIVE) {
       z.readString(chunk.toString('utf8'));
+      //z.readString("((var-get ((ns-vars *namespace*) 'main)) (rest *argv*))");
+      //z.readJS(['say', ['ns-name', '*namespace*']]);
     }
+  });
+  process.on('exit', () => {
+    console.log('end');
+    z.readJS(
+      ['let', ['f', [['ns-vars', '*namespace*'], ['quote', 'main']]],
+        ['p', 'f'],
+        ['if', 'f',
+          ['apply', 'f', ['rest', '*argv*']]]]
+    );
   });
 }
