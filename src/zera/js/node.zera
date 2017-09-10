@@ -24,7 +24,9 @@
   (let [global? (fn-opts opts :global false)]
     (->ws (exec "/usr/local/bin/node" "/usr/local/bin/npm" "install" (if global? "-g" "") pkg))))
 
-(defmacro import [specs]
+(defmacro import
+  "Import Node modules from local 'node_modules' path"
+  [specs]
   (unless (vector? specs) (throw (js/Error. "Expected a spec vector")))
   (let [specs* (map (fn [s]
                       (let [mod (first s)
@@ -34,10 +36,9 @@
                           [mod name]
                           (throw (js/Error. (str "Spec is in wrong form" (inspect s)))))))
                     (partition 3 specs))]
-;    (doeach [s specs*]
-;      (p (s 0))
-;      (npm-install (s 0)))
-    (cons 'do (map (fn [s] (list 'def (s 1) (list 'js.node/require (s 0)))) specs*))))
+    (cons 'do 
+          (cons (list 'js.node/module-path (list 'zera.core/str '*dir* "/node_modules"))
+                (map (fn [s] (list 'def (s 1) (list 'js.node/require (s 0)))) specs*)))))
 
 (def
   {:doc "An alias for process.abort() on Node.js"
