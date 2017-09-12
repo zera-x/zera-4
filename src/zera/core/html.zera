@@ -35,6 +35,19 @@
     :else
       (str exp)))
 
+(defn render-to [elem exp]
+  (cond
+    (.-write elem) (.write elem (html exp))
+    (.-innerHTML elem) (.-set! elem innerHTML (html exp))
+    (arraylike? elem) (doeach [e (->array elem)] (render-to e exp))
+    :else
+      (throw (js/Error. (str "Don't know how to render to " (inspect elem))))))
+
+(defn q [pat]
+  (if (.-querySelectorAll js.browser/document)
+    (.querySelectorAll js.browser/document pat)
+    (throw (js/Error. "Querying by selector is not supported in this browser"))))
+
 (comment
 (p (html [:a {:href "#"} "test"]))
 (p (html [:a {:href "#"} "test"]))
