@@ -6,7 +6,7 @@ default: all
 all: dist/core.js dist/reader.js dist/util.js dist/zera.js
 
 dist/core.js:
-	($(CC) src/zera/core.ts --outDir dist >> /dev/null) || exit 0
+	cp src/zera/core.js dist/core.js
 
 dist/core-opt.js:
 	closure-compiler -O ADVANCED dist/core.js > dist/core-opt.js
@@ -39,4 +39,6 @@ clean:
 	rm dist/reader.js
 	rm dist/util.js
 	rm dist/core.zera.js
+	rm dist/zera.js
+	rm dist/html.zera.js
 	rm dist/js.zera.js
