@@ -1,6 +1,6 @@
 (ns zera-to-js)
 
-(def- ->json js/->json)
+(def ->json js/->json)
 
 (unless (= 2 (count *argv*))
   (say "USAGE: " (*argv* 0) " FILE")
