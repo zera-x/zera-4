@@ -1,0 +1,15 @@
+(ns zera.tools.reader.types)
+
+;; imports goog.string.StringBuffer
+
+;; Protocols
+
+; TODO: add doc strings to protocol methods, make empty protocol methods fail if not implemented
+(defprotocol Reader
+   (read-char [reader]
+     "Returns the next char from the Reader, nil if the end of stream has been reached")
+   (peek-char [reader])
+     "Returns the next char from the Reader without removing it from the reader stream")
+
+(defprotocol IPushbackReader
+   (unread [reader ch]))
