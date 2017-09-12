@@ -2,11 +2,35 @@
   <head>
     <title>Zera</title>
     <script type="text/zera">
-     (ns zera.core.html)
-     (.write js/document (html [:a {:href "http://delonnewman.name"} "Delon Newman"]))
+     (ns user)
+     (alias 'h 'zera.core.html)
+
+     (def id
+      (do
+        (def :private id* (atom 0))
+        (fn []
+          (swap! id* inc))))
+
+     (defn board [name]
+        {:board/name name
+         :board/index {}
+         :board/forms []})
+
+      (defn append-form [b form]
+        (let [fid (id)]
+          (assoc b
+            :board/index (assoc (b :board/index) fid form)
+            :board/forms (conj (b :board/forms) fid))))
+
+      (defn assoc-form [b id form]
+        (assoc b :board/index (assoc (b :board/index) id form)))
+
+     (def main (h/q "#main"))
+     (h/render-to main [:a {:href "http://delonnewman.name"} "Delon Newman"])
     </script>
   </head>
   <body>
+    <div id="main"></div>
     <script src="zera.js"></script>
   </body>
 </html>
