@@ -1,7 +1,7 @@
 ; vim: ft=clojure
 (ns compile)
 
-(def :dynamic *indent-char* "    ")
+(def :dynamic *indent-str* "    ")
 
 ;; Identifier
 (defn ident
@@ -41,7 +41,7 @@
   [x &xs]
   (if (empty? xs)
     (str "{ " x "; }")
-    (str "{\n" *indent-char* (join (str ";\n" *indent-char*) (cons x xs)) ";\n}")))
+    (str "{\n" *indent-str* (join (str ";\n" *indent-str*) (cons x xs)) ";\n}")))
 
 ;; Control flow
 (defn return
@@ -181,6 +181,25 @@
         (->> (partition 2 pairs)
              (map (fn [xs] (str (first xs) " = " (second xs))))
              (join ", ")))))
+
+;; special forms
+(def *special-forms*
+  '#{def
+     quote
+     fn
+     cond
+     .
+     loop
+     recur
+     set!
+     defmacro
+     throw
+     try
+     catch
+     finally
+     new
+     deftype
+     defprotocol})
 
 (defmacro def
   ([x]
