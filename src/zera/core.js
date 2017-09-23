@@ -14,7 +14,7 @@ zera.core = {};
   var isJSA     = false;
   var isNashorn = false;
 
-  var _, ROOT_OBJECT, mori;
+  var _, ROOT_OBJECT, mori, path;
   if (typeof exports !== 'undefined') {
     isNode = true;
     mori = require('mori');
@@ -22,6 +22,7 @@ zera.core = {};
     zera.util = _;
     zera.reader = require('./reader.js');
     ROOT_OBJECT = global;
+    path = require('path');
   }
   else if (typeof java !== 'undefined') {
     isNashorn = true;
@@ -501,6 +502,9 @@ zera.core = {};
 
     if (_.isFunction(value)) {
       value.$lang$ws$ident = ident;
+      if (isNode && name === '-main') {
+        value.apply(null, process.argv.slice(3));
+      }
     }
     return value;
   };
@@ -2023,6 +2027,10 @@ zera.core = {};
   globalEnv.define('*version*', '0.0.1-alpha');
   globalEnv.define('*mode*', _.keyword('production'), _.hashMap(_.keyword('dynamic'), true));
   globalEnv.define('*target-language*', _.keyword('javascript'), _.hashMap(_.keyword('dynamic'), true));
+
+  if (isNode) {
+    globalEnv.define('*include-path*', _.sortedSet('.', './src', '/Users/delon/Projects/Personal/zera/zera/src'), _.hashMap(_.keyword('dynamic'), true));
+  }
 
   ws.DEFAULT_NS.importJSModule(ws);
 

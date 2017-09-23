@@ -3,6 +3,14 @@
 (require "analyzer.zera")
 (ns zera.compiler.javascript)
 
+;; Zera -> JavaScript
+;; 
+;; :a                  => zera.core.keyword(null, 'a')
+;; {:a 1, :b 2}        => zera.core.hashMap(zera.core.keyword(null, 'a'), 1, zera.core.keyword(null, 'b'), 2)
+;; ...
+;; (def x 1)           => zera.core.NS_SCOPE.define('x', 1)
+;; (def ^:private x 1) => var x = 1
+
 (alias 's 'zera.compiler.syntax)
 (alias 'a 'zera.compiler.analyzer)
 

@@ -53,7 +53,6 @@ function interactive() {
     console.log("Bye for now!");
     process.exit(0);
   });
-  process.exitCode = 0;
 }
 
 if (argv.i || argv.interactive) {
@@ -87,17 +86,7 @@ else {
   process.stdin.on('data', (chunk) => {
     if (!INTERACTIVE) {
       z.readString(chunk.toString('utf8'));
-      //z.readString("((var-get ((ns-vars *namespace*) 'main)) (rest *argv*))");
-      //z.readJS(['say', ['ns-name', '*namespace*']]);
+      console.log('-main', z.readJS([['ns-vars', '*namespace*'], ['quote', '-main']]));
     }
-  });
-  process.on('exit', () => {
-    console.log('end');
-    z.readJS(
-      ['let', ['f', [['ns-vars', '*namespace*'], ['quote', 'main']]],
-        ['p', 'f'],
-        ['if', 'f',
-          ['apply', 'f', ['rest', '*argv*']]]]
-    );
   });
 }

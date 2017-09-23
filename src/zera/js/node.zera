@@ -21,21 +21,26 @@
   (.spawnSync cp cmd (->js args)))
 
 (defn npm-install [pkg &opts]
-  (let [global? (fn-opts opts :global false)]
-    (->ws (exec "/usr/local/bin/node" "/usr/local/bin/npm" "install" (if global? "-g" "") pkg))))
+  (let [global? (fn-opts opts :global false)
+        res (->ws (exec "/usr/local/bin/node" "/usr/local/bin/npm" "install" (if global? "-g" "") pkg))
+        out (res "output")]
+    (doeach [x out]
+      (if x
+        (say x)))
+    res))
 
 (defmacro import
   "Import Node modules from local 'node_modules' path"
-  [specs]
-  (unless (vector? specs) (throw (js/Error. "Expected a spec vector")))
+  [&specs]
   (let [specs* (map (fn [s]
+                      (unless (vector? s) (throw (js/Error. "module specs should be a vector")))
                       (let [mod (first s)
                             as (second s)
                             name (second (rest s))]
                         (if (and (string? mod) (= :as as) (symbol? name))
                           [mod name]
                           (throw (js/Error. (str "Spec is in wrong form" (inspect s)))))))
-                    (partition 3 specs))]
+                    specs)]
     (cons 'do 
           (cons (list 'js.node/module-path (list 'zera.core/str '*dir* "/node_modules"))
                 (map (fn [s] (list 'def (s 1) (list 'js.node/require (s 0)))) specs*)))))

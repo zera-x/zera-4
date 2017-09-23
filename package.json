@@ -21,6 +21,7 @@
     "express": "^4.15.4",
     "feedparser-promised": "^1.4.0",
     "imap": "^0.8.19",
+    "js-yaml": "^3.10.0",
     "mori": "^0.3.2",
     "mysql": "^2.14.0",
     "node-instagram": "^3.0.0",
