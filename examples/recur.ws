@@ -58,8 +58,8 @@
 
 (time
 (let [fibs (map fib (range 50))
-      pairs (partition 2 fibs)
-      ratios (reduce (fn [memo xs] (concat memo (apply / xs))) pairs [])]
-  (doeach [ratio ratios]
-    (println (str (join "/" (reverse ratio)) " = " (apply / (reverse ratio))))))
+      pairs (partition 2 fibs)]
+  (doeach [ratio pairs]
+    (let [ratio* (reverse ratio)]
+      (println (str "[" (nth ratio 0) " " (nth ratio 1) "] " (join "/" ratio*) " = " (apply / ratio*))))))
 )

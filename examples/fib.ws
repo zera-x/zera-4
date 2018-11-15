@@ -1,21 +1,21 @@
-(module examples.fib)
+(ns examples.fib)
 
 
-(define-function fib
+(defn fib
   [n]
   (cond (= n 0) 0
         (= n 1) 1
         :else
           (+ (again (- n 1)) (again (- n 2)))))
 
-(define-function map*
+(defn map*
   [f col]
   (cond (empty? col) col
         :else
           (let [x (first col) xs (rest col) x* (f x)]
-            (cons (f (first col)) (again f (rest col))))))
+            (cons (f (first col)) (recur f (rest col))))))
 
-(define-function times2 [x] (* x 2))
+(defn times2 [x] (* x 2))
 
 ;(.-set! pbnj.core DEBUG true)
 ;(println
