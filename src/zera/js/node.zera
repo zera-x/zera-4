@@ -21,6 +21,7 @@
   (.spawnSync cp cmd (->js args)))
 
 (defn npm-install [pkg &opts]
+  (say "Installing " pkg " with NPM...")
   (let [global? (fn-opts opts :global false)
         res (->ws (exec "/usr/local/bin/node" "/usr/local/bin/npm" "install" (if global? "-g" "") pkg))
         out (res "output")]
